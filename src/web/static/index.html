@@ -8,7 +8,8 @@
   body { margin: 0; font: 15px system-ui, sans-serif; background: #111; color: #eee; display: grid; place-items: center; min-height: 100vh; }
   main { display: grid; gap: 20px; justify-items: center; }
   .stage { perspective: 700px; width: 320px; height: 320px; display: grid; place-items: center; }
-  .plate { width: 260px; height: 260px; background: #c8a46a; border: 10px solid #8a6a3a; border-radius: 4px; transition: transform 30ms linear; }
+  .plate { width: 260px; height: 260px; background: #c8a46a; border: 10px solid #8a6a3a; border-radius: 4px; transition: transform 30ms linear; position: relative; }
+  .ball { position: absolute; border-radius: 50%; background: #e8e8f0; box-shadow: 0 1px 3px #0009; transform: translate(-50%, -50%); }
   .row { display: flex; gap: 10px; align-items: center; }
   button { font: inherit; padding: 10px 22px; border: 0; border-radius: 6px; cursor: pointer; }
   #arm { background: #2e7d32; color: #fff; }
@@ -24,9 +25,9 @@
   <div class="row">
     <span id="link" class="pill">offline</span>
     <span id="armed" class="pill">disarmed</span>
-    <span id="stale" class="pill">no input</span>
+    <span id="beat" class="pill warn">no data</span>
   </div>
-  <div class="stage"><div id="plate" class="plate"></div></div>
+  <div class="stage"><div id="plate" class="plate"><div id="ball" class="ball" hidden></div></div></div>
   <div class="row">
     <button id="arm">arm</button>
     <button id="kill">kill (space)</button>
@@ -39,7 +40,7 @@ const held = new Set();
 const keymap = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1],
                  a: [-1, 0], d: [1, 0], w: [0, 1], s: [0, -1] };
 let pending = {};
-let ws;
+let ws, cfg, lastT, lastSeen;
 
 addEventListener("keydown", e => {
   if (e.code === "Space") { pending.kill = true; e.preventDefault(); return; }
@@ -58,6 +59,13 @@ function intent() {
 
 function show(s) {
   if (!s.plate_state) return;
+  if (s.t_s !== lastT) { lastT = s.t_s; lastSeen = performance.now(); }
+  const b = s.ball, ball = document.getElementById("ball");
+  ball.hidden = !b.valid;
+  if (b.valid) {
+    ball.style.left = `${50 + 100 * b.x_mm / cfg.plate_inner_mm}%`;
+    ball.style.top = `${50 - 100 * b.y_mm / cfg.plate_inner_mm}%`;
+  }
   const p = s.plate_state;
   document.getElementById("plate").style.transform =
     `rotateX(${p.sent_y_deg}deg) rotateY(${p.sent_x_deg}deg)`;
@@ -83,7 +91,23 @@ function frame() {
   pending = {};
 }
 
-connect();
+function beat() {
+  if (lastSeen !== undefined) {
+    const age = (performance.now() - lastSeen) / 1000;
+    const el = document.getElementById("beat");
+    el.textContent = `tick ${Math.round(age * 1000)} ms ago`;
+    el.className = "pill " + (age > cfg.heartbeat_stale_s ? "warn" : "on");
+  }
+  requestAnimationFrame(beat);
+}
+
+fetch("/config").then(r => r.json()).then(c => {
+  cfg = c;
+  const ball = document.getElementById("ball");
+  ball.style.width = ball.style.height = `${100 * cfg.ball_d_mm / cfg.plate_inner_mm}%`;
+  connect();
+  beat();
+});
 </script>
 </body>
 </html>

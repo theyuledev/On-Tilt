@@ -31,3 +31,6 @@ dead_zone = { value = 0.05, label = "uncalibrated default (estimated expected va
 [control]
 mode = "hand"
 sim_tick_hz = { value = 100, label = "uncalibrated default (estimated expected value)" }
+
+[game]
+heartbeat_stale_s = { value = 0.25, label = "uncalibrated default (estimated expected value)" }
