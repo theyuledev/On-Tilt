@@ -92,7 +92,7 @@ class Loop:
         sent = safety.step(self.safety, target, stale, dt, self.cfg["rig"])
         try:
             return sent, self.actuator.send(sent, now)
-        except (LinkError, OSError) as e:
+        except (LinkError, OSError, ValueError) as e:
             # board times out on its own and levels the plate
             print(f"board lost: {e}")
             self.board_lost = True

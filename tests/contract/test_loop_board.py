@@ -50,6 +50,10 @@ def go_silent(board):
     board.silent = True
 
 
+def garble(board):
+    board.readline = lambda: b"\xff\xfeOK P x\n"
+
+
 def test_default_actuator_is_sim():
     loop = Loop(load())
     assert isinstance(loop.actuator, SimActuator)
@@ -87,7 +91,7 @@ def test_no_sim_ball_on_the_real_board(loop, clock):
     assert loop.ball is None and not loop.last.ball.valid
 
 
-@pytest.mark.parametrize("fail", [go_silent, unplug])
+@pytest.mark.parametrize("fail", [go_silent, unplug, garble])
 def test_dead_link_marks_board_lost_and_stops_sending(loop, board, clock, fail):
     loop.arm()
     ticks(loop, clock, 3)
