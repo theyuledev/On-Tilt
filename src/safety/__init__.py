@@ -12,8 +12,9 @@ class SafetyState:
     y_us: float | None = None
 
     def arm(self) -> None:
-        self.armed = True
-        self.killing = False
+        # a kill runs to the end, no re-arming half way down the ramp
+        if not self.killing:
+            self.armed = True
 
     def kill(self) -> None:
         if self.armed:

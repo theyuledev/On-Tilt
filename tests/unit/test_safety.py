@@ -76,3 +76,17 @@ def test_kill_ramps_to_level_then_disarms():
     run(s, ServoCommand(1650, 1650), 300)
     assert not s.armed
     assert step(s, ServoCommand(1650, 1650), False, 0.01, RIG) is None
+
+
+def test_arm_during_kill_ramp_is_ignored():
+    s = armed()
+    run(s, ServoCommand(1650, 1650), 50)
+    s.kill()
+    run(s, ServoCommand(1650, 1650), 10)
+    s.arm()
+    assert s.killing
+    assert step(s, ServoCommand(1650, 1650), False, 0.01, RIG) == ServoCommand(1639, 1639)
+    run(s, ServoCommand(1650, 1650), 300)
+    assert not s.armed and not s.killing
+    s.arm()
+    assert s.armed
