@@ -14,6 +14,12 @@ kill_ramp_us_s = { value = 300, label = "uncalibrated default (estimated expecte
 stale_intent_s = { value = 0.25, label = "uncalibrated default (estimated expected value)" }
 plate_inner_mm = { value = 265, label = "uncalibrated default (estimated expected value)" }
 ball_d_mm = { value = 16, label = "uncalibrated default (estimated expected value)" }
+camera_index = { value = 1, label = "uncalibrated default (estimated expected value)" }
+camera_width = { value = 1280, label = "uncalibrated default (estimated expected value)" }
+camera_height = { value = 800, label = "uncalibrated default (estimated expected value)" }
+camera_fps = { value = 120, label = "uncalibrated default (estimated expected value)" }
+camera_manual_exposure_mode = { value = 1, label = "uncalibrated default (estimated expected value)" }
+camera_exposure = "TODO(measured: camera_exposure)"
 
 [input]
 intent_gain_deg = { value = 12.0, label = "uncalibrated default (estimated expected value)" }
