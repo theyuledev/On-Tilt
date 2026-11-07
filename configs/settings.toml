@@ -30,4 +30,8 @@ dead_zone = { value = 0.05, label = "uncalibrated default (estimated expected va
 
 [control]
 mode = "hand"
-sim_tick_hz = { value = 100, label = "uncalibrated default (estimated expected value)" }
+sim_tick_hz = { value = 100, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+servo_dead_time_s = { value = 0.02, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+servo_tau_s = { value = 0.035, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+servo_top_speed_us_s = { value = 2875, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+servo_dead_band_us = { value = 5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }

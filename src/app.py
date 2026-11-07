@@ -20,7 +20,7 @@ class Loop:
         self.bus = Bus()
         self.keys = KeyboardInput()
         self.safety = safety.SafetyState()
-        self.actuator = SimActuator(cfg["rig"])
+        self.actuator = SimActuator(cfg["rig"], cfg["control"])
         self.mode = cfg["control"]["mode"]
         self.last: RunLogRecord | None = None
 
@@ -39,7 +39,7 @@ class Loop:
         plate_cmd = MODES[self.mode](ball, intent, self.cfg["input"])
         target = tilt_to_pulse(plate_cmd, rig)
         sent = safety.step(self.safety, target, stale, dt, rig)
-        plate_state = self.actuator.send(sent)
+        plate_state = self.actuator.send(sent, now)
 
         rec = RunLogRecord(
             t_s=now,
