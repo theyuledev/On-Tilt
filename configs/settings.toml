@@ -37,6 +37,9 @@ servo_tau_s = { value = 0.035, label = "uncalibrated default (NOT TESTED, expect
 servo_top_speed_us_s = { value = 2875, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 servo_dead_band_us = { value = 5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 sim_g_mm_s2 = { value = 9810, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+kp_deg_mm = { value = 0.07, label = "sim-tuned (PR #39)" }
+kd_deg_s_mm = { value = 0.04, label = "sim-tuned (PR #39)" }
+d_max_deg = { value = 3.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 
 [game]
 heartbeat_stale_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }

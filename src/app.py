@@ -54,7 +54,7 @@ class Loop:
                 intent = hand
         stale = now - intent.t_s > rig["stale_intent_s"]
 
-        plate_cmd = MODES[self.mode](ball, intent, self.cfg["input"])
+        plate_cmd = MODES[self.mode](ball, intent, self.cfg)
         target = tilt_to_pulse(plate_cmd, rig)
         sent = safety.step(self.safety, target, stale, dt, rig)
         plate_state = self.actuator.send(sent, now)
