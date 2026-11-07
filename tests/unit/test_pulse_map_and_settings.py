@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from src.contracts import PlateCommand
@@ -43,3 +45,8 @@ def test_label_check_wants_the_whole_untested_string():
     assert not label_ok("measured")
     assert not label_ok("uncalibrated default (estimated expected value)")
     assert not label_ok("uncalibrated default")
+
+
+def test_tests_ignore_the_local_settings_file():
+    assert load() == load(local=Path("nope.toml"))
+    assert load_raw() == load_raw(local=Path("nope.toml"))
