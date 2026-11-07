@@ -1,4 +1,5 @@
 import curses
+import signal
 import sys
 import time
 
@@ -27,12 +28,12 @@ class Bench:
             self.log.append(f"{line}  ->  {reply}")
         return reply
 
-    def submit(self, line: str) -> None:
+    def submit(self, line: str) -> str:
         line = line.strip()
         if line == "quiet":
             self.quiet = True
             self.log.append("quiet: no more heartbeat")
-            return
+            return ""
         if line == "l":
             line = limits_line(self.rig)
         reply = self._send(line) or ""
@@ -42,6 +43,7 @@ class Bench:
             self.quiet = False
         elif parts[:2] == ["OK", "D"] or "disarmed" in parts:
             self.last_p = None
+        return reply
 
     def kill(self) -> None:
         if self.killing:
@@ -64,6 +66,18 @@ class Bench:
                 self.last_p = None
         elif self.last_p and not self.quiet:
             self._send(f"P {self.last_p[0]} {self.last_p[1]}", show=False)
+
+
+def kill_and_wait(bench: Bench, period: float) -> None:
+    """Ramp to level and disarm; a second ctrl-c mid-ramp does nothing."""
+    old = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    try:
+        bench.kill()
+        while bench.killing:
+            time.sleep(period)
+            bench.tick(period)
+    finally:
+        signal.signal(signal.SIGINT, old)
 
 
 def draw(scr, bench: Bench, line: str) -> None:
@@ -103,11 +117,10 @@ def run(scr, bench: Bench, period: float) -> None:
             last = now
             draw(scr, bench, line)
             time.sleep(period)
-    except KeyboardInterrupt:
-        bench.kill()
-        while bench.killing:
-            time.sleep(period)
-            bench.tick(period)
+    except BaseException as e:
+        kill_and_wait(bench, period)
+        if not isinstance(e, KeyboardInterrupt):
+            raise
 
 
 def main() -> None:
