@@ -92,8 +92,14 @@ class Loop:
         sent = safety.step(self.safety, target, stale, dt, self.cfg["rig"])
         try:
             return sent, self.actuator.send(sent, now)
-        except (LinkError, OSError, ValueError) as e:
-            # board times out on its own and levels the plate
+        except LinkError as e:
+            # board refused or went quiet and levels itself, so disarm and let the page re-arm
+            print(f"board disarmed: {e}")
+            self.actuator.armed = False
+            self.safety = safety.SafetyState()
+            return None, LEVEL
+        except (OSError, ValueError) as e:
+            # port gone or garbled, nothing sane to send any more
             print(f"board lost: {e}")
             self.board_lost = True
             self.safety = safety.SafetyState()

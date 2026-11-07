@@ -91,7 +91,34 @@ def test_no_sim_ball_on_the_real_board(loop, clock):
     assert loop.ball is None and not loop.last.ball.valid
 
 
-@pytest.mark.parametrize("fail", [go_silent, unplug, garble])
+def test_board_error_disarms_and_lets_the_page_arm_again(loop, board, clock):
+    loop.arm()
+    ticks(loop, clock, 3)
+    board.armed = False  # board stalled 250 ms, self levelled and dropped out
+    ticks(loop, clock, 1)
+    assert board.sent[-1].startswith("P")
+    snap = loop.snapshot()
+    assert not snap["armed"] and not snap["board_lost"] and not loop.safety.armed
+
+    n = len(board.sent)
+    ticks(loop, clock, 3)
+    assert board.sent[n:] == []
+    loop.arm()
+    ticks(loop, clock, 3)
+    assert [s[0] for s in board.sent[n:]] == ["L", "A", "P", "P", "P"]
+    assert board.armed and loop.snapshot()["armed"]
+
+
+def test_silent_board_disarms_instead_of_latching_lost(loop, board, clock):
+    loop.arm()
+    ticks(loop, clock, 3)
+    go_silent(board)
+    ticks(loop, clock, 1)
+    snap = loop.snapshot()
+    assert not snap["armed"] and not snap["board_lost"]
+
+
+@pytest.mark.parametrize("fail", [unplug, garble])
 def test_dead_link_marks_board_lost_and_stops_sending(loop, board, clock, fail):
     loop.arm()
     ticks(loop, clock, 3)
