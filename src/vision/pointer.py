@@ -1,3 +1,4 @@
+import itertools
 import math
 
 import cv2
@@ -50,15 +51,18 @@ def dark_dot(gray: np.ndarray, labels: np.ndarray, label: int, box) -> Point | N
     return x + m["m10"] / m["m00"], y + m["m01"] / m["m00"]
 
 
-def pick_pair(before: np.ndarray, after: np.ndarray, min_move: float = 2.0):
-    # the notes on the horn are the blobs that moved, the other servo's notes and leds don't
+def pick_pair(before, after, min_move: float = 2.0, spacing: tuple[float, float] = (40, 250)):
+    # the notes on the horn are the blobs that moved. the breadboard shifts a bit when
+    # its leds blink and a bent note shows as two blobs, so only pair blobs a horn apart
     if len(before) == 0 or len(after) < 2:
         return None
     moved = np.linalg.norm(after[:, None] - before[None], axis=2).min(1)
-    i = np.argsort(-moved)[:2]
-    if moved[i[1]] < min_move:
-        return None
-    return tuple(map(tuple, after[i]))
+    best = None
+    for i, j in itertools.combinations(np.flatnonzero(moved >= min_move), 2):
+        if spacing[0] <= math.dist(after[i], after[j]) <= spacing[1]:
+            if best is None or moved[i] + moved[j] > moved[best[0]] + moved[best[1]]:
+                best = (i, j)
+    return None if best is None else tuple(map(tuple, after[list(best)]))
 
 
 def track_pair(gray: np.ndarray, pair, prev: float | None = None, max_jump: float | None = None):

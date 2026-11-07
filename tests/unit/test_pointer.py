@@ -17,7 +17,7 @@ def rig():
     return load()["rig"]
 
 
-def frame(angle_deg, radius=150, size=60, dot=8, extra=None, shift=(0, 0)):
+def frame(angle_deg, radius=100, size=60, dot=8, extra=None, shift=(0, 0)):
     img = np.full((800, 1280), 40, np.uint8)
     img += (np.random.default_rng(0).random(img.shape) * 10).astype(np.uint8)
     th = math.radians(angle_deg)
@@ -36,7 +36,7 @@ def frame(angle_deg, radius=150, size=60, dot=8, extra=None, shift=(0, 0)):
 def test_bright_blobs_finds_the_two_notes_and_skips_small_dots():
     img = frame(30, extra=(1000, 700, 6, 6))
     blobs = bright_blobs(img)
-    assert len(blobs) == 2 and math.dist(blobs[0], blobs[1]) == pytest.approx(300, abs=2)
+    assert len(blobs) == 2 and math.dist(blobs[0], blobs[1]) == pytest.approx(200, abs=2)
 
 
 def test_pick_pair_takes_the_blobs_that_moved():
@@ -44,7 +44,7 @@ def test_pick_pair_takes_the_blobs_that_moved():
     before = bright_blobs(frame(0, extra=still))
     after = bright_blobs(frame(4, extra=still))
     pair = pick_pair(before, after)
-    assert pair is not None and math.dist(*pair) == pytest.approx(300, abs=2)
+    assert pair is not None and math.dist(*pair) == pytest.approx(200, abs=2)
     assert all(p[0] > 400 for p in pair)
     assert pick_pair(before, before) is None
 
@@ -131,7 +131,22 @@ def test_track_pair_centres_on_the_dark_dot_or_falls_back_to_the_note():
     pair = pick_pair(bright_blobs(frame(0)), bright_blobs(frame(4)))
     _, *pts = track_pair(frame(0, shift=(6, -3)), pair)
     left, right = sorted(pts)
-    assert left == pytest.approx((490 + 6 - 0.5, 400 - 3 - 0.5), abs=0.3)
-    assert right == pytest.approx((790 + 6 - 0.5, 400 - 3 - 0.5), abs=0.3)
+    assert left == pytest.approx((540 + 6 - 0.5, 400 - 3 - 0.5), abs=0.3)
+    assert right == pytest.approx((740 + 6 - 0.5, 400 - 3 - 0.5), abs=0.3)
     _, *pts = track_pair(frame(0, dot=0), pair)
-    assert sorted(pts)[0] == pytest.approx((490 - 0.5, 400 - 0.5), abs=0.3)
+    assert sorted(pts)[0] == pytest.approx((540 - 0.5, 400 - 0.5), abs=0.3)
+
+
+def test_pick_pair_skips_a_moving_blob_far_from_the_notes():
+    before = bright_blobs(frame(0, extra=(1000, 700, 40, 40)))
+    after = bright_blobs(frame(4, extra=(1010, 700, 40, 40)))
+    pair = pick_pair(before, after)
+    assert pair is not None and all(p[0] < 800 for p in pair)
+    assert math.dist(*pair) == pytest.approx(200, abs=2)
+
+
+def test_pick_pair_skips_two_blobs_too_close_to_be_a_horn():
+    before = bright_blobs(frame(0, radius=15, size=24, dot=0))
+    after = bright_blobs(frame(20, radius=15, size=24, dot=0))
+    assert len(before) == 2 and len(after) == 2
+    assert pick_pair(before, after) is None
