@@ -1,24 +1,22 @@
 import csv
-import json
 import sys
 import time
 from pathlib import Path
 
 import cv2
-import numpy as np
 
 from src.control.pulse_map import center
 from src.io.camera import CameraSource, open_camera
 from src.io.serial_link import open_board
 from src.io.settings import ROOT, load
 from src.safety import limits
+from src.vision.calib import load_calib
 from src.vision.plate_pose import QuadTracker, tilt_report
 from src.vision.pointer import PairTracker, report
 from tools.bench import Bench, kill_and_wait
 
 REVERSALS = (3, 5, 8, 12, 20, 30)
 OUT = ROOT / "data" / "servo"
-CALIB = ROOT / "configs" / "calib.local.json"
 
 
 def plan(rig: dict, axis: int, tick: float) -> list[tuple[int, str]]:
@@ -145,8 +143,7 @@ def main() -> None:
     steps = plan(rig, axis, tick)
     other = round(center(rig)[1 - axis])
     if "plate" in args:
-        cal = json.loads(CALIB.read_text())
-        tracker = QuadTracker(np.array(cal["K"]), np.array(cal["D"]), rig["plate_inner_mm"])
+        tracker = QuadTracker(load_calib(), rig["plate_inner_mm"])
         name, kind = f"{name}_plate", "quad"
     else:
         tracker, kind = PairTracker(max(us for us, _ in steps)), "ang"

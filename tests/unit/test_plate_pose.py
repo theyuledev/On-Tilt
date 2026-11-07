@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from src.io.settings import load
+from src.vision.calib import project
 from src.vision.plate_pose import (
     QuadTracker,
     find_plate_quad,
@@ -18,9 +19,10 @@ from tools.servo_test import plan
 pytestmark = pytest.mark.unit
 TICK = 0.01
 SIZE = 305
-# a wide lens like the overhead cam, plate off to the right of the frame
-K = np.array([[700.0, 0, 640], [0, 700.0, 400], [0, 0, 1]])
-D = np.array([-0.3, 0.1, 0, 0, -0.02])
+# wide lenses like the overhead cam, plate off to the right of the frame
+K = [[700.0, 0, 640], [0, 700.0, 400], [0, 0, 1]]
+STANDARD = {"model": "standard", "K": K, "D": [-0.3, 0.1, 0, 0, -0.02]}
+FISHEYE = {"model": "fisheye", "K": K, "D": [0.05, -0.02, 0.01, 0]}
 T = np.array([80.0, -10.0, 380.0])
 
 
@@ -39,7 +41,7 @@ def pose(tip_y=0.0, tip_x=0.0):
     return r, math.degrees(math.asin(r[2, 0])), math.degrees(math.asin(r[2, 1]))
 
 
-def render(r, balls=True):
+def render(r, lens=STANDARD, balls=True):
     s = SIZE / 2
     edge = np.linspace(-s, s, 25)
     rim = np.concatenate(
@@ -50,26 +52,26 @@ def render(r, balls=True):
             np.c_[np.full(25, -s), edge],
         ]
     )
-    obj = np.c_[rim, np.zeros(len(rim))].astype(np.float32)
     rvec, _ = cv2.Rodrigues(r)
-    px, _ = cv2.projectPoints(obj, rvec, T, K, D)
+    px = project(lens, np.c_[rim, np.zeros(len(rim))], rvec, T)
     img = np.full((800, 1280), 90, np.uint8)
     img += (np.random.default_rng(0).random(img.shape) * 8).astype(np.uint8)
-    # fixed point coords so the corners land where projectPoints says, not on a pixel grid
-    cv2.fillPoly(img, [(px.reshape(-1, 2) * 16).round().astype(np.int32)], 225, cv2.LINE_AA, 4)
+    # fixed point coords so the corners land where the projection says, not on a pixel grid
+    cv2.fillPoly(img, [(px * 16).round().astype(np.int32)], 225, cv2.LINE_AA, 4)
     if balls:
         for c, rad in (((60, 40, 0), 40), ((-20, -30, 0), 25), ((-90, 60, 0), 8)):
-            b, _ = cv2.projectPoints(np.array([c], np.float32), rvec, T, K, D)
-            cv2.circle(img, tuple(b.ravel().round().astype(int)), rad, 30, -1)
+            b = project(lens, [c], rvec, T)[0]
+            cv2.circle(img, tuple(b.round().astype(int)), rad, 30, -1)
     return img
 
 
-def test_quad_and_tilt_come_back_from_a_rendered_plate():
+@pytest.mark.parametrize("lens", [STANDARD, FISHEYE], ids=lambda c: c["model"])
+def test_quad_and_tilt_come_back_from_a_rendered_plate(lens):
     r, tx, ty = pose(tip_y=6, tip_x=-4)
-    quad = find_plate_quad(render(r))
+    quad = find_plate_quad(render(r, lens))
     assert quad is not None and quad.shape == (4, 2)
     assert np.argmin(quad[:, 1]) == 0 and quad[1, 0] > quad[3, 0]
-    got_x, got_y, _, tvec = plate_tilt(quad, K, D, SIZE)
+    got_x, got_y, _, tvec = plate_tilt(quad, lens, SIZE)
     assert got_x == pytest.approx(tx, abs=0.5) and got_y == pytest.approx(ty, abs=0.5)
     assert np.allclose(tvec.ravel(), T, atol=8)
 
@@ -81,7 +83,7 @@ def test_positive_tilt_means_the_plus_edge_is_lower():
         z = (square(SIZE) @ r.T + T)[:, 2]
         assert (tx > 0) == (z[[1, 2]].mean() > z[[0, 3]].mean())
         assert (ty > 0) == (z[[0, 1]].mean() > z[[2, 3]].mean())
-        got_x, got_y, _, _ = plate_tilt(find_plate_quad(render(r)), K, D, SIZE)
+        got_x, got_y, _, _ = plate_tilt(find_plate_quad(render(r)), STANDARD, SIZE)
         assert np.sign(got_x) == np.sign(tx) and np.sign(got_y) == np.sign(ty)
     assert pose(tip_y=5)[1] > 0
 
@@ -89,7 +91,7 @@ def test_positive_tilt_means_the_plus_edge_is_lower():
 def test_small_tilts_keep_their_sign():
     for tip in (0.5, -0.5):
         r, tx, _ = pose(tip_y=tip)
-        got, *_ = plate_tilt(find_plate_quad(render(r)), K, D, SIZE)
+        got, *_ = plate_tilt(find_plate_quad(render(r)), STANDARD, SIZE)
         assert got == pytest.approx(tx, abs=0.5)
 
 
@@ -103,7 +105,7 @@ def test_prev_keeps_the_corner_order_and_blank_frames_give_none():
 
 def test_tracker_rows_carry_tilt_and_corners():
     r, tx, ty = pose(tip_y=3)
-    tracker = QuadTracker(K, D, SIZE)
+    tracker = QuadTracker(STANDARD, SIZE)
     row = tracker.update(render(r), 1.0, 1500)
     assert len(row) == 11 and row[0] == 1.0
     assert row[1] == pytest.approx(tx, abs=0.5) and row[2] == pytest.approx(ty, abs=0.5)

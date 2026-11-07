@@ -10,6 +10,8 @@ still to be pinned down on the rig.
 import cv2
 import numpy as np
 
+from src.vision.calib import undistort
+
 SUBPIX = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, 20, 0.01)
 
 
@@ -52,11 +54,12 @@ def square(size_mm: float) -> np.ndarray:
     return np.array([[-s, s, 0], [s, s, 0], [s, -s, 0], [-s, -s, 0]], np.float32)
 
 
-def plate_tilt(corners: np.ndarray, K, D, size_mm: float):
-    """(tilt_x_deg, tilt_y_deg, rvec, tvec) of a size_mm square seen at these corners."""
-    K, D = np.asarray(K, float), np.asarray(D, float)
-    pts = cv2.undistortPoints(np.asarray(corners, np.float64).reshape(-1, 1, 2), K, D, P=K)
-    ok, rvec, tvec = cv2.solvePnP(square(size_mm), pts, K, None, flags=cv2.SOLVEPNP_IPPE_SQUARE)
+def plate_tilt(corners: np.ndarray, lens: dict, size_mm: float):
+    """(tilt_x_deg, tilt_y_deg, rvec, tvec) of a size_mm square seen at these corners
+    through the calib file's lens, standard or fisheye."""
+    pts = undistort(lens, corners).reshape(-1, 1, 2)
+    eye = np.eye(3)
+    ok, rvec, tvec = cv2.solvePnP(square(size_mm), pts, eye, None, flags=cv2.SOLVEPNP_IPPE_SQUARE)
     if not ok:
         return None
     r, _ = cv2.Rodrigues(rvec)
@@ -68,8 +71,8 @@ def plate_tilt(corners: np.ndarray, K, D, size_mm: float):
 class QuadTracker:
     """Follows the plate quad frame to frame; rows are (t, tilt_x, tilt_y, x0, y0, .., y3)."""
 
-    def __init__(self, K, D, size_mm: float):
-        self.K, self.D, self.size_mm = K, D, size_mm
+    def __init__(self, lens: dict, size_mm: float):
+        self.lens, self.size_mm = lens, size_mm
         self.quad = self.image = None
 
     def update(self, gray: np.ndarray, t: float, us: int | None = None):
@@ -77,7 +80,7 @@ class QuadTracker:
         if quad is None:
             return None
         self.quad, self.image = quad, gray
-        tilt = plate_tilt(quad, self.K, self.D, self.size_mm)
+        tilt = plate_tilt(quad, self.lens, self.size_mm)
         return None if tilt is None else (t, tilt[0], tilt[1], *map(float, quad.ravel()))
 
 

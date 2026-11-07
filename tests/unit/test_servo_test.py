@@ -10,7 +10,7 @@ from src.io.settings import load
 from src.vision.plate_pose import QuadTracker
 from src.vision.pointer import PairTracker
 from tests.contract.fake_board import FakeBoard
-from tests.unit.test_plate_pose import SIZE, D, K, pose, render
+from tests.unit.test_plate_pose import SIZE, STANDARD, pose, render
 from tests.unit.test_pointer import frame
 from tools.bench import Bench
 from tools.servo_test import guarded, load_csv, run, save
@@ -73,7 +73,7 @@ def test_run_on_the_y_axis_tracks_the_plate(bench):
         1500,
         1,
         TICK,
-        QuadTracker(K, D, SIZE),
+        QuadTracker(STANDARD, SIZE),
         clock,
     )
     assert all(c[2:4] == (1500, 1560) for c in commands)
