@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from src.contracts import ServoCommand
 from src.control.pulse_map import center
 
+LEVEL_HOLD_S = 0.04  # two 20 ms servo pwm periods, so the level pulse really goes out
+
 
 @dataclass
 class SafetyState:
@@ -10,6 +12,7 @@ class SafetyState:
     killing: bool = False
     x_us: float | None = None
     y_us: float | None = None
+    level_s: float = 0.0
 
     def arm(self) -> None:
         # a kill runs to the end, no re-arming half way down the ramp
@@ -63,9 +66,12 @@ def step(
 
     out = ServoCommand(x_us=round(state.x_us), y_us=round(state.y_us))
 
-    # last pulse out is the level one, servos hold there once pulses stop
+    # last pulses out are the level one, servos hold there once pulses stop
     if state.killing and (state.x_us, state.y_us) == (cx, cy):
-        state.armed = state.killing = False
-        state.x_us = state.y_us = None
+        state.level_s += dt
+        if state.level_s >= LEVEL_HOLD_S:
+            state.armed = state.killing = False
+            state.x_us = state.y_us = None
+            state.level_s = 0.0
 
     return out

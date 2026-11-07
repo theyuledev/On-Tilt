@@ -79,7 +79,7 @@ def test_kill_ramps_to_level_then_disarms(loop, board, clock):
     loop.kill()
     ticks(loop, clock, 300, key=(1.0, 0.0))
     after = board.sent[n:]
-    assert after[-1] == "D" and after[-2] == f"P {cx} {cy}"
+    assert after[-1] == "D" and after[-5:-1] == [f"P {cx} {cy}"] * 4
     xs = [int(s.split()[1]) for s in after[:-1]]
     assert len(xs) > 1 and xs == sorted(xs, reverse=True)
     assert not board.armed and not loop.last.armed
