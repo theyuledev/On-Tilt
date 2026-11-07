@@ -44,12 +44,15 @@ def test_key_tilts_sim_plate_through_safety_then_kill_levels_and_disarms(clock):
     assert loop.last.plate_state.sent_x_deg == 0
 
 
-def test_no_input_keeps_plate_level(clock):
+def test_no_input_keeps_plate_level_and_shows_stale(clock):
     loop = Loop(load())
     loop.arm()
     ticks(loop, clock, 100)
     assert loop.last.plate_state.sent_x_deg == 0
     assert loop.last.plate_state.sent_y_deg == 0
+    assert loop.snapshot()["stale"]
+    ticks(loop, clock, 1, key=(0.5, 0.0))
+    assert not loop.snapshot()["stale"]
 
 
 def test_browser_page_and_socket():

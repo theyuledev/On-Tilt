@@ -38,6 +38,7 @@ class Loop:
         self.safety = safety.SafetyState()
         self.actuator = actuator or SimActuator(cfg["rig"], cfg["control"])
         self.board_lost = False
+        self.stale = False
         self.mode = cfg["control"]["mode"]
         self.ball: BallState | None = None
         self.last: RunLogRecord | None = None
@@ -62,7 +63,7 @@ class Loop:
             hand = self.hand.latest()
             if hand.valid and now - hand.t_s <= rig["stale_intent_s"]:
                 intent = hand
-        stale = now - intent.t_s > rig["stale_intent_s"]
+        stale = self.stale = now - intent.t_s > rig["stale_intent_s"]
 
         plate_cmd = MODES[self.mode](ball, intent, self.cfg)
         target = tilt_to_pulse(plate_cmd, rig)
@@ -113,6 +114,7 @@ class Loop:
     def snapshot(self) -> dict:
         snap = self.last.to_dict() if self.last else {}
         snap["killing"] = self.safety.killing
+        snap["stale"] = self.stale
         snap["board_lost"] = self.board_lost
         snap["camera_lost"] = self.camera_lost
         return snap

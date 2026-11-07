@@ -23,6 +23,7 @@ def test_page_has_ball_heartbeat_and_board_lost(client):
     assert 'id="ball"' in page
     assert 'id="beat"' in page
     assert 'id="board"' in page
+    assert 'id="stale"' in page and "no input" in page
 
 
 def test_page_tracks_held_keys_by_code_so_shift_cannot_stick_one(client):

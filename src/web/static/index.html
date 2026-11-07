@@ -27,6 +27,7 @@
     <span id="link" class="pill">offline</span>
     <span id="armed" class="pill">disarmed</span>
     <span id="beat" class="pill warn">no data</span>
+    <span id="stale" class="pill warn" hidden>no input</span>
     <span id="board" class="pill warn" hidden>board lost</span>
   </div>
   <div class="row">
@@ -81,6 +82,7 @@ function show(s) {
   const armed = document.getElementById("armed");
   armed.textContent = s.killing ? "killing" : s.armed ? "armed" : "disarmed";
   armed.className = "pill " + (s.killing ? "warn" : s.armed ? "on" : "");
+  document.getElementById("stale").hidden = !(s.stale && s.armed);
   document.getElementById("board").hidden = !s.board_lost;
   nocam.textContent = s.camera_lost ? "camera lost" : "no camera";
   document.getElementById("nums").textContent =
