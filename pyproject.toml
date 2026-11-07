@@ -1,0 +1,38 @@
+[project]
+name = "on-tilt"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi",
+    "mediapipe",
+    "numpy",
+    "opencv-contrib-python",
+    "pyserial",
+    "uvicorn[standard]",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit",
+    "pytest",
+    "ruff",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers"
+pythonpath = ["."]
+testpaths = ["tests"]
+markers = [
+    "unit: pure logic",
+    "contract: host side of the serial protocol on a fake link",
+    "replay: tracker on recorded clips",
+    "sim: full pipeline on the sim plant",
+    "hardware: needs the rig",
+]
