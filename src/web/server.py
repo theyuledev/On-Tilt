@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 import cv2
@@ -5,6 +6,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 
 STATIC = Path(__file__).parent / "static"
+JPEG_SCALE = 0.5  # 1280x800 camera -> 640x400 on the page
+JPEG_PERIOD_S = 1 / 15  # one encode per ~66 ms, the control loop shares this process
 
 
 def make_app(loop) -> FastAPI:
@@ -23,12 +26,18 @@ def make_app(loop) -> FastAPI:
             "heartbeat_stale_s": game["heartbeat_stale_s"],
         }
 
+    jpeg = {"t": float("-inf"), "bytes": b""}
+
     @app.get("/camera.jpg")
     def camera():
         if loop.frame is None or loop.camera_lost:
             return Response(status_code=404)
-        _, jpg = cv2.imencode(".jpg", loop.frame.image)
-        return Response(jpg.tobytes(), media_type="image/jpeg")
+        now = time.monotonic()
+        if now - jpeg["t"] >= JPEG_PERIOD_S:
+            small = cv2.resize(loop.frame.image, None, fx=JPEG_SCALE, fy=JPEG_SCALE)
+            _, jpg = cv2.imencode(".jpg", small)
+            jpeg["t"], jpeg["bytes"] = now, jpg.tobytes()
+        return Response(jpeg["bytes"], media_type="image/jpeg")
 
     @app.websocket("/ws")
     async def ws(sock: WebSocket):
