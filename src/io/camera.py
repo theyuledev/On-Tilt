@@ -1,5 +1,6 @@
 import threading
 import time
+from pathlib import Path
 
 import cv2
 
@@ -54,16 +55,27 @@ class CameraSource:
 
 
 class ClipSource:
+    """Replays a clip. Uses the capture times from <clip>.csv when the recorder wrote one."""
+
     def __init__(self, path):
+        path = Path(path)
         self._cap = cv2.VideoCapture(str(path))
         if not self._cap.isOpened():
             raise FileNotFoundError(path)
+        times = path.with_suffix(".csv")
+        self._times = [float(t) for t in times.read_text().split()] if times.exists() else None
+        self._i = 0
 
     def read(self) -> Frame | None:
         ok, image = self._cap.read()
         if not ok:
             return None
-        return Frame(image, self._cap.get(cv2.CAP_PROP_POS_MSEC) / 1000)
+        if self._times is not None:
+            t = self._times[self._i]
+        else:
+            t = self._cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
+        self._i += 1
+        return Frame(image, t)
 
     def close(self) -> None:
         self._cap.release()
