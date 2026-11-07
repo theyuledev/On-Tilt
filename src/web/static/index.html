@@ -9,6 +9,7 @@
   main { display: grid; gap: 20px; justify-items: center; }
   .stage { perspective: 700px; width: 320px; height: 320px; display: grid; place-items: center; }
   .plate { width: 260px; height: 260px; background: #c8a46a; border: 10px solid #8a6a3a; border-radius: 4px; transition: transform 30ms linear; position: relative; }
+  #cam { width: 400px; max-width: 45vw; border-radius: 4px; }
   .ball { position: absolute; border-radius: 50%; background: #e8e8f0; box-shadow: 0 1px 3px #0009; transform: translate(-50%, -50%); }
   .row { display: flex; gap: 10px; align-items: center; }
   button { font: inherit; padding: 10px 22px; border: 0; border-radius: 6px; cursor: pointer; }
@@ -27,7 +28,10 @@
     <span id="armed" class="pill">disarmed</span>
     <span id="beat" class="pill warn">no data</span>
   </div>
-  <div class="stage"><div id="plate" class="plate"><div id="ball" class="ball" hidden></div></div></div>
+  <div class="row">
+    <div class="stage"><div id="plate" class="plate"><div id="ball" class="ball" hidden></div></div></div>
+    <img id="cam" alt="overhead cam"><span id="nocam" hidden>no camera</span>
+  </div>
   <div class="row">
     <button id="arm">arm</button>
     <button id="kill">kill (space)</button>
@@ -41,6 +45,8 @@ const keymap = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowD
                  a: [-1, 0], d: [1, 0], w: [0, 1], s: [0, -1] };
 let pending = {};
 let ws, cfg, lastT, lastSeen;
+const cam = document.getElementById("cam"), nocam = document.getElementById("nocam");
+const nextCam = () => { cam.src = "/camera.jpg?" + performance.now(); };
 
 addEventListener("keydown", e => {
   if (e.code === "Space") { pending.kill = true; e.preventDefault(); return; }
@@ -50,6 +56,8 @@ addEventListener("keyup", e => held.delete(e.key));
 addEventListener("blur", () => held.clear());
 document.getElementById("arm").onclick = () => { pending.arm = true; };
 document.getElementById("kill").onclick = () => { pending.kill = true; };
+cam.onload = () => { cam.hidden = false; nocam.hidden = true; nextCam(); };
+cam.onerror = () => { cam.hidden = true; nocam.hidden = false; };
 
 function intent() {
   let x = 0, y = 0;
@@ -80,7 +88,7 @@ function show(s) {
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.onopen = () => { document.getElementById("link").textContent = "live"; document.getElementById("link").className = "pill on"; frame(); };
+  ws.onopen = () => { document.getElementById("link").textContent = "live"; document.getElementById("link").className = "pill on"; nextCam(); frame(); };
   ws.onclose = () => { document.getElementById("link").textContent = "offline"; document.getElementById("link").className = "pill warn"; setTimeout(connect, 1000); };
   ws.onmessage = e => { show(JSON.parse(e.data)); requestAnimationFrame(frame); };
 }
