@@ -53,3 +53,7 @@ min_contrast = { value = 0.4, label = "uncalibrated default (NOT TESTED, expecte
 min_fill = { value = 0.75, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 radius_tol = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 lost_after_misses = { value = 5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+board_corners = { value = [7, 8], label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+board_square_mm = { value = 25.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+calib_views = { value = 20, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+calib_timeout_s = { value = 180, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
