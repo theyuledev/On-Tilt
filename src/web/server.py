@@ -13,6 +13,15 @@ def make_app(loop) -> FastAPI:
     def index():
         return FileResponse(STATIC / "index.html")
 
+    @app.get("/config")
+    def config():
+        rig, game = loop.cfg["rig"], loop.cfg["game"]
+        return {
+            "plate_inner_mm": rig["plate_inner_mm"],
+            "ball_d_mm": rig["ball_d_mm"],
+            "heartbeat_stale_s": game["heartbeat_stale_s"],
+        }
+
     @app.websocket("/ws")
     async def ws(sock: WebSocket):
         await sock.accept()
