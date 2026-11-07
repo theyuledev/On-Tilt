@@ -24,6 +24,10 @@ serial_reply_timeout_s = { value = 0.05, label = "uncalibrated default (NOT TEST
 [input]
 intent_gain_deg = { value = 12.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 dead_zone = { value = 0.05, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+hand_span = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+neutral_s = { value = 1.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+smoothing = { value = 0.3, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+hand_port = { value = 9001, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 
 [control]
 mode = "hand"
