@@ -27,6 +27,7 @@
     <span id="link" class="pill">offline</span>
     <span id="armed" class="pill">disarmed</span>
     <span id="beat" class="pill warn">no data</span>
+    <span id="board" class="pill warn" hidden>board lost</span>
   </div>
   <div class="row">
     <div class="stage"><div id="plate" class="plate"><div id="ball" class="ball" hidden></div></div></div>
@@ -80,6 +81,7 @@ function show(s) {
   const armed = document.getElementById("armed");
   armed.textContent = s.killing ? "killing" : s.armed ? "armed" : "disarmed";
   armed.className = "pill " + (s.killing ? "warn" : s.armed ? "on" : "");
+  document.getElementById("board").hidden = !s.board_lost;
   document.getElementById("nums").textContent =
     `tilt x ${p.sent_x_deg.toFixed(2)}°  y ${p.sent_y_deg.toFixed(2)}°\n` +
     (s.armed ? `servo x ${s.servo_cmd.x_us} us  y ${s.servo_cmd.y_us} us\n` : `servo off\n`) +
