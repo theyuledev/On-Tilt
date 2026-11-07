@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, Response
 STATIC = Path(__file__).parent / "static"
 JPEG_SCALE = 0.5  # 1280x800 camera -> 640x400 on the page
 JPEG_PERIOD_S = 1 / 15  # one encode per ~66 ms, the control loop shares this process
+FULL_JPEG_QUALITY = 95  # calibration fits the lens from these, keep the pixels honest
 
 
 def make_app(loop) -> FastAPI:
@@ -29,9 +30,13 @@ def make_app(loop) -> FastAPI:
     jpeg = {"t": float("-inf"), "bytes": b""}
 
     @app.get("/camera.jpg")
-    def camera():
+    def camera(full: bool = False):
         if loop.frame is None or loop.camera_lost:
             return Response(status_code=404)
+        if full:
+            quality = [cv2.IMWRITE_JPEG_QUALITY, FULL_JPEG_QUALITY]
+            _, jpg = cv2.imencode(".jpg", loop.frame.image, quality)
+            return Response(jpg.tobytes(), media_type="image/jpeg")
         now = time.monotonic()
         if now - jpeg["t"] >= JPEG_PERIOD_S:
             small = cv2.resize(loop.frame.image, None, fx=JPEG_SCALE, fy=JPEG_SCALE)

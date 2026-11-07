@@ -60,6 +60,24 @@ def test_camera_jpeg_is_half_res_and_cached_for_a_frame_period(monkeypatch):
     assert client.get("/camera.jpg").content != first
 
 
+def test_camera_jpeg_full_is_full_res_and_skips_the_cache(monkeypatch):
+    now = [1000.0]
+    monkeypatch.setattr(time, "monotonic", lambda: now[0])
+    loop = SimpleNamespace(cfg=load(), camera_lost=False)
+    loop.frame = Frame(np.zeros((800, 1280, 3), np.uint8), 0.0)
+    client = TestClient(make_app(loop))
+
+    small = client.get("/camera.jpg").content
+    full = client.get("/camera.jpg?full=1").content
+    assert full != small
+    img = cv2.imdecode(np.frombuffer(full, np.uint8), cv2.IMREAD_COLOR)
+    assert img.shape[:2] == (800, 1280)
+
+    loop.frame = Frame(np.full((800, 1280, 3), 255, np.uint8), 0.01)
+    assert client.get("/camera.jpg?full=1").content != full
+    assert client.get("/camera.jpg").content == small
+
+
 def test_camera_jpeg_404s_without_a_frame():
     loop = SimpleNamespace(cfg=load(), camera_lost=False, frame=None)
     assert TestClient(make_app(loop)).get("/camera.jpg").status_code == 404
