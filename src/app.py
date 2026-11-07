@@ -128,8 +128,18 @@ async def run(loop: Loop) -> None:
         last = now
 
 
+def stop_on_error(ticker: asyncio.Task, server) -> None:
+    # a dead loop must not leave the page looking alive
+    if not ticker.cancelled() and ticker.exception() is not None:
+        print(f"loop died: {ticker.exception()!r}")
+        server.should_exit = True
+
+
 def main() -> None:
     cfg = load()
+    mode = cfg["control"]["mode"]
+    if mode not in MODES:
+        raise SystemExit(f"control.mode {mode!r} is not one of {sorted(MODES)}")
     try:
         hand = HandInput(cfg["input"]["hand_port"])
     except OSError as e:
@@ -151,6 +161,7 @@ def main() -> None:
 
     async def go():
         ticker = asyncio.create_task(run(loop))
+        ticker.add_done_callback(lambda t: stop_on_error(t, server))
         print(f"http://127.0.0.1:{port}")
         await server.serve()
         ticker.cancel()
