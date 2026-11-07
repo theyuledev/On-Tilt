@@ -2,7 +2,7 @@ from typing import NamedTuple, Protocol
 
 import numpy as np
 
-from src.contracts import PlateState, ServoCommand
+from src.contracts import Intent, PlateState, ServoCommand
 
 
 class Frame(NamedTuple):
@@ -14,6 +14,10 @@ class FrameSource(Protocol):
     def read(self) -> Frame | None: ...
 
     def close(self) -> None: ...
+
+
+class InputSource(Protocol):
+    def latest(self) -> Intent: ...
 
 
 class TiltActuator(Protocol):

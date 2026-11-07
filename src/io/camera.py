@@ -15,23 +15,28 @@ def _first_frame_shape(cap) -> tuple[int, ...] | None:
     return None
 
 
-def find_camera(rig: dict, video_capture=cv2.VideoCapture) -> int:
-    want = (rig["camera_height"], rig["camera_width"])
+def find_camera(is_wanted, what: str, video_capture=cv2.VideoCapture) -> int:
     index = 0
     while True:
         cap = video_capture(index)
         if not cap.isOpened():
             cap.release()
-            raise RuntimeError(f"no camera gives {want[1]}x{want[0]} frames")
+            raise RuntimeError(f"no camera gives {what}")
         shape = _first_frame_shape(cap)
         cap.release()
-        if shape == want:
+        if shape is not None and is_wanted(shape):
             return index
         index += 1
 
 
+def overhead_shape(rig: dict) -> tuple[int, int]:
+    return rig["camera_height"], rig["camera_width"]
+
+
 def open_camera(rig: dict, video_capture=cv2.VideoCapture):
-    cap = video_capture(find_camera(rig, video_capture))
+    want = overhead_shape(rig)
+    index = find_camera(lambda s: s == want, f"{want[1]}x{want[0]} frames", video_capture)
+    cap = video_capture(index)
     # on mac this camera stops sending frames if width/height get set, and the
     # fast mode only kicks in if MJPG + fps are set before the first read
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
