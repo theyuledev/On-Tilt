@@ -1,3 +1,5 @@
+import shutil
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -33,7 +35,17 @@ def overhead_shape(rig: dict) -> tuple[int, int]:
     return rig["camera_height"], rig["camera_width"]
 
 
-def open_camera(rig: dict, video_capture=cv2.VideoCapture):
+def set_exposure(rig: dict, run=subprocess.run) -> bool:
+    tool = shutil.which("uvc-util")
+    if tool is None:
+        return False
+    # the cam is back on auto exposure after every replug; units are 100 us
+    steps = round(rig["camera_exposure_ms"] * 10)
+    run([tool, "-I", "0", "-s", "auto-exposure-mode=1", "-s", f"exposure-time-abs={steps}"])
+    return True
+
+
+def open_camera(rig: dict, video_capture=cv2.VideoCapture, run=subprocess.run):
     want = overhead_shape(rig)
     index = find_camera(lambda s: s == want, f"{want[1]}x{want[0]} frames", video_capture)
     cap = video_capture(index)
@@ -44,6 +56,7 @@ def open_camera(rig: dict, video_capture=cv2.VideoCapture):
     if _first_frame_shape(cap) is None:
         cap.release()
         raise RuntimeError("camera found but sends no frames in fast mode")
+    set_exposure(rig, run)
     return cap
 
 

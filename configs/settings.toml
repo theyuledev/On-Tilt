@@ -12,11 +12,12 @@ startup_flag = true
 slew_us_s = { value = 1500, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 kill_ramp_us_s = { value = 300, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 stale_intent_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-plate_inner_mm = { value = 265, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-ball_d_mm = { value = 16, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+plate_inner_mm = { value = 305, label = "measured (2026-11-07)" }
+ball_d_mm = { value = 61.8, label = "measured (2026-11-07)" }
 camera_width = { value = 1280, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 camera_height = { value = 800, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-camera_fps = { value = 120, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+camera_fps = { value = 120, label = "measured (2026-11-07)" }
+camera_exposure_ms = { value = 3.0, label = "measured (2026-11-07)" }
 actuator = "sim"
 serial_port = "TODO(set: serial_port)"
 serial_baud = { value = 115200, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }

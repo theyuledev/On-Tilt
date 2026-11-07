@@ -7,11 +7,11 @@ from src.io.settings import load, load_raw
 pytestmark = pytest.mark.unit
 
 UNTESTED = "uncalibrated default (NOT TESTED, expected predicted default value)"
-TUNED = ("sim-tuned (PR #", "player-tuned (")
+DATED = ("measured (", "sim-tuned (PR #", "player-tuned (")
 
 
 def label_ok(label: str) -> bool:
-    return label in ("measured", UNTESTED) or (label.startswith(TUNED) and label.endswith(")"))
+    return label == UNTESTED or (label.startswith(DATED) and label.endswith(")"))
 
 
 def test_pulse_map_round_trip():
@@ -39,6 +39,7 @@ def test_every_number_in_settings_has_a_label():
 
 def test_label_check_wants_the_whole_untested_string():
     assert label_ok(UNTESTED)
-    assert label_ok("sim-tuned (PR #32)")
+    assert label_ok("sim-tuned (PR #32)") and label_ok("measured (2026-11-07)")
+    assert not label_ok("measured")
     assert not label_ok("uncalibrated default (estimated expected value)")
     assert not label_ok("uncalibrated default")
