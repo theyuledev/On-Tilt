@@ -59,3 +59,14 @@ def test_browser_page_and_socket():
         sock.receive_json()
     assert loop.safety.armed
     assert loop.keys.latest().x == 0.5
+
+
+def test_sim_ball_starts_centred_and_rolls_downhill(clock):
+    loop = Loop(load())
+    loop.arm()
+    ticks(loop, clock, 1)
+    assert (loop.ball.x_mm, loop.ball.y_mm) == (0, 0) and loop.ball.valid
+
+    ticks(loop, clock, 100, key=(1.0, 0.0))
+    assert loop.ball.x_mm > 0 and loop.ball.y_mm == 0
+    assert loop.last.ball.x_mm > 0

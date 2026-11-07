@@ -13,6 +13,7 @@ from src.io.camera import CameraSource, open_camera
 from src.io.ports import Frame, FrameSource, InputSource
 from src.io.settings import env, load
 from src.modes import MODES
+from src.sim.ball import roll
 from src.sim.plate import SimActuator
 from src.web.server import make_app
 
@@ -30,6 +31,7 @@ class Loop:
         self.safety = safety.SafetyState()
         self.actuator = SimActuator(cfg["rig"], cfg["control"])
         self.mode = cfg["control"]["mode"]
+        self.ball: BallState | None = None
         self.last: RunLogRecord | None = None
 
     def arm(self) -> None:
@@ -44,7 +46,7 @@ class Loop:
             if frame is not None:
                 self.frame = frame
         rig = self.cfg["rig"]
-        ball = BallState(x_mm=0.0, y_mm=0.0, vx_mm_s=0.0, vy_mm_s=0.0, valid=False, t_s=now)
+        ball = self.ball or BallState(0.0, 0.0, 0.0, 0.0, valid=True, t_s=now)
         intent = self.keys.latest()
         if self.hand is not None:
             hand = self.hand.latest()
@@ -56,6 +58,7 @@ class Loop:
         target = tilt_to_pulse(plate_cmd, rig)
         sent = safety.step(self.safety, target, stale, dt, rig)
         plate_state = self.actuator.send(sent, now)
+        self.ball = roll(ball, plate_state, now, rig, self.cfg["control"])
 
         rec = RunLogRecord(
             t_s=now,
