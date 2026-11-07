@@ -44,6 +44,8 @@ class Bench:
             self.last_p = None
 
     def kill(self) -> None:
+        if self.killing:
+            return
         if self.last_p is None:
             self._send("D")
             return

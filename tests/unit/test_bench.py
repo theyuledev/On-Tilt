@@ -68,3 +68,15 @@ def test_kill_with_no_pulses_just_disarms(setup):
     board, bench, _ = setup
     bench.kill()
     assert board.sent == ["D"]
+
+
+def test_second_kill_mid_ramp_does_not_restart_the_ramp(setup):
+    board, bench, _ = setup
+    armed_at(bench, 1650, 1500)
+    bench.kill()
+    for _ in range(20):
+        bench.tick(0.01)
+    mid = int(board.sent[-1].split()[1])
+    bench.kill()
+    bench.tick(0.01)
+    assert int(board.sent[-1].split()[1]) <= mid
