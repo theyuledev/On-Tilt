@@ -13,6 +13,7 @@ pytestmark = pytest.mark.unit
 class FakeFrames:
     def __init__(self, *frames):
         self.frames = list(frames)
+        self.running = True
 
     def read(self):
         return self.frames.pop(0) if self.frames else None
@@ -42,7 +43,22 @@ def test_camera_jpg_serves_the_frame_or_404():
     assert r.content.startswith(b"\xff\xd8")
 
 
+def test_dead_grab_thread_shows_camera_lost_instead_of_the_last_frame():
+    frames = FakeFrames(Frame(np.zeros((8, 8, 3), np.uint8), 1.0))
+    loop = Loop(load(), frames=frames)
+    client = TestClient(make_app(loop))
+    loop.tick(1.0, 0.01)
+    assert loop.snapshot()["camera_lost"] is False
+    assert client.get("/camera.jpg").status_code == 200
+
+    frames.running = False
+    assert loop.snapshot()["camera_lost"] is True
+    assert client.get("/camera.jpg").status_code == 404
+    assert Loop(load()).snapshot()["camera_lost"] is False
+
+
 def test_page_has_the_cam():
     page = TestClient(make_app(Loop(load()))).get("/").text
     assert 'src = "/camera.jpg?' in page
     assert "no camera" in page
+    assert '"camera lost"' in page

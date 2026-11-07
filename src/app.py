@@ -99,10 +99,16 @@ class Loop:
             self.safety = safety.SafetyState()
             return None, LEVEL
 
+    @property
+    def camera_lost(self) -> bool:
+        # the grab thread stops on a failed read; clip sources have no thread
+        return self.frames is not None and not getattr(self.frames, "running", True)
+
     def snapshot(self) -> dict:
         snap = self.last.to_dict() if self.last else {}
         snap["killing"] = self.safety.killing
         snap["board_lost"] = self.board_lost
+        snap["camera_lost"] = self.camera_lost
         return snap
 
 

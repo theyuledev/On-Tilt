@@ -67,26 +67,35 @@ def test_missing_clip_fails_loudly(tmp_path):
 RIG = {"camera_width": 1280, "camera_height": 800, "camera_fps": 120, "camera_exposure_ms": 3.0}
 
 
-def fake_cameras(shapes):
+def fake_cameras(shapes, dead_opens=0):
     opened = []
+    fast = []
 
     class Cap:
         def __init__(self, index):
             self.shape = shapes[index] if index < len(shapes) else None
             self.sets = {}
+            self.reads = 0
+            self.released = False
             opened.append(self)
 
         def isOpened(self):
             return self.shape is not None
 
         def read(self):
+            # the first dead_opens opens in fast mode give one frame then nothing
+            self.reads += 1
+            if self.reads > 1 and self in fast[:dead_opens]:
+                return False, None
             return True, np.zeros(self.shape, np.uint8)
 
         def set(self, prop, value):
+            if not self.sets:
+                fast.append(self)
             self.sets[prop] = value
 
         def release(self):
-            pass
+            self.released = True
 
     return Cap, opened
 
@@ -112,6 +121,26 @@ def test_exposure_goes_manual_in_100us_steps(monkeypatch):
     assert ran == [cmd]
     monkeypatch.setattr(shutil, "which", lambda name: None)
     assert not set_exposure(RIG, ran.append) and len(ran) == 1
+
+
+def test_reopens_once_when_the_stream_dies_after_warm_up():
+    cap_cls, opened = fake_cameras([(800, 1280, 3)], dead_opens=1)
+    ran = []
+    cap = open_camera(RIG, cap_cls, ran.append)
+    fast = [c for c in opened if c.sets]
+    assert len(fast) == 2 and cap is fast[1]
+    assert fast[0].released and not cap.released
+    assert cap.sets == fast[0].sets
+    assert len(ran) == (1 if shutil.which("uvc-util") else 0)
+
+
+def test_stream_still_dead_after_reopen_fails_clearly():
+    cap_cls, opened = fake_cameras([(800, 1280, 3)], dead_opens=2)
+    ran = []
+    with pytest.raises(RuntimeError, match="reopen"):
+        open_camera(RIG, cap_cls, ran.append)
+    assert len([c for c in opened if c.sets]) == 2
+    assert all(c.released for c in opened) and not ran
 
 
 def test_no_matching_camera_fails_clearly():
