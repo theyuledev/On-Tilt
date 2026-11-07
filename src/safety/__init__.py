@@ -30,6 +30,15 @@ def _clamp(v: float, lo: float, hi: float) -> float:
     return min(max(v, lo), hi)
 
 
+def limits(rig: dict) -> tuple[float, float, float, float]:
+    cx, cy = center(rig)
+    lim_x, lim_y = rig["limit_x_us"], rig["limit_y_us"]
+    if rig["startup_flag"]:
+        lim_x = min(lim_x, rig["startup_range_us"])
+        lim_y = min(lim_y, rig["startup_range_us"])
+    return cx - lim_x, cx + lim_x, cy - lim_y, cy + lim_y
+
+
 def step(
     state: SafetyState, target: ServoCommand, stale: bool, dt: float, rig: dict
 ) -> ServoCommand | None:
@@ -40,16 +49,12 @@ def step(
     if state.x_us is None:
         state.x_us, state.y_us = cx, cy
 
-    lim_x, lim_y = rig["limit_x_us"], rig["limit_y_us"]
-    if rig["startup_flag"]:
-        lim_x = min(lim_x, rig["startup_range_us"])
-        lim_y = min(lim_y, rig["startup_range_us"])
-
     if state.killing or stale:
         tx, ty, rate = cx, cy, rig["kill_ramp_us_s"]
     else:
-        tx = _clamp(target.x_us, cx - lim_x, cx + lim_x)
-        ty = _clamp(target.y_us, cy - lim_y, cy + lim_y)
+        x_lo, x_hi, y_lo, y_hi = limits(rig)
+        tx = _clamp(target.x_us, x_lo, x_hi)
+        ty = _clamp(target.y_us, y_lo, y_hi)
         rate = rig["slew_us_s"]
 
     state.x_us = _toward(state.x_us, tx, rate * dt)

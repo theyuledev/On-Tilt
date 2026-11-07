@@ -20,6 +20,9 @@ camera_height = { value = 800, label = "uncalibrated default (estimated expected
 camera_fps = { value = 120, label = "uncalibrated default (estimated expected value)" }
 camera_manual_exposure_mode = { value = 1, label = "uncalibrated default (estimated expected value)" }
 camera_exposure = "TODO(measured: camera_exposure)"
+serial_port = "TODO(set: serial_port)"
+serial_baud = { value = 115200, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+serial_reply_timeout_s = { value = 0.05, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 
 [input]
 intent_gain_deg = { value = 12.0, label = "uncalibrated default (estimated expected value)" }
