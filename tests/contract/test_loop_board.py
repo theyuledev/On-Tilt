@@ -133,6 +133,15 @@ def test_late_reply_does_not_lock_out_the_next_arm(loop, board, clock):
     assert board.armed and loop.snapshot()["armed"]
 
 
+def test_unplugged_at_arm_latches_board_lost_instead_of_raising(loop, board, clock):
+    board.unplugged = True
+    loop.arm()
+    ticks(loop, clock, 2)
+    snap = loop.snapshot()
+    assert snap["board_lost"] and not snap["armed"]
+    assert board.sent == []
+
+
 @pytest.mark.parametrize("fail", [unplug, garble])
 def test_dead_link_marks_board_lost_and_stops_sending(loop, board, clock, fail):
     loop.arm()

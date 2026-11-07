@@ -1,3 +1,5 @@
+import termios
+
 import serial
 
 from src.contracts import PlateState, ServoCommand
@@ -54,7 +56,11 @@ class SerialActuator:
 
     def _arm(self) -> None:
         # a reply that came in after the timeout is still queued, it would be read as L's
-        self.link.port.reset_input_buffer()
+        try:
+            self.link.port.reset_input_buffer()
+        except termios.error as e:
+            # gone port, and termios.error is not an OSError on its own
+            raise OSError(str(e)) from e
         self.link.ask(limits_line(self.rig))
         self.link.ask("A")
         self.armed = True
