@@ -10,6 +10,7 @@ class FakeBoard:
         self.pulses = None
         self.led = False
         self.silent = False
+        self.late = False  # next reply misses the read and sits in the buffer
         self.sent: list[str] = []
         self._replies: list[str] = []
 
@@ -20,7 +21,13 @@ class FakeBoard:
             self._replies.append(self._handle(line.split()))
 
     def readline(self) -> bytes:
+        if self.late:
+            self.late = False
+            return b""
         return (self._replies.pop(0) + "\n").encode() if self._replies else b""
+
+    def reset_input_buffer(self) -> None:
+        self._replies.clear()
 
     def _handle(self, parts: list[str]) -> str:
         if not parts or len(parts[0]) != 1:

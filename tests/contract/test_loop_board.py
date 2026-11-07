@@ -118,6 +118,21 @@ def test_silent_board_disarms_instead_of_latching_lost(loop, board, clock):
     assert not snap["armed"] and not snap["board_lost"]
 
 
+def test_late_reply_does_not_lock_out_the_next_arm(loop, board, clock):
+    loop.arm()
+    ticks(loop, clock, 3)
+    board.late = True
+    ticks(loop, clock, 1)
+    assert not loop.snapshot()["armed"] and board._replies  # the P reply landed after the timeout
+
+    board.armed = False  # 250 ms of silence, board self levelled
+    n = len(board.sent)
+    loop.arm()
+    ticks(loop, clock, 3)
+    assert [s[0] for s in board.sent[n:]] == ["L", "A", "P", "P", "P"]
+    assert board.armed and loop.snapshot()["armed"]
+
+
 @pytest.mark.parametrize("fail", [unplug, garble])
 def test_dead_link_marks_board_lost_and_stops_sending(loop, board, clock, fail):
     loop.arm()

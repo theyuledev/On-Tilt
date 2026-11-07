@@ -16,7 +16,7 @@ def limits_line(rig: dict) -> str:
 
 
 class BoardLink:
-    """Speaks firmware/PROTOCOL.md over anything with write() and readline()."""
+    """Speaks firmware/PROTOCOL.md over anything with write(), readline(), reset_input_buffer()."""
 
     def __init__(self, port):
         self.port = port
@@ -53,6 +53,8 @@ class SerialActuator:
         self.state = PlateState(sent_x_deg=0.0, sent_y_deg=0.0, est_x_deg=0.0, est_y_deg=0.0)
 
     def _arm(self) -> None:
+        # a reply that came in after the timeout is still queued, it would be read as L's
+        self.link.port.reset_input_buffer()
         self.link.ask(limits_line(self.rig))
         self.link.ask("A")
         self.armed = True
