@@ -25,7 +25,7 @@ def make_app(loop) -> FastAPI:
 
     @app.get("/camera.jpg")
     def camera():
-        if loop.frame is None:
+        if loop.frame is None or loop.camera_lost:
             return Response(status_code=404)
         _, jpg = cv2.imencode(".jpg", loop.frame.image)
         return Response(jpg.tobytes(), media_type="image/jpeg")

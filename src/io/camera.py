@@ -8,9 +8,11 @@ import cv2
 
 from src.io.ports import Frame
 
+WARMUP_READS = 30
+
 
 def _first_frame_shape(cap) -> tuple[int, ...] | None:
-    for _ in range(30):
+    for _ in range(WARMUP_READS):
         ok, img = cap.read()
         if ok:
             return img.shape[:2]
@@ -45,9 +47,7 @@ def set_exposure(rig: dict, run=subprocess.run) -> bool:
     return True
 
 
-def open_camera(rig: dict, video_capture=cv2.VideoCapture, run=subprocess.run):
-    want = overhead_shape(rig)
-    index = find_camera(lambda s: s == want, f"{want[1]}x{want[0]} frames", video_capture)
+def _open_fast(index: int, rig: dict, video_capture):
     cap = video_capture(index)
     # on mac this camera stops sending frames if width/height get set, and the
     # fast mode only kicks in if MJPG + fps are set before the first read
@@ -56,6 +56,25 @@ def open_camera(rig: dict, video_capture=cv2.VideoCapture, run=subprocess.run):
     if _first_frame_shape(cap) is None:
         cap.release()
         raise RuntimeError("camera found but sends no frames in fast mode")
+    return cap
+
+
+def _stream_alive(cap) -> bool:
+    n = WARMUP_READS // 3
+    return sum(cap.read()[0] for _ in range(n)) >= n / 2
+
+
+def open_camera(rig: dict, video_capture=cv2.VideoCapture, run=subprocess.run):
+    want = overhead_shape(rig)
+    index = find_camera(lambda s: s == want, f"{want[1]}x{want[0]} frames", video_capture)
+    cap = _open_fast(index, rig, video_capture)
+    if not _stream_alive(cap):
+        # first open after a replug or exposure change can die right after the warm-up frame
+        cap.release()
+        cap = _open_fast(index, rig, video_capture)
+        if not _stream_alive(cap):
+            cap.release()
+            raise RuntimeError("camera stream dead after reopen")
     set_exposure(rig, run)
     return cap
 
