@@ -5,7 +5,7 @@ import pytest
 
 from src.io.settings import load
 from src.safety import limits
-from src.vision.pointer import horn_angle, motion_roi, report
+from src.vision.pointer import bright_blobs, pick_pair, report, track_pair
 from tools.servo_test import plan
 
 pytestmark = pytest.mark.unit
@@ -32,26 +32,30 @@ def frame(angle_deg, radius=150, size=60, dot=8, extra=None):
     return img
 
 
-def test_horn_angle_finds_two_squares():
-    angle, p1, p2 = horn_angle(frame(30))
-    assert abs(angle - 30) < 0.5 or abs(angle + 150) < 0.5
-    assert math.dist(p1, p2) == pytest.approx(300, abs=2)
+def test_bright_blobs_finds_the_two_notes_and_skips_small_dots():
+    img = frame(30, extra=(1000, 700, 6, 6))
+    blobs = bright_blobs(img)
+    assert len(blobs) == 2 and math.dist(blobs[0], blobs[1]) == pytest.approx(300, abs=2)
 
 
-def test_horn_angle_unwraps_against_previous():
-    angle, _, _ = horn_angle(frame(120), prev=100)
+def test_pick_pair_takes_the_blobs_that_moved():
+    still = (20, 20, 300, 300)
+    before = bright_blobs(frame(0, extra=still))
+    after = bright_blobs(frame(4, extra=still))
+    pair = pick_pair(before, after)
+    assert pair is not None and math.dist(*pair) == pytest.approx(300, abs=2)
+    assert all(p[0] > 400 for p in pair)
+    assert pick_pair(before, before) is None
+
+
+def test_track_pair_follows_the_notes_and_unwraps():
+    pair = pick_pair(bright_blobs(frame(100)), bright_blobs(frame(104)))
+    angle, _, _ = track_pair(frame(120), pair, prev=100)
     assert angle == pytest.approx(120, abs=0.5)
-    angle, _, _ = horn_angle(frame(-10), prev=175)
+    pair = pick_pair(bright_blobs(frame(161)), bright_blobs(frame(165)))
+    angle, _, _ = track_pair(frame(-10), pair, prev=165)
     assert angle == pytest.approx(170, abs=0.5)
-
-
-def test_roi_rejects_bright_distractor_outside_it():
-    img = frame(0, extra=(20, 20, 300, 300))
-    angle, _, _ = horn_angle(img, roi=(300, 200, 700, 400), prev=0)
-    assert angle == pytest.approx(0, abs=0.5)
-    assert motion_roi(frame(0), frame(0)) is None
-    x, y, w, h = motion_roi(frame(0), frame(40))
-    assert x < 640 - 150 < 640 + 150 < x + w and y < 400 < y + h
+    assert track_pair(frame(60), pair) is None
 
 
 def test_plan_stays_in_startup_limits_and_has_every_phase(rig):
@@ -59,7 +63,13 @@ def test_plan_stays_in_startup_limits_and_has_every_phase(rig):
     lo, hi = limits(rig)[:2]
     assert all(lo <= us <= hi for us, _ in steps)
     phases = [p for _, p in steps]
-    assert phases[0] == "hold" and "sweep" in phases and "step" in phases and "rev30" in phases
+    assert (
+        phases[0] == "find"
+        and "hold" in phases
+        and "sweep" in phases
+        and "step" in phases
+        and "rev30" in phases
+    )
 
 
 def toy_servo(steps, rig, tau=0.04, delay=0.03, dead=6.0, noise=0.02, fps=119):

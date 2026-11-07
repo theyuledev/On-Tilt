@@ -10,7 +10,7 @@ from src.io.camera import CameraSource, open_camera
 from src.io.serial_link import open_board
 from src.io.settings import load
 from src.safety import limits
-from src.vision.pointer import horn_angle, motion_roi, report
+from src.vision.pointer import bright_blobs, pick_pair, report, track_pair
 from tools.bench import Bench
 
 REVERSALS = (3, 5, 8, 12, 20, 30)
@@ -18,7 +18,7 @@ OUT = Path("data/servo")
 
 
 def plan(rig: dict, axis: int, tick: float) -> list[tuple[int, str]]:
-    """One (pulse_us, phase) per tick: hold, slow sweep, big steps, small reversals."""
+    """One (pulse_us, phase) per tick: find nudge, hold, slow sweep, big steps, small reversals."""
     c = round(center(rig)[axis])
     lo, hi = limits(rig)[2 * axis : 2 * axis + 2]
     r = round(min(c - lo, hi - c))
@@ -32,6 +32,8 @@ def plan(rig: dict, axis: int, tick: float) -> list[tuple[int, str]]:
         n = max(1, round(abs(b - a) / (rate * tick)))
         out.extend((round(a + (b - a) * i / n), phase) for i in range(1, n + 1))
 
+    ramp(c, c + r, "find")
+    ramp(c + r, c, "find")
     hold(c, 1.5, "hold")
     ramp(c, c + r, "sweep")
     ramp(c + r, c - r, "sweep")
@@ -49,7 +51,7 @@ def plan(rig: dict, axis: int, tick: float) -> list[tuple[int, str]]:
 
 def run(bench: Bench, cam, steps, other: int, axis: int, tick: float):
     commands, angles = [], []
-    first = roi = prev = None
+    first = pair = prev = None
     top = max(us for us, _ in steps)
     last_phase = None
     t0 = time.monotonic()
@@ -71,13 +73,15 @@ def run(bench: Bench, cam, steps, other: int, axis: int, tick: float):
             gray = f.image if f.image.ndim == 2 else cv2.cvtColor(f.image, cv2.COLOR_BGR2GRAY)
             if first is None:
                 first = gray
-            elif roi is None and us == top:
-                roi = motion_roi(first, gray)
-                print(f"roi {roi}", flush=True)
-            found = horn_angle(gray, roi, prev)
-            if found:
-                prev = found[0]
-                angles.append((f.t_s, prev))
+            elif pair is None:
+                if us == top:
+                    pair = pick_pair(bright_blobs(first), bright_blobs(gray))
+                    print(f"pointer {pair}" if pair else "pointer not found", flush=True)
+            else:
+                found = track_pair(gray, pair, prev)
+                if found:
+                    prev, *pair = found
+                    angles.append((f.t_s, prev))
     return commands, angles
 
 

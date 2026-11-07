@@ -17,40 +17,45 @@ def unwrap(angle: float, prev: float) -> float:
     return angle
 
 
-def horn_angle(
-    gray: np.ndarray, roi: tuple[int, int, int, int] | None = None, prev: float | None = None
-) -> tuple[float, Point, Point] | None:
-    x0 = y0 = 0
-    if roi is not None:
-        x0, y0, w, h = roi
-        gray = gray[y0 : y0 + h, x0 : x0 + w]
+def bright_blobs(gray: np.ndarray, min_area: int = 200) -> np.ndarray:
     thr = (np.percentile(gray, 50) + np.percentile(gray, 99.9)) / 2
-    mask = (gray > thr).astype(np.uint8)
-    n, _, stats, cents = cv2.connectedComponentsWithStats(mask)
-    if n < 3:
-        return None
+    n, _, stats, cents = cv2.connectedComponentsWithStats((gray > thr).astype(np.uint8))
+    if n < 2:
+        return np.empty((0, 2))
     stats, cents = stats[1:], cents[1:]
     w, h, area = (stats[:, k] for k in (cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT, cv2.CC_STAT_AREA))
-    roundish = (area >= 20) & (area > 0.5 * w * h) & (np.minimum(w, h) > 0.5 * np.maximum(w, h))
-    idx = np.flatnonzero(roundish)
-    if len(idx) < 2:
+    ok = (area >= min_area) & (area > 0.5 * w * h) & (np.minimum(w, h) > 0.5 * np.maximum(w, h))
+    return cents[ok]
+
+
+def pick_pair(before: np.ndarray, after: np.ndarray, min_move: float = 2.0):
+    # the notes on the horn are the blobs that moved, the other servo's notes and leds don't
+    if len(before) == 0 or len(after) < 2:
         return None
-    (x1, y1), (x2, y2) = cents[idx[np.argsort(-area[idx])[:2]]]
+    moved = np.linalg.norm(after[:, None] - before[None], axis=2).min(1)
+    i = np.argsort(-moved)[:2]
+    if moved[i[1]] < min_move:
+        return None
+    return tuple(map(tuple, after[i]))
+
+
+def track_pair(gray: np.ndarray, pair, prev: float | None = None, max_jump: float = 60):
+    blobs = bright_blobs(gray)
+    pts = []
+    for p in pair:
+        if len(blobs) == 0:
+            return None
+        d = np.linalg.norm(blobs - p, axis=1)
+        if d.min() > max_jump:
+            return None
+        pts.append(tuple(blobs[d.argmin()]))
+    (x1, y1), (x2, y2) = pts
+    if pts[0] == pts[1]:
+        return None
     angle = math.degrees(math.atan2(y2 - y1, x2 - x1))
     if prev is not None:
         angle = unwrap(angle, prev)
-    return angle, (x1 + x0, y1 + y0), (x2 + x0, y2 + y0)
-
-
-def motion_roi(a: np.ndarray, b: np.ndarray, pad: int = 40) -> tuple[int, int, int, int] | None:
-    diff = cv2.absdiff(a, b)
-    if diff.max() < 30:
-        return None
-    ys, xs = np.nonzero(diff > diff.max() / 2)
-    h, w = a.shape[:2]
-    x0, y0 = max(xs.min() - pad, 0), max(ys.min() - pad, 0)
-    x1, y1 = min(xs.max() + pad, w), min(ys.max() + pad, h)
-    return int(x0), int(y0), int(x1 - x0), int(y1 - y0)
+    return angle, pts[0], pts[1]
 
 
 def _first_motion(ta, a, t0, t1, thr) -> tuple[float, float] | None:
