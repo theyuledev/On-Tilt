@@ -43,7 +43,7 @@
 <script>
 const held = new Set();
 const keymap = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1],
-                 a: [-1, 0], d: [1, 0], w: [0, 1], s: [0, -1] };
+                 KeyA: [-1, 0], KeyD: [1, 0], KeyW: [0, 1], KeyS: [0, -1] };
 let pending = {};
 let ws, cfg, lastT, lastSeen;
 const cam = document.getElementById("cam"), nocam = document.getElementById("nocam");
@@ -51,9 +51,9 @@ const nextCam = () => { cam.src = "/camera.jpg?" + performance.now(); };
 
 addEventListener("keydown", e => {
   if (e.code === "Space") { pending.kill = true; e.preventDefault(); return; }
-  if (keymap[e.key]) { held.add(e.key); e.preventDefault(); }
+  if (keymap[e.code]) { held.add(e.code); e.preventDefault(); }
 });
-addEventListener("keyup", e => held.delete(e.key));
+addEventListener("keyup", e => held.delete(e.code));
 addEventListener("blur", () => held.clear());
 document.getElementById("arm").onclick = () => { pending.arm = true; };
 document.getElementById("kill").onclick = () => { pending.kill = true; };

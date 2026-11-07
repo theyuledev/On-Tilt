@@ -21,6 +21,13 @@ def test_page_has_ball_heartbeat_and_board_lost(client):
     assert 'id="board"' in page
 
 
+def test_page_tracks_held_keys_by_code_so_shift_cannot_stick_one(client):
+    page = client.get("/").text
+    assert "e.code" in page and "e.key" not in page
+    assert all(k in page for k in ("KeyA", "KeyD", "KeyW", "KeyS"))
+    assert 'addEventListener("blur", () => held.clear())' in page
+
+
 def test_config_gives_plate_ball_and_stale_limit_from_settings(client):
     cfg = load()
     assert client.get("/config").json() == {
