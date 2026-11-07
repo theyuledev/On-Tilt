@@ -15,7 +15,7 @@ htmlcov/
 
 /data
 /data.nosync/
-*.task
+/models
 configs/*.local.*
 
 .DS_Store
