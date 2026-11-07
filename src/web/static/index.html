@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>On-Tilt</title>
+<style>
+  body { margin: 0; font: 15px system-ui, sans-serif; background: #111; color: #eee; display: grid; place-items: center; min-height: 100vh; }
+  main { display: grid; gap: 20px; justify-items: center; }
+  .stage { perspective: 700px; width: 320px; height: 320px; display: grid; place-items: center; }
+  .plate { width: 260px; height: 260px; background: #c8a46a; border: 10px solid #8a6a3a; border-radius: 4px; transition: transform 30ms linear; }
+  .row { display: flex; gap: 10px; align-items: center; }
+  button { font: inherit; padding: 10px 22px; border: 0; border-radius: 6px; cursor: pointer; }
+  #arm { background: #2e7d32; color: #fff; }
+  #kill { background: #c62828; color: #fff; font-weight: 700; }
+  .pill { padding: 3px 10px; border-radius: 99px; background: #333; }
+  .on { background: #2e7d32; }
+  .warn { background: #c62828; }
+  pre { margin: 0; color: #aaa; }
+</style>
+</head>
+<body>
+<main>
+  <div class="row">
+    <span id="link" class="pill">offline</span>
+    <span id="armed" class="pill">disarmed</span>
+    <span id="stale" class="pill">no input</span>
+  </div>
+  <div class="stage"><div id="plate" class="plate"></div></div>
+  <div class="row">
+    <button id="arm">arm</button>
+    <button id="kill">kill (space)</button>
+  </div>
+  <pre id="nums"></pre>
+  <div>arrows / wasd to tilt</div>
+</main>
+<script>
+const held = new Set();
+const keymap = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1],
+                 a: [-1, 0], d: [1, 0], w: [0, 1], s: [0, -1] };
+let pending = {};
+let ws;
+
+addEventListener("keydown", e => {
+  if (e.code === "Space") { pending.kill = true; e.preventDefault(); return; }
+  if (keymap[e.key]) { held.add(e.key); e.preventDefault(); }
+});
+addEventListener("keyup", e => held.delete(e.key));
+addEventListener("blur", () => held.clear());
+document.getElementById("arm").onclick = () => { pending.arm = true; };
+document.getElementById("kill").onclick = () => { pending.kill = true; };
+
+function intent() {
+  let x = 0, y = 0;
+  for (const k of held) { x += keymap[k][0]; y += keymap[k][1]; }
+  return { x: Math.max(-1, Math.min(1, x)), y: Math.max(-1, Math.min(1, y)) };
+}
+
+function show(s) {
+  if (!s.plate_state) return;
+  const p = s.plate_state;
+  document.getElementById("plate").style.transform =
+    `rotateX(${p.sent_y_deg}deg) rotateY(${p.sent_x_deg}deg)`;
+  const armed = document.getElementById("armed");
+  armed.textContent = s.killing ? "killing" : s.armed ? "armed" : "disarmed";
+  armed.className = "pill " + (s.killing ? "warn" : s.armed ? "on" : "");
+  document.getElementById("nums").textContent =
+    `tilt x ${p.sent_x_deg.toFixed(2)}°  y ${p.sent_y_deg.toFixed(2)}°\n` +
+    (s.armed ? `servo x ${s.servo_cmd.x_us} us  y ${s.servo_cmd.y_us} us\n` : `servo off\n`) +
+    `intent x ${s.intent.x}  y ${s.intent.y}`;
+}
+
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => { document.getElementById("link").textContent = "live"; document.getElementById("link").className = "pill on"; frame(); };
+  ws.onclose = () => { document.getElementById("link").textContent = "offline"; document.getElementById("link").className = "pill warn"; setTimeout(connect, 1000); };
+  ws.onmessage = e => { show(JSON.parse(e.data)); requestAnimationFrame(frame); };
+}
+
+function frame() {
+  if (ws.readyState !== 1) return;
+  ws.send(JSON.stringify({ ...intent(), ...pending }));
+  pending = {};
+}
+
+connect();
+</script>
+</body>
+</html>
