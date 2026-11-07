@@ -2,6 +2,8 @@ from typing import NamedTuple, Protocol
 
 import numpy as np
 
+from src.contracts import PlateState, ServoCommand
+
 
 class Frame(NamedTuple):
     image: np.ndarray
@@ -12,3 +14,7 @@ class FrameSource(Protocol):
     def read(self) -> Frame | None: ...
 
     def close(self) -> None: ...
+
+
+class TiltActuator(Protocol):
+    def send(self, cmd: ServoCommand | None, now: float) -> PlateState: ...
