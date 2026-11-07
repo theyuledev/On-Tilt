@@ -5,22 +5,29 @@ import uvicorn
 
 from src import safety
 from src.bus import Bus
-from src.contracts import BallState, RunLogRecord
+from src.contracts import BallState, PlateState, RunLogRecord, ServoCommand
 from src.control.pulse_map import tilt_to_pulse
 from src.inputs.hand import HandInput
 from src.inputs.keyboard import KeyboardInput
 from src.io.camera import CameraSource, open_camera
-from src.io.ports import Frame, FrameSource, InputSource
+from src.io.ports import Frame, FrameSource, InputSource, TiltActuator
+from src.io.serial_link import LinkError, SerialActuator, open_board
 from src.io.settings import env, load
 from src.modes import MODES
 from src.sim.ball import roll
 from src.sim.plate import SimActuator
 from src.web.server import make_app
 
+LEVEL = PlateState(sent_x_deg=0.0, sent_y_deg=0.0, est_x_deg=0.0, est_y_deg=0.0)
+
 
 class Loop:
     def __init__(
-        self, cfg: dict, hand: InputSource | None = None, frames: FrameSource | None = None
+        self,
+        cfg: dict,
+        hand: InputSource | None = None,
+        frames: FrameSource | None = None,
+        actuator: TiltActuator | None = None,
     ):
         self.cfg = cfg
         self.bus = Bus()
@@ -29,13 +36,15 @@ class Loop:
         self.frames = frames
         self.frame: Frame | None = None
         self.safety = safety.SafetyState()
-        self.actuator = SimActuator(cfg["rig"], cfg["control"])
+        self.actuator = actuator or SimActuator(cfg["rig"], cfg["control"])
+        self.board_lost = False
         self.mode = cfg["control"]["mode"]
         self.ball: BallState | None = None
         self.last: RunLogRecord | None = None
 
     def arm(self) -> None:
-        self.safety.arm()
+        if not self.board_lost:
+            self.safety.arm()
 
     def kill(self) -> None:
         self.safety.kill()
@@ -46,7 +55,8 @@ class Loop:
             if frame is not None:
                 self.frame = frame
         rig = self.cfg["rig"]
-        ball = self.ball or BallState(0.0, 0.0, 0.0, 0.0, valid=True, t_s=now)
+        sim = isinstance(self.actuator, SimActuator)
+        ball = self.ball or BallState(0.0, 0.0, 0.0, 0.0, valid=sim, t_s=now)
         intent = self.keys.latest()
         if self.hand is not None:
             hand = self.hand.latest()
@@ -56,9 +66,9 @@ class Loop:
 
         plate_cmd = MODES[self.mode](ball, intent, self.cfg)
         target = tilt_to_pulse(plate_cmd, rig)
-        sent = safety.step(self.safety, target, stale, dt, rig)
-        plate_state = self.actuator.send(sent, now)
-        self.ball = roll(ball, plate_state, now, rig, self.cfg["control"])
+        sent, plate_state = self._drive(target, stale, dt, now)
+        if sim:
+            self.ball = roll(ball, plate_state, now, rig, self.cfg["control"])
 
         rec = RunLogRecord(
             t_s=now,
@@ -74,9 +84,25 @@ class Loop:
         self.bus.publish("tick", rec)
         return rec
 
+    def _drive(
+        self, target: ServoCommand, stale: bool, dt: float, now: float
+    ) -> tuple[ServoCommand | None, PlateState]:
+        if self.board_lost:
+            return None, LEVEL
+        sent = safety.step(self.safety, target, stale, dt, self.cfg["rig"])
+        try:
+            return sent, self.actuator.send(sent, now)
+        except (LinkError, OSError) as e:
+            # board times out on its own and levels the plate
+            print(f"board lost: {e}")
+            self.board_lost = True
+            self.safety = safety.SafetyState()
+            return None, LEVEL
+
     def snapshot(self) -> dict:
         snap = self.last.to_dict() if self.last else {}
         snap["killing"] = self.safety.killing
+        snap["board_lost"] = self.board_lost
         return snap
 
 
@@ -102,7 +128,10 @@ def main() -> None:
     except RuntimeError as e:
         print(f"camera off: {e}")
         frames = None
-    loop = Loop(cfg, hand, frames)
+    actuator = None
+    if cfg["rig"]["actuator"] == "real":
+        actuator = SerialActuator(open_board(cfg["rig"]), cfg["rig"])
+    loop = Loop(cfg, hand, frames, actuator)
     port = int(env("PORT", "8000"))
     server = uvicorn.Server(
         uvicorn.Config(make_app(loop), host="127.0.0.1", port=port, log_level="warning")
