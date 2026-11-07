@@ -1,7 +1,9 @@
 import pytest
 
 from src.contracts import ServoCommand
-from src.safety import SafetyState, step
+from src.io.settings import load
+from src.safety import SafetyState, limits, step
+from tests.contract.fake_board import ENVELOPE
 
 pytestmark = pytest.mark.unit
 
@@ -103,3 +105,11 @@ def test_arm_during_kill_ramp_is_ignored():
     assert not s.armed and not s.killing
     s.arm()
     assert s.armed
+
+
+@pytest.mark.parametrize("startup_flag", [False, True])
+def test_settings_limits_stay_inside_the_firmware_envelope(startup_flag):
+    rig = {**load()["rig"], "startup_flag": startup_flag}
+    lo, hi = ENVELOPE
+    for edge in limits(rig):
+        assert lo <= edge <= hi
