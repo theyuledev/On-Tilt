@@ -63,6 +63,45 @@ def test_missing_clip_fails_loudly(tmp_path):
         ClipSource(tmp_path / "nope.avi")
 
 
-def test_camera_refuses_to_open_before_exposure_is_set():
-    with pytest.raises(RuntimeError, match="not set yet"):
-        open_camera({"camera_exposure": "TODO(measured: camera_exposure)"})
+RIG = {"camera_width": 1280, "camera_height": 800, "camera_fps": 120}
+
+
+def fake_cameras(shapes):
+    opened = []
+
+    class Cap:
+        def __init__(self, index):
+            self.shape = shapes[index] if index < len(shapes) else None
+            self.sets = {}
+            opened.append(self)
+
+        def isOpened(self):
+            return self.shape is not None
+
+        def read(self):
+            return True, np.zeros(self.shape, np.uint8)
+
+        def set(self, prop, value):
+            self.sets[prop] = value
+
+        def release(self):
+            pass
+
+    return Cap, opened
+
+
+def test_picks_the_camera_by_frame_size_and_sets_fast_mode():
+    cap_cls, opened = fake_cameras([(1080, 1920, 3), (800, 1280, 3), (720, 1280, 3)])
+    cap = open_camera(RIG, cap_cls)
+    assert cap.shape == (800, 1280, 3)
+    assert cap.sets == {
+        cv2.CAP_PROP_FOURCC: cv2.VideoWriter_fourcc(*"MJPG"),
+        cv2.CAP_PROP_FPS: 120,
+    }
+    assert all(not c.sets for c in opened if c is not cap)
+
+
+def test_no_matching_camera_fails_clearly():
+    cap_cls, _ = fake_cameras([(1080, 1920, 3), (720, 1280, 3)])
+    with pytest.raises(RuntimeError, match="1280x800"):
+        open_camera(RIG, cap_cls)
