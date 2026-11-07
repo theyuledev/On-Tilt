@@ -1,32 +1,32 @@
 [rig]
-center_x_us = { value = 1500, label = "uncalibrated default (estimated expected value)" }
-center_y_us = { value = 1500, label = "uncalibrated default (estimated expected value)" }
-trim_x_us = { value = 0, label = "uncalibrated default (estimated expected value)" }
-trim_y_us = { value = 0, label = "uncalibrated default (estimated expected value)" }
-us_per_deg_x = { value = 28.75, label = "uncalibrated default (estimated expected value)" }
-us_per_deg_y = { value = 28.75, label = "uncalibrated default (estimated expected value)" }
-limit_x_us = { value = 150, label = "uncalibrated default (estimated expected value)" }
-limit_y_us = { value = 150, label = "uncalibrated default (estimated expected value)" }
-startup_range_us = { value = 150, label = "uncalibrated default (estimated expected value)" }
+center_x_us = { value = 1500, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+center_y_us = { value = 1500, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+trim_x_us = { value = 0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+trim_y_us = { value = 0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+us_per_deg_x = { value = 28.75, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+us_per_deg_y = { value = 28.75, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+limit_x_us = { value = 150, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+limit_y_us = { value = 150, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+startup_range_us = { value = 150, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 startup_flag = true
-slew_us_s = { value = 1500, label = "uncalibrated default (estimated expected value)" }
-kill_ramp_us_s = { value = 300, label = "uncalibrated default (estimated expected value)" }
-stale_intent_s = { value = 0.25, label = "uncalibrated default (estimated expected value)" }
-plate_inner_mm = { value = 265, label = "uncalibrated default (estimated expected value)" }
-ball_d_mm = { value = 16, label = "uncalibrated default (estimated expected value)" }
-camera_index = { value = 1, label = "uncalibrated default (estimated expected value)" }
-camera_width = { value = 1280, label = "uncalibrated default (estimated expected value)" }
-camera_height = { value = 800, label = "uncalibrated default (estimated expected value)" }
-camera_fps = { value = 120, label = "uncalibrated default (estimated expected value)" }
-camera_manual_exposure_mode = { value = 1, label = "uncalibrated default (estimated expected value)" }
+slew_us_s = { value = 1500, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+kill_ramp_us_s = { value = 300, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+stale_intent_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+plate_inner_mm = { value = 265, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+ball_d_mm = { value = 16, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+camera_index = { value = 1, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+camera_width = { value = 1280, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+camera_height = { value = 800, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+camera_fps = { value = 120, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+camera_manual_exposure_mode = { value = 1, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 camera_exposure = "TODO(measured: camera_exposure)"
 serial_port = "TODO(set: serial_port)"
 serial_baud = { value = 115200, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 serial_reply_timeout_s = { value = 0.05, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 
 [input]
-intent_gain_deg = { value = 12.0, label = "uncalibrated default (estimated expected value)" }
-dead_zone = { value = 0.05, label = "uncalibrated default (estimated expected value)" }
+intent_gain_deg = { value = 12.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+dead_zone = { value = 0.05, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 
 [control]
 mode = "hand"
