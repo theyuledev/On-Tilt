@@ -9,7 +9,8 @@ from src.contracts import BallState, RunLogRecord
 from src.control.pulse_map import tilt_to_pulse
 from src.inputs.hand import HandInput
 from src.inputs.keyboard import KeyboardInput
-from src.io.ports import InputSource
+from src.io.camera import CameraSource, open_camera
+from src.io.ports import Frame, FrameSource, InputSource
 from src.io.settings import env, load
 from src.modes import MODES
 from src.sim.plate import SimActuator
@@ -17,11 +18,15 @@ from src.web.server import make_app
 
 
 class Loop:
-    def __init__(self, cfg: dict, hand: InputSource | None = None):
+    def __init__(
+        self, cfg: dict, hand: InputSource | None = None, frames: FrameSource | None = None
+    ):
         self.cfg = cfg
         self.bus = Bus()
         self.keys = KeyboardInput()
         self.hand = hand
+        self.frames = frames
+        self.frame: Frame | None = None
         self.safety = safety.SafetyState()
         self.actuator = SimActuator(cfg["rig"], cfg["control"])
         self.mode = cfg["control"]["mode"]
@@ -34,6 +39,10 @@ class Loop:
         self.safety.kill()
 
     def tick(self, now: float, dt: float) -> RunLogRecord:
+        if self.frames is not None:
+            frame = self.frames.read()
+            if frame is not None:
+                self.frame = frame
         rig = self.cfg["rig"]
         ball = BallState(x_mm=0.0, y_mm=0.0, vx_mm_s=0.0, vy_mm_s=0.0, valid=False, t_s=now)
         intent = self.keys.latest()
@@ -85,7 +94,12 @@ def main() -> None:
     except OSError as e:
         print(f"hand input off: {e}")
         hand = None
-    loop = Loop(cfg, hand)
+    try:
+        frames = CameraSource(open_camera(cfg["rig"]))
+    except RuntimeError as e:
+        print(f"camera off: {e}")
+        frames = None
+    loop = Loop(cfg, hand, frames)
     port = int(env("PORT", "8000"))
     server = uvicorn.Server(
         uvicorn.Config(make_app(loop), host="127.0.0.1", port=port, log_level="warning")
