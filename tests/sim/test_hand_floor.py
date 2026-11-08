@@ -99,7 +99,3 @@ def test_corner_to_corner_settles_quick_without_hitting_the_rim():
     assert settle_s(xs) < 3.0
     assert overshoot_mm(xs) < BAND_MM
     assert max(abs(x) for x in xs) < RIM_MM
-
-
-def test_the_same_player_is_slower_on_the_old_shaping():
-    assert settle_s(run(TODAY)) > settle_s(run(NEW))

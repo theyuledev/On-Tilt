@@ -118,6 +118,15 @@ def test_full_stick_reaches_the_top_on_each_axis():
     assert shape(1.0, 0.0, cfg(REAL))[0] == pytest.approx(1.5)
 
 
+def test_the_whole_hand_travel_moves_the_plate():
+    clamp = REAL["limit_x_us"] / REAL["us_per_deg_x"]
+    new = [shape(i, 0.0, FELT)[0] for i in (0.4, 0.6, 0.9, 1.0)]
+    assert new[0] < new[1] < new[2] < clamp and new[3] == pytest.approx(clamp)
+    # gain 6 with no floor is pinned at the plate clamp from about 0.42 on
+    old = [min(clamp, shape(i, 0.0, CFG)[0]) for i in (0.5, 0.6, 0.9)]
+    assert old == [clamp] * 3
+
+
 def test_with_friction_the_curve_still_only_climbs():
     xs = [shape(v / 1000, 0.0, FELT)[0] for v in range(1001)]
     assert xs == sorted(xs) and xs[0] == 0.0
