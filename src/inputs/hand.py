@@ -96,7 +96,8 @@ class HandIntent:
 
         sx, sy = _signs(cfg)
         # ease in after the hand shows up or the neutral moves, so the plate never jumps
-        ramp = min(1.0, (t - self._appear) / cfg["key_ramp_s"])
+        ramp_s = cfg["key_ramp_s"]
+        ramp = min(1.0, (t - self._appear) / ramp_s) if ramp_s > 0 else 1.0
         x = _clamp(sx * (at[0] - self.neutral[0]) / self.span) * ramp
         y = _clamp(sy * (at[1] - self.neutral[1]) / self.span) * ramp
         return Intent(x=x, y=y, valid=True, t_s=t)

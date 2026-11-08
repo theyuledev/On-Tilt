@@ -128,6 +128,13 @@ def test_no_jump_when_the_hand_comes_back_tilted():
     eases_in(hand, (20.0, 0.0), 1.0, 20 / SPAN)
 
 
+def test_no_ease_in_when_key_ramp_s_is_zero():
+    hand = HandIntent({**RAW_TILT, "key_ramp_s": 0.0})
+    hand.update((0.0, 0.0), 0.0, recentre=True)
+    assert not hand.update(None, 0.5).valid
+    assert hand.update((20.0, 0.0), 1.0).x == pytest.approx(20 / SPAN)
+
+
 def test_the_ease_in_starts_over_on_recentre():
     hand = HandIntent(RAW_TILT)
     hand.update((0.0, 0.0), 0.0, recentre=True)
