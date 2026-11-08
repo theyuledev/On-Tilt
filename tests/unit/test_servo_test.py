@@ -172,3 +172,28 @@ def test_csv_round_trip_and_old_single_time_rows(tmp_path, monkeypatch):
     old = tmp_path / "old.csv"
     old.write_text("cmd,1.0,1600,1500,find\nang,1.005,12.5\n")
     assert load_csv(old) == ([(1.0, 1.0, 1600, 1500, "find")], [(1.005, 12.5)], "ang")
+
+
+class CutCam(FakeCam):
+    def __init__(self, images, clock, after):
+        super().__init__(images, clock)
+        self.after = after
+
+    def read(self):
+        if self.reads == self.after:
+            raise KeyboardInterrupt
+        return super().read()
+
+
+def test_ctrl_c_mid_run_keeps_what_was_logged_and_levels_the_servos(bench):
+    board, b = bench
+    steps = [(1550, "find")] * 5 + [(1500, "hold")] * 5
+    clock = Clock()
+    cam = CutCam([frame(0)] + [frame(4)] * 40, clock, 6)
+    commands, rows = [], []
+    out = guarded(
+        b, 0.01, lambda: run(b, cam, steps, 1500, 0, TICK, PairTracker(1550), clock, commands, rows)
+    )
+    assert out is None
+    assert 0 < len(commands) < len(steps) and len(rows) > 0
+    assert board.sent[-2:] == ["P 1500 1500", "D"] and not board.armed
