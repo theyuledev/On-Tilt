@@ -88,8 +88,24 @@ def test_l_range_loads_limits_around_center_and_logs_headroom(setup):
     assert board.sent == ["L 1300 1700 1300 1700 1500 1500"]
     assert bench.log[-1] == "headroom x: 250 below, 250 above | y: 250 below, 250 above"
     assert (rig["limit_x_us"], rig["limit_y_us"], rig["startup_flag"]) == (200, 200, False)
+
+
+def test_bare_l_goes_back_to_the_settings_limits(setup):
+    board, bench, rig = setup
+    bench.submit("l 300")
     bench.submit("l")
-    assert board.sent[-1] == "L 1300 1700 1300 1700 1500 1500"
+    assert board.sent == ["L 1200 1800 1200 1800 1500 1500", "L 1350 1650 1350 1650 1500 1500"]
+    assert (rig["limit_x_us"], rig["limit_y_us"], rig["startup_flag"]) == (150, 150, True)
+    assert bench.log[-1] == headroom(load()["rig"])
+
+
+def test_arm_starts_the_heartbeat_at_level(setup):
+    board, bench, _ = setup
+    bench.submit("l")
+    bench.submit("A")
+    assert bench.last_p == (1500, 1500)
+    bench.tick(0.01)
+    assert board.sent[-1] == "P 1500 1500"
 
 
 def test_l_with_a_bad_range_sends_nothing(setup):

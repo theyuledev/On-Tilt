@@ -10,6 +10,7 @@ from src.io.serial_link import ENVELOPE_US, BoardLink, LinkError, limits_line, o
 from src.io.settings import load
 
 NUDGE_US = 5
+LIMIT_KEYS = ("limit_x_us", "limit_y_us", "startup_flag")
 
 
 def headroom(rig: dict) -> str:
@@ -30,6 +31,7 @@ class Bench:
     def __init__(self, link: BoardLink, rig: dict):
         self.link = link
         self.rig = rig
+        self.settings_limits = {k: rig[k] for k in LIMIT_KEYS}
         self.log: list[str] = []
         self.last_p: tuple[int, int] | None = None
         self.quiet = False
@@ -59,19 +61,24 @@ class Bench:
         if parts[:2] == ["OK", "P"]:
             self.last_p = (int(parts[2]), int(parts[3]))
             self.quiet = False
+        elif parts[:2] == ["OK", "A"]:
+            # pulses start at level, the heartbeat has to keep them alive from here
+            cx, cy = center(self.rig)
+            self.last_p, self.quiet = (round(cx), round(cy)), False
         elif parts[:2] == ["OK", "D"] or "disarmed" in parts:
             self.last_p = None
         return reply
 
     def _load(self, words: list[str]) -> str:
-        rig = self.rig
-        if len(words) == 2:
-            if not words[1].isdigit():
-                self.log.append(f"{' '.join(words)} needs a whole number")
-                return ""
+        if len(words) == 1:
+            rig = {**self.rig, **self.settings_limits}
+        elif words[1].isdigit():
             # bench-only limits, the settings file is untouched
             rng = int(words[1])
             rig = {**self.rig, "limit_x_us": rng, "limit_y_us": rng, "startup_flag": False}
+        else:
+            self.log.append(f"{' '.join(words)} needs a whole number")
+            return ""
         reply = self._send(limits_line(rig)) or ""
         if reply == "OK L":
             # the board took them, so they are the bench's limits now

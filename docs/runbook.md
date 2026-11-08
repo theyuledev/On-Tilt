@@ -27,9 +27,9 @@ page: `arm` button arms, `kill (space)` button or the space key kills. arrows / 
 
 bench, typed at the `>` prompt:
 
-- `l` loads the settings limits and level pulse (`L xlo xhi ylo yhi xlevel ylevel`), then logs the headroom to the board envelope (1050..1950 us)
-- `l 200` same but with limits of +-200 us around center on both axes, bench only, settings are not written
-- `A` arms, pulses start at the level pulse (center + trims)
+- `l` loads the settings limits and level pulse (`L xlo xhi ylo yhi xlevel ylevel`), also after an `l <n>` widened them, then logs the headroom to the board envelope (1050..1950 us)
+- `l 200` same but with limits of +-200 us around center on both axes. bench only, settings are not written, and the bench keeps them only when the board answers `OK L`; the next bare `l` is back on the settings limits
+- `A` arms, pulses start at the level pulse (center + trims) and the bench heartbeat starts there, so arrows work right away
 - `P x y` sets pulses, the reply shows the clamped values; the bench keeps resending the last P as a heartbeat
 - arrow keys nudge the live pulses 5 us: left/right = x -/+, up/down = y +/-
 - status line: `pulses (x, y) off (+dx, +dy) us` is the offset from center
