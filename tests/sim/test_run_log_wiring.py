@@ -31,10 +31,15 @@ def no_camera(*a):
     raise RuntimeError("no camera")
 
 
+def no_board(*a):
+    raise AssertionError("tests never open a real port")
+
+
 @pytest.fixture
 def headless(monkeypatch, tmp_path):
     monkeypatch.setattr(app, "HandInput", off)
     monkeypatch.setattr(app, "open_camera", no_camera)
+    monkeypatch.setattr(app, "open_board", no_board)
     monkeypatch.setattr(app.uvicorn, "Server", Server)
     monkeypatch.setattr(app, "run", one_tick)
     monkeypatch.setattr(start_run_log, "__defaults__", (tmp_path, time.localtime))
