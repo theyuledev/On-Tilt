@@ -6,12 +6,22 @@ import cv2
 import mediapipe as mp
 from mediapipe.tasks.python import BaseOptions, vision
 
-from src.inputs.hand import HandIntent, palm_center, recentre_asked, send_intent
+from src.inputs.hand import HandIntent, palm_angles, palm_center, recentre_asked, send_intent
 from src.inputs.hand_view import JPEG_PERIOD_S, frame_jpg, publish
 from src.io.camera import WARMUP_READS, CameraSource, find_camera, overhead_shape
 from src.io.settings import ROOT, load
 
 MODEL = ROOT / "models" / "hand_landmarker.task"
+READINGS = {
+    "tilt": lambda result: palm_angles(result.hand_world_landmarks[0]),
+    "palm": lambda result: palm_center(result.hand_landmarks[0]),
+}
+
+
+def reading_for(mode: str):
+    if mode not in READINGS:
+        raise SystemExit(f"input.hand_mode must be one of {', '.join(READINGS)}, not {mode!r}")
+    return READINGS[mode]
 
 
 def run(
@@ -53,6 +63,7 @@ def run(
 def main() -> None:
     cfg = load()
     inp = cfg["input"]
+    read = reading_for(inp["hand_mode"])
     overhead = overhead_shape(cfg["rig"])
     cap = cv2.VideoCapture(find_camera(lambda s: s != overhead, "a webcam picture"))
     # a fresh capture can miss its first reads, and the grab thread stops on a miss
@@ -74,7 +85,12 @@ def main() -> None:
             mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), int(t * 1000)
         )
         last[:] = [result]
-        return palm_center(result.hand_landmarks[0]) if result.hand_landmarks else None
+        return read(result) if result.hand_landmarks else None
+
+    def view(img, intent):
+        # the tilt neutral is two angles, not a place in the image
+        spot = hand.neutral if inp["hand_mode"] == "palm" else None
+        publish(frame_jpg(img, last[0], spot, intent, inp["hand_flip_x"]))
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(("127.0.0.1", 0))
@@ -88,7 +104,7 @@ def main() -> None:
             hand,
             partial(send_intent, sock, port=inp["hand_port"]),
             partial(recentre_asked, sock),
-            show=lambda img, intent: publish(frame_jpg(img, last[0], hand.neutral, intent)),
+            show=view,
         )
     except KeyboardInterrupt:
         pass

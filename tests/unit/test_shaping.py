@@ -1,3 +1,4 @@
+import math
 import time
 
 import pytest
@@ -45,6 +46,29 @@ def test_expo_bends_the_middle_down_but_not_the_ends():
 
 def test_gain_scales_the_output():
     assert shape(1.0, 0.0, {**CFG, "intent_gain_deg": 12.0})[0] == pytest.approx(12.0)
+
+
+def test_inside_the_dead_zone_is_exactly_zero():
+    for r in (0.0, 0.03, 0.079):
+        assert shape(r * 0.6, r * 0.8, CFG) == (0.0, 0.0)
+
+
+@pytest.mark.parametrize("edge", [0.08, 0.16])
+def test_dead_zone_joins_are_smooth(edge):
+    def f(r):
+        return shape(r, 0.0, CFG)[0]
+
+    h = 1e-6
+    assert f(edge + h) - f(edge - h) == pytest.approx(0.0, abs=1e-4)
+    left = (f(edge - h) - f(edge - 2 * h)) / h
+    right = (f(edge + 2 * h) - f(edge + h)) / h
+    assert left == pytest.approx(right, rel=1e-3, abs=1e-3)
+
+
+def test_full_intent_is_full_gain_on_any_heading():
+    assert shape(1.0, 0.0, CFG)[0] == pytest.approx(6.0)
+    x, y = shape(0.6, 0.8, {**CFG, "expo": 0.0})
+    assert math.hypot(x, y) == pytest.approx(6.0)
 
 
 def test_held_key_ramps_up_over_key_ramp_s_and_releases_at_once(clock):
