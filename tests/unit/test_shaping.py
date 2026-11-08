@@ -128,6 +128,14 @@ def test_no_dead_zone_does_not_divide_by_zero():
         assert math.isfinite(x) and x > 0 and y == 0
 
 
+def test_odd_settings_never_divide_by_zero():
+    assert shape(1.0, 0.0, cfg(dead_zone=0.7)) == pytest.approx((6.0, 0.0))
+    assert shape(1.0, 1.0, cfg(dead_zone=1.0)) == (0.0, 0.0)
+    assert top_deg(cfg({**REAL, "us_per_deg_x": 0.0, "us_per_deg_y": 0.0})) == (6.0, 6.0)
+    assert floor_deg(cfg(control={**ROUGH, "sim_g_mm_s2": 0})) == (0.0, 0.0)
+    assert floor_deg(cfg(control={**ROUGH, "sim_g_mm_s2": 1})) == (90.0, 90.0)
+
+
 def test_no_step_at_the_dead_zone_edge_with_friction():
     h = 1e-6
     for x, y in ((DZ, 0.0), (0.0, -DZ)):

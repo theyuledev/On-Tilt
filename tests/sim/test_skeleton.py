@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.app import Loop, run, stop_on_error
+from src.inputs.shaping import top_deg
 from src.io.settings import load
 from src.web.server import make_app
 
@@ -29,12 +30,11 @@ def ticks(loop, clock, n, key=None, dt=0.01):
 
 def test_key_tilts_sim_plate_through_safety_then_kill_levels_and_disarms(clock):
     loop = Loop(load())
-    rig = loop.cfg["rig"]
     loop.arm()
 
     ticks(loop, clock, 100, key=(1.0, 0.0))
     p = loop.last.plate_state
-    assert p.sent_x_deg == pytest.approx(rig["startup_range_us"] / rig["us_per_deg_x"], abs=0.05)
+    assert p.sent_x_deg == pytest.approx(top_deg(loop.cfg)[0], abs=0.05)
     assert p.sent_y_deg == 0
     assert loop.last.armed
 
