@@ -6,6 +6,7 @@ from pathlib import Path
 
 import cv2
 
+from src.io.camera_exposure import exposure_problem
 from src.io.camera_hook import Hooked
 from src.io.ports import Frame
 
@@ -85,6 +86,9 @@ def open_camera(rig: dict, video_capture=cv2.VideoCapture, run=subprocess.run):
         cap = _open_fast(index, rig, video_capture)
         if _stream_alive(cap):
             set_exposure(rig, run)
+            problem = exposure_problem(rig, run)
+            if problem:
+                print(f"camera: {problem}")
             return cap
         cap.release()
     raise RuntimeError(f"camera gives no frames after {OPEN_TRIES} opens")
