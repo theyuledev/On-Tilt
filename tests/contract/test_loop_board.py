@@ -199,11 +199,11 @@ def test_no_d_when_the_last_level_pulse_timed_out_during_the_board_ramp(loop, bo
     ticks(loop, clock, 3)
     loop.kill()
     ticks(loop, clock, 3)  # level hold, one tick to go
-    board.ramping = board.late = True  # the ERR P lands after the timeout, S still says armed
+    board.ramping = board.late = True  # the ERR P lands after the timeout, S says ramping
     ticks(loop, clock, 1)
-    assert board.sent[-1] == "S" and loop.last.armed
+    assert board.sent[-1] == "S" and not loop.last.armed
     ticks(loop, clock, 1)
-    assert not loop.last.armed and "D" not in board.sent and board.sent[-1] == "S"
+    assert "D" not in board.sent and board.sent[-1] == "S"
     snap = loop.snapshot()
     assert not snap["armed"] and not snap["board_lost"]
 

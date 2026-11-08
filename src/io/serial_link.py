@@ -59,12 +59,13 @@ class BoardLink:
         raise LinkError(f"{line!r} -> {reply!r}")
 
     def status(self) -> dict:
-        armed, loaded, since_ms, fw = self.ask("S")
+        armed, loaded, since_ms, fw, *ramping = self.ask("S")  # fw 0.1 has no ramping field
         return {
             "armed": armed == "1",
             "limits_loaded": loaded == "1",
             "since_ms": int(since_ms),
             "fw": fw,
+            "ramping": ramping == ["1"],
         }
 
 
@@ -84,7 +85,9 @@ class SerialActuator:
 
     def still_armed(self) -> bool:
         self.link.flush()
-        return self.link.status()["armed"]
+        s = self.link.status()
+        # during its self ramp the board is as good as disarmed
+        return s["armed"] and not s["ramping"]
 
     def send(self, cmd: ServoCommand | None, now: float) -> PlateState:
         if cmd is None:
@@ -101,8 +104,7 @@ class SerialActuator:
         try:
             x, y = (int(v) for v in self.link.ask(f"P {cmd.x_us} {cmd.y_us}"))
         except LinkError as e:
-            # only a timeout leaves the board in doubt; an ERR is its own word, during its
-            # self ramp it still says armed=1 so asking S there would keep us going
+            # only a timeout leaves the board in doubt, an ERR is its own word
             if isinstance(e, BoardRefused) or not self.still_armed():
                 raise
             self.acked = False

@@ -77,6 +77,36 @@ def test_ask_never_skips_an_err(board):
 
 def test_status(board, rig):
     link = BoardLink(board)
-    assert link.status() == {"armed": False, "limits_loaded": False, "since_ms": 0, "fw": "fake"}
+    assert link.status() == {
+        "armed": False,
+        "limits_loaded": False,
+        "since_ms": 0,
+        "fw": "fake",
+        "ramping": False,
+    }
     SerialActuator(link, rig).send(ServoCommand(1500, 1500), 0.0)
     assert link.status()["armed"]
+
+
+def test_ramping_board_says_so_and_counts_as_disarmed(board, rig):
+    board.armed = board.ramping = True
+    link = BoardLink(board)
+    assert link.status()["ramping"]
+    assert not SerialActuator(link, rig).still_armed()
+
+
+def test_late_p_during_the_board_ramp_raises_without_d(board, rig):
+    act = SerialActuator(BoardLink(board), rig)
+    act.send(ServoCommand(1500, 1500), 0.0)
+    board.late = board.ramping = True
+    with pytest.raises(LinkError, match="no reply"):
+        act.send(ServoCommand(1520, 1480), 0.01)
+    assert "D" not in board.sent and board.sent[-1] == "S"
+
+
+def test_old_firmware_status_has_no_ramping_field(board, rig):
+    board.old_fw = True
+    link = BoardLink(board)
+    assert link.status()["ramping"] is False
+    board.armed = True
+    assert SerialActuator(link, rig).still_armed()
