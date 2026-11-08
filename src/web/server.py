@@ -71,19 +71,24 @@ def make_app(loop) -> FastAPI:
         try:
             while True:
                 msg = await sock.receive_json()
-                if "x" in msg and "y" in msg and math.isfinite(float(msg["x"]) + float(msg["y"])):
-                    loop.keys.set(float(msg["x"]), float(msg["y"]))
-                if msg.get("arm"):
-                    loop.arm()
-                if msg.get("kill"):
-                    loop.kill()
-                game = getattr(loop, "game", None)
-                if game is not None and msg.get("race") == "start":
-                    game.start()
-                elif game is not None and msg.get("race") == "abort":
-                    game.abort()
-                if "save" in msg and game is not None and (name := clean_name(msg["save"])):
-                    game.save(name)
+                try:
+                    if msg.get("kill"):
+                        loop.kill()
+                    if "x" in msg and "y" in msg:
+                        x, y = float(msg["x"]), float(msg["y"])
+                        if math.isfinite(x + y):
+                            loop.keys.set(x, y)
+                    if msg.get("arm") and not msg.get("kill"):
+                        loop.arm()
+                    game = getattr(loop, "game", None)
+                    if game is not None and msg.get("race") == "start":
+                        game.start()
+                    elif game is not None and msg.get("race") == "abort":
+                        game.abort()
+                    if "save" in msg and game is not None and (name := clean_name(msg["save"])):
+                        game.save(name)
+                except Exception as e:
+                    print(f"ws message dropped: {e!r}")
                 await sock.send_json(loop.snapshot())
         except WebSocketDisconnect:
             pass

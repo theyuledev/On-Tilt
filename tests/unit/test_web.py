@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from src.inputs.keyboard import KeyboardInput
 from src.io.ports import Frame
 from src.io.settings import ROOT, load
+from src.safety import SafetyState
 from src.web.server import JPEG_PERIOD_S, make_app
 
 pytestmark = pytest.mark.unit
@@ -131,6 +132,81 @@ def test_ws_save_without_a_game_is_ignored_and_the_socket_stays_open():
             assert sock.receive_json() == {"ok": 1}
 
 
+def _ws_loop(calls):
+    keys = SimpleNamespace(set=lambda x, y: calls.append("keys"))
+    return SimpleNamespace(
+        cfg=load(),
+        keys=keys,
+        arm=lambda: calls.append("arm"),
+        kill=lambda: calls.append("kill"),
+        snapshot=lambda: {},
+    )
+
+
+def test_ws_bad_x_drops_only_that_message():
+    calls = []
+    with TestClient(make_app(_ws_loop(calls))).websocket_connect("/ws") as sock:
+        sock.send_json({"x": "abc", "y": 0})
+        sock.receive_json()
+        sock.send_json({"kill": True})
+        sock.receive_json()
+    assert calls == ["kill"]
+
+
+def test_ws_kill_with_a_bad_x_still_kills():
+    calls = []
+    with TestClient(make_app(_ws_loop(calls))).websocket_connect("/ws") as sock:
+        sock.send_json({"kill": True, "x": "abc", "y": 0})
+        sock.receive_json()
+    assert calls == ["kill"]
+
+
+def test_ws_non_dict_message_keeps_the_socket_open():
+    calls = []
+    with TestClient(make_app(_ws_loop(calls))).websocket_connect("/ws") as sock:
+        sock.send_json([1, 2])
+        sock.receive_json()
+        sock.send_json({"kill": True})
+        sock.receive_json()
+    assert calls == ["kill"]
+
+
+def test_ws_save_that_raises_keeps_the_socket_open():
+    def save(name):
+        raise OSError("disk full")
+
+    calls = []
+    loop = _ws_loop(calls)
+    loop.game = SimpleNamespace(save=save)
+    with TestClient(make_app(loop)).websocket_connect("/ws") as sock:
+        sock.send_json({"save": "abc"})
+        sock.receive_json()
+        sock.send_json({"kill": True})
+        sock.receive_json()
+    assert calls == ["kill"]
+
+
+def _safety_loop():
+    st = SafetyState()
+    return st, SimpleNamespace(cfg=load(), arm=st.arm, kill=st.kill, snapshot=lambda: {})
+
+
+def test_ws_arm_and_kill_in_one_message_from_disarmed_stays_disarmed():
+    st, loop = _safety_loop()
+    with TestClient(make_app(loop)).websocket_connect("/ws") as sock:
+        sock.send_json({"arm": True, "kill": True})
+        sock.receive_json()
+    assert not st.armed
+
+
+def test_ws_arm_alone_from_disarmed_arms():
+    st, loop = _safety_loop()
+    with TestClient(make_app(loop)).websocket_connect("/ws") as sock:
+        sock.send_json({"arm": True})
+        sock.receive_json()
+    assert st.armed and not st.killing
+
+
 def test_page_has_a_results_panel_loaded_after_hud_and_before_app(client):
     page = client.get("/").text
     assert all(f'id="{i}"' in page for i in RESULT_IDS)
@@ -168,6 +244,15 @@ def test_typing_in_a_field_skips_the_window_keys_but_still_lets_go_of_tilt(clien
     up = js[js.index('addEventListener("keyup"') :].split("\n")[0]
     assert up.index("!typing(e)") < up.index("clickKeys.has(e.code)")
     assert up.endswith("e.preventDefault(); held.delete(e.code); });")
+
+
+def test_space_kills_while_armed_even_from_the_name_field(client):
+    js = static(client, "app.js")
+    down = js[js.index('addEventListener("keydown"') : js.index('addEventListener("keyup"')]
+    kill = 'if (e.code === "Space" && armedNow) { pending.kill = true; e.preventDefault(); '
+    assert down.index(kill + "return; }") < down.index("if (typing(e)) return;")
+    show = js[js.index("function show(s) {") :]
+    assert show.index("armedNow = !!s.armed;") < show.index("\n}")
 
 
 def test_page_has_a_hand_pill_keyed_on_the_snapshot_flags(client):

@@ -4,6 +4,7 @@ const keymap = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowD
                  KeyA: [-1, 0], KeyD: [1, 0], KeyW: [0, 1], KeyS: [0, -1] };
 let pending = {};
 let ws, cfg, maze, lastT, lastSeen, handWasSeen = false;
+let armedNow = false;
 const $ = id => document.getElementById(id);
 const cam = $("cam"), nocam = $("nocam"), ctx = $("race").getContext("2d");
 const padCtx = $("pad").getContext("2d");
@@ -18,6 +19,7 @@ if (watch) {
   // a focused button clicks on enter or space keyup, so space after a kill could re-arm
   const clickKeys = new Set(["Space", "Enter", "NumpadEnter"]);
   addEventListener("keydown", e => {
+    if (e.code === "Space" && armedNow) { pending.kill = true; e.preventDefault(); return; }
     if (typing(e)) return;
     if (clickKeys.has(e.code)) e.preventDefault();
     if (e.code === "Space") { pending.kill = true; return; }
@@ -64,6 +66,7 @@ function ring(px) {
 }
 
 function show(s) {
+  armedNow = !!s.armed;
   if (!s.plate_state) return;
   if (s.t_s !== lastT) { lastT = s.t_s; lastSeen = performance.now(); }
   const b = s.ball, p = s.plate_state;
