@@ -72,7 +72,7 @@ def make_app(loop) -> FastAPI:
     def hand():
         # the hand process writes this file, an old one means it stopped
         try:
-            path = hand_view.HAND_JPG
+            path = hand_view.hand_jpg(loop.cfg["input"]["hand_port"])
             if time.time() - path.stat().st_mtime > loop.cfg["game"]["heartbeat_stale_s"]:
                 return Response(status_code=404)
             return Response(path.read_bytes(), media_type="image/jpeg")

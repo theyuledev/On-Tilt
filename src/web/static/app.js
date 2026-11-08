@@ -8,6 +8,7 @@ let armedNow = false;
 const $ = id => document.getElementById(id);
 const cam = $("cam"), nocam = $("nocam"), ctx = $("race").getContext("2d");
 const padCtx = $("pad").getContext("2d");
+const FRAME_MS = 66;  // ~15 images a second, neither jpg changes faster
 const nextCam = () => { cam.src = "/camera.jpg?" + performance.now(); };
 let camRetry;
 const handcam = $("handcam"), handnone = $("handnone");
@@ -38,14 +39,24 @@ if (watch) {
   $("kill").onclick = e => { pending.kill = true; e.currentTarget.blur(); };
   $("racebtn").onclick = e => { pending.race = raceCmd(); e.currentTarget.blur(); };
 }
-cam.onload = () => { cam.hidden = false; nocam.hidden = true; nextCam(); };
+cam.onload = () => {
+  cam.hidden = false;
+  nocam.hidden = true;
+  clearTimeout(camRetry);
+  camRetry = setTimeout(nextCam, FRAME_MS);
+};
 cam.onerror = () => {
   cam.hidden = true;
   nocam.hidden = false;
   clearTimeout(camRetry);
   camRetry = setTimeout(nextCam, 1000);
 };
-handcam.onload = () => { handcam.hidden = false; handnone.hidden = true; nextHand(); };
+handcam.onload = () => {
+  handcam.hidden = false;
+  handnone.hidden = true;
+  clearTimeout(handRetry);
+  handRetry = setTimeout(nextHand, FRAME_MS);
+};
 handcam.onerror = () => {
   handcam.hidden = true;
   handnone.hidden = false;

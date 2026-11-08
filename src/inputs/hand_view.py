@@ -6,7 +6,7 @@ import cv2
 
 from src.inputs.hand import palm_angles, palm_center
 
-HAND_JPG = Path(tempfile.gettempdir()) / "on-tilt-hand.jpg"
+HAND_DIR = Path(tempfile.gettempdir())
 JPEG_WIDTH = 640
 JPEG_PERIOD_S = 1 / 15  # the model shares this process, keep the encode cheap
 # same edges as mediapipe's HAND_CONNECTIONS
@@ -50,7 +50,11 @@ def frame_jpg(img, result, neutral, intent) -> bytes:
     return cv2.imencode(".jpg", draw(img, lm, neutral, angles, intent))[1].tobytes()
 
 
-def publish(jpg: bytes, path: Path = HAND_JPG) -> None:
+def hand_jpg(port: int) -> Path:
+    return HAND_DIR / f"on-tilt-hand-{port}.jpg"
+
+
+def publish(jpg: bytes, path: Path) -> None:
     # the server reads this file, a rename means it never sees half a jpeg
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_bytes(jpg)
