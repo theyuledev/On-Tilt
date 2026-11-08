@@ -1,5 +1,7 @@
+from dataclasses import replace
+
 from src.contracts import BallState, Intent, PlateCommand
-from src.modes.path import target
+from src.modes.path import guide
 
 LEVEL = PlateCommand(tilt_x_deg=0.0, tilt_y_deg=0.0)
 
@@ -36,10 +38,11 @@ def balance(ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
 
 
 class PathFollower:
-    """Chases the point path_lookahead_mm ahead along control.path_mm, then holds the end."""
+    """Rolls the ball along control.path_mm at path_speed_mm_s, then holds the end."""
 
     def __init__(self, cfg: dict):
-        self.path = [(p[0], p[1]) for p in cfg["control"]["path_mm"]]
+        pts = [(p[0], p[1]) for p in cfg["control"]["path_mm"]]
+        self.path = [p for i, p in enumerate(pts) if i == 0 or p != pts[i - 1]]
         if not self.path:
             raise ValueError("control.path_mm needs at least one point")
         self.seg = 0
@@ -47,11 +50,12 @@ class PathFollower:
     def __call__(self, ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
         if not ball.valid:
             return LEVEL
-        c = cfg["control"]
         at = (ball.x_mm, ball.y_mm)
-        ahead, capture = c["path_lookahead_mm"], c["path_capture_mm"]
-        self.seg, goal = target(self.path, self.seg, at, ahead, capture)
-        return pd_toward(ball, goal, cfg)
+        self.seg, goal, vel, lean = guide(self.path, self.seg, at, cfg["control"])
+        # d brakes the speed relative to the path, not the ball's own
+        rel = replace(ball, vx_mm_s=ball.vx_mm_s - vel[0], vy_mm_s=ball.vy_mm_s - vel[1])
+        cmd = pd_toward(rel, goal, cfg)
+        return PlateCommand(cmd.tilt_x_deg + lean[0], cmd.tilt_y_deg + lean[1])
 
 
 MODES = {"hand": hand, "balance": balance, "path": PathFollower}

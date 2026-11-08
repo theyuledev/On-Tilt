@@ -45,6 +45,8 @@ d_max_deg = { value = 3.0, label = "uncalibrated default (NOT TESTED, expected p
 path_mm = { value = [[100, 100], [-100, 100], [-100, -100], [100, -100], [100, 100]], label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 path_lookahead_mm = { value = 40, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 path_capture_mm = { value = 15, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+path_speed_mm_s = { value = 100, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+path_accel_mm_s2 = { value = 250, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 
 [game]
 heartbeat_stale_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
