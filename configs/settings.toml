@@ -12,6 +12,7 @@ startup_flag = true
 slew_us_s = { value = 1500, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 kill_ramp_us_s = { value = 300, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 stale_intent_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+arm_fade_s = { value = 0.5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 plate_inner_mm = { value = 305, label = "measured (2026-11-07)" }
 ball_d_mm = { value = 61.8, label = "measured (2026-11-07)" }
 camera_width = { value = 1280, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }

@@ -17,7 +17,7 @@ const typing = e => e.target.tagName === "INPUT" || e.target.tagName === "TEXTAR
 
 if (watch) {
   // a projector tab must never overwrite the player's keys
-  $("arm").disabled = $("kill").disabled = $("racebtn").disabled = true;
+  $("arm").disabled = $("hold").disabled = $("kill").disabled = $("racebtn").disabled = true;
 } else {
   // a focused button clicks on enter or space keyup, so space after a kill could re-arm
   const clickKeys = new Set(["Space", "Enter", "NumpadEnter"]);
@@ -27,6 +27,7 @@ if (watch) {
     if (clickKeys.has(e.code)) e.preventDefault();
     if (e.code === "Space") { pending.kill = true; return; }
     if (e.code === "KeyC" && !e.metaKey && !e.ctrlKey) { pending.recentre = true; return; }
+    if (e.code === "KeyH" && !e.metaKey && !e.ctrlKey) { pending.hold = true; return; }
     if (keymap[e.code]) { held.add(e.code); e.preventDefault(); }
     if (e.code === "KeyR" && !(e.repeat || e.metaKey || e.ctrlKey || e.altKey || typing(e))) {
       pending.race = raceCmd();
@@ -35,6 +36,7 @@ if (watch) {
   addEventListener("keyup", e => { if (!typing(e) && clickKeys.has(e.code)) e.preventDefault(); held.delete(e.code); });
   addEventListener("blur", () => held.clear());
   $("arm").onclick = e => { pending.arm = true; e.currentTarget.blur(); };
+  $("hold").onclick = e => { pending.hold = true; e.currentTarget.blur(); };
   $("kill").onclick = e => { pending.kill = true; e.currentTarget.blur(); };
   $("racebtn").onclick = e => { pending.race = raceCmd(); e.currentTarget.blur(); };
 }
@@ -92,7 +94,7 @@ function show(s) {
   pill("ballpill", "ball: " + (b.valid ? "tracked" : "lost"), b.valid ? "on" : "warn");
   $("speed").textContent = b.valid ? Math.round(Math.hypot(b.vx_mm_s, b.vy_mm_s)) : 0;
   $("timer").hidden = $("cps").hidden = s.race === undefined;
-  pill("armed", s.killing ? "killing" : s.armed ? "armed" : "disarmed",
+  pill("armed", s.killing ? "killing" : s.armed ? (s.holding ? "holding" : "armed") : "disarmed",
        s.killing ? "warn" : s.armed ? "on" : "");
   $("armblock").hidden = !s.arm_blocked;
   $("armblock").textContent = s.arm_blocked || "";

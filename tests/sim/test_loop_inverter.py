@@ -37,6 +37,8 @@ def test_hand_step_back_to_zero_lands_exactly_on_centre(clock):
     cfg["control"]["inverter_on"] = True  # must stay out of the way in hand mode
     loop = Loop(cfg)
     loop.arm()
+    # fade in at level first
+    ticks(loop, clock, round(cfg["rig"]["arm_fade_s"] / 0.01), key=(0.0, 0.0))
     ticks(loop, clock, 100, key=(0.9, 0.0))
     assert loop.last.plate_state.est_x_deg > 3
     ticks(loop, clock, 200, key=(0.0, 0.0))

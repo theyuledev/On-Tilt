@@ -36,6 +36,8 @@ class Loop:
         self.band = start(cfg["rig"])
         self.actuator = actuator or SimActuator(cfg["rig"], cfg["control"])
         self.board_lost = False
+        self.holding = False
+        self.armed_s = 0.0
         self.stale = False
         self.hand_seen = self.hand_calibrating = False
         self.mode = cfg["control"]["mode"]
@@ -64,10 +66,21 @@ class Loop:
 
     def arm(self) -> None:
         if not self.board_lost and not self.arm_blocked:
+            if self.holding or not self.safety.armed:
+                self.armed_s = 0.0
             self.step = make_mode(self.mode, self.cfg)
             self.safety.arm()
+            self.holding = False
+
+    def hold(self) -> None:
+        # armed and level between runs, so the next arm starts from level, not the sag
+        if not self.safety.armed:
+            self.arm()
+        if self.safety.armed and not self.safety.killing:
+            self.holding = True
 
     def kill(self) -> None:
+        self.holding = False
         self.safety.kill()
 
     def tick(self, now: float, dt: float) -> RunLogRecord:
@@ -80,11 +93,8 @@ class Loop:
             # an old frame says nothing about where the ball is now
             ball = replace(ball, valid=False)
         intent, stale = self._intent(now)
-
-        if not self.safety.armed or self.safety.killing or stale:
-            self.step = make_mode(self.mode, self.cfg)  # fresh mode state, no kick on arm
-        plate_cmd = self.step(ball, intent, self.cfg)
-        target = tilt_to_pulse(plate_cmd, rig)
+        plate_cmd = self._command(ball, intent, stale)
+        target = tilt_to_pulse(self._fade(plate_cmd, dt), rig)
         sent, plate_state = self._drive(target, stale, dt, now)
         tilt = (plate_state.sent_x_deg, plate_state.sent_y_deg) if sent is not None else (0.0, 0.0)
         self._watch("command", now, PlateCommand(*tilt))
@@ -104,6 +114,18 @@ class Loop:
         self.last = rec
         self.bus.publish("tick", rec)
         return rec
+
+    def _command(self, ball: BallState, intent: Intent, stale: bool) -> PlateCommand:
+        self.holding = self.holding and self.safety.armed
+        if not self.safety.armed or self.safety.killing or stale or self.holding:
+            self.step = make_mode(self.mode, self.cfg)  # fresh mode state, no kick on arm
+        return PlateCommand(0.0, 0.0) if self.holding else self.step(ball, intent, self.cfg)
+
+    def _fade(self, cmd: PlateCommand, dt: float) -> PlateCommand:
+        # after an arm the tilt fades in from level instead of slewing straight there
+        self.armed_s += dt
+        k = min(1.0, self.armed_s / self.cfg["rig"]["arm_fade_s"])
+        return PlateCommand(cmd.tilt_x_deg * k, cmd.tilt_y_deg * k)
 
     def _intent(self, now: float) -> tuple[Intent, bool]:
         rig = self.cfg["rig"]
@@ -175,6 +197,7 @@ class Loop:
     def snapshot(self) -> dict:
         snap = self.last.to_dict() if self.last else {}
         snap["killing"] = self.safety.killing
+        snap["holding"] = self.holding
         snap["stale"] = self.stale
         snap["board_lost"] = self.board_lost
         snap["camera_lost"] = self.camera_lost
