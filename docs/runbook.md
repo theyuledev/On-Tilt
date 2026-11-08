@@ -19,7 +19,7 @@ serial_port = "/dev/cu.usbmodem..."
 camera_uvc = "0x....:0x...."
 ```
 
-camera_uvc: read it off `uvc-util -d`, the Vend:Prod column of the overhead cam. without it and with more than one uvc camera plugged in the exposure is not set and the app says `camera: exposure unverified: ...`. unverified does not block arming, only a readback that differs from what we set does
+camera_uvc: read it off `uvc-util -d`, the Vend:Prod column of the overhead cam. without it and with more than one uvc camera plugged in the exposure is not set and the app says `camera: exposure unverified: ...`. today the readback is only printed at open; once the app wiring lands, a readback that differs from what was set blocks arming, and an unverified one never does
 
 - app: `uv run python -m src.app`, page at http://127.0.0.1:8000 (PORT env or .env changes it). it prints `hand input off: ...` / `camera off: ...` when those are missing and keeps running without them
 - bench: `uv run python -m tools.bench [port]`. the optional port overrides serial_port for this run
