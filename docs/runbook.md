@@ -50,6 +50,8 @@ bench, typed at the `>` prompt:
 
 servo power is always off for any firmware upload.
 
+after any flash or board swap, servo power still off: `uv run python -m tools.board_check [port]` (app and bench not running), every line should read `ok`. no pulses at the pin is still checked by eye.
+
 ## camera revive
 
 the overhead cam jams after repeated open/close. the app says `camera off: ...` at start when it could not open it and runs on without video.
