@@ -18,6 +18,10 @@ class BoardRefused(LinkError):
     """The board answered ERR, so its state is known."""
 
 
+class EchoMismatch(LinkError):
+    """The board answered a P with other pulses than we sent, so its limits are not ours."""
+
+
 def limits_line(rig: dict) -> str:
     cx, cy = center(rig)
     x_lo, x_hi, y_lo, y_hi = (round(v) for v in limits(rig))
@@ -48,15 +52,26 @@ class BoardLink:
         self.port.write((line + "\n").encode())
         return self._read(line)
 
-    def ask(self, line: str) -> list[str]:
+    def ask(self, line: str, echo: list[str] | None = None) -> list[str]:
         self.port.write((line + "\n").encode())
+        wrong = None
         for _ in range(STRAGGLERS + 1):
-            reply = self._read(line)
+            reply = self.port.readline().decode().strip()
+            if not reply:
+                break
             parts = reply.split()
             if parts[0] == "ERR":
                 raise BoardRefused(f"{line!r} -> {reply!r}")
             if parts[0] == "OK" and parts[1:2] == [line[0]]:
-                return parts[2:]
+                if echo is None or parts[2:] == echo:
+                    return parts[2:]
+                # the board clamps with the limits we loaded, so a P echoes exactly what we
+                # sent; anything else is a late reply to an earlier P, or its limits differ
+                wrong = reply
+        if wrong is not None:
+            raise EchoMismatch(f"{line!r} -> {wrong!r} echo mismatch")
+        if not reply:
+            raise LinkError(f"no reply to {line!r}")
         raise LinkError(f"{line!r} -> {reply!r}")
 
     def status(self) -> dict:
@@ -100,16 +115,16 @@ class SerialActuator:
         if not self.armed:
             self._arm()
         try:
-            x, y = (int(v) for v in self.link.ask(f"P {cmd.x_us} {cmd.y_us}"))
+            self.link.ask(f"P {cmd.x_us} {cmd.y_us}", echo=[str(cmd.x_us), str(cmd.y_us)])
         except LinkError as e:
-            # only a timeout leaves the board in doubt; an ERR is its own word, during its
-            # self ramp it still says armed=1 so asking S there would keep us going
-            if isinstance(e, BoardRefused) or not self.still_armed():
+            # only a timeout leaves the board in doubt; an ERR or a wrong echo is its own word,
+            # during its self ramp it still says armed=1 so asking S there would keep us going
+            if isinstance(e, (BoardRefused, EchoMismatch)) or not self.still_armed():
                 raise
             self.acked = False
             return self.state
         self.acked = True
-        tilt = pulse_to_tilt(ServoCommand(x_us=x, y_us=y), self.rig)
+        tilt = pulse_to_tilt(cmd, self.rig)
         self.state = PlateState(
             sent_x_deg=tilt.tilt_x_deg,
             sent_y_deg=tilt.tilt_y_deg,
