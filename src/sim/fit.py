@@ -142,3 +142,29 @@ def pulse_fit(windows, dt: float, ref_us: float, g: float) -> PulseFit:
         axis_deg=tuple(np.degrees(np.arctan2(A[1], A[0]))),
         r2=float(1 - resid / (np.sum(tx**2) + np.sum(ty**2))),
     )
+
+
+# the balance gate: a release from RELEASE_MM is inside 20 mm by RELEASE_S at each gain scale,
+# then the worst radius after each AFTER_MM key stays under its value
+RELEASE_MM = 60.0
+RELEASE_S = {1.0: 2.5, 0.7: 3.5}
+AFTER_MM = {5.0: 15.0, 15.0: 12.0}
+# hold acceptance limits with no gate behind them
+OVERSHOOT_PCT = 20.0
+RMS_MM = 5.0
+
+
+def hold_verdict(t, x, y) -> dict[str, tuple[bool, float]]:
+    """t from the release on, settings gains; name -> (ok, value)."""
+    t, x, y = (np.asarray(a, dtype=float) for a in (t, x, y))
+    s, r = settle(t, x, y), np.hypot(x, y)
+    out = {
+        "t20_s": (s.t20_s <= RELEASE_S[1.0], s.t20_s),
+        "overshoot_pct": (s.overshoot_pct < OVERSHOOT_PCT, s.overshoot_pct),
+    }
+    for after, lim in AFTER_MM.items():
+        held = r[t > t[0] + after]
+        worst = float(held.max()) if held.size else math.inf
+        out[f"after_{after:g}_s_mm"] = (worst < lim, worst)
+    out["rms_mm"] = (s.rms_mm < RMS_MM, s.rms_mm)
+    return out

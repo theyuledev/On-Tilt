@@ -7,7 +7,7 @@ from src.contracts import BallState, PlateCommand, PlateState
 from src.control.pulse_map import tilt_to_pulse
 from src.io.settings import load
 from src.sim.ball import roll
-from src.sim.fit import ball_accel, pulse_fit, settle, step_response
+from src.sim.fit import ball_accel, hold_verdict, pulse_fit, settle, step_response
 from src.sim.plate import SimActuator
 
 pytestmark = pytest.mark.unit
@@ -127,3 +127,30 @@ def test_pulse_fit_recovers_level_gain_and_axis_directions():
     assert fit.us_per_deg == pytest.approx(per_us, rel=0.03)
     assert fit.axis_deg == pytest.approx((20.0, 110.0), abs=1.0)
     assert fit.r2 > 0.99
+
+
+HOLD_T = np.arange(0, 35, 0.01)
+
+
+def failing(t, x):
+    return [k for k, (ok, _) in hold_verdict(t, x, np.zeros_like(t)).items() if not ok]
+
+
+def test_hold_verdict_passes_a_clean_decay_from_60_mm():
+    assert failing(HOLD_T, 60 * np.exp(-HOLD_T / 0.3)) == []
+
+
+def test_hold_verdict_fails_a_ball_that_wanders_past_20_mm_after_5_s():
+    x = 60 * np.exp(-HOLD_T / 0.3) + np.where((HOLD_T > 10) & (HOLD_T < 11), 25.0, 0.0)
+    assert failing(HOLD_T, x) == ["t20_s", "after_5_s_mm"]
+
+
+def test_hold_verdict_fails_a_big_swing_past_the_centre():
+    x = 60 * np.exp(-HOLD_T / 0.8) * np.cos(2 * np.pi * HOLD_T / 1.5)
+    assert failing(HOLD_T, x) == ["overshoot_pct"]
+
+
+def test_hold_verdict_fails_a_ball_parked_off_centre_and_a_short_trace():
+    assert failing(HOLD_T, np.full_like(HOLD_T, 8.0)) == ["rms_mm"]
+    t = np.arange(0, 10, 0.01)
+    assert failing(t, 60 * np.exp(-t / 0.3)) == ["after_15_s_mm"]
