@@ -25,6 +25,14 @@ def need(q: float, u: float, r_out: float, latency_s: float, a_max: float) -> fl
     return u * u / (2 * room) / a_max
 
 
+def hold_line(
+    q: float, u: float, edge: float, band: float, top: float, k: float, kd: float
+) -> float:
+    """Most outward tilt allowed at depth q, outward speed u: eases off, then springs back."""
+    ramp = smoothstep((q - (edge - band)) / band)
+    return max(top * (1 - ramp) - k * max(q - edge, 0.0) - kd * ramp * u, -top)
+
+
 class Guard:
     """Caps a player's tilt and blends in a brake as the ball heads for the rim."""
 
@@ -43,6 +51,8 @@ class Guard:
         self.brake = [g * math.sin(math.radians(c["guard_brake_frac"] * d)) for d in self.clamp]
         self.r_out = (rig["plate_inner_mm"] - rig["ball_d_mm"]) / 2 - c["guard_margin_mm"]
         self.r_in = self.r_out - c["guard_band_mm"]
+        self.edge = self.r_out - c["guard_hold_in_mm"]
+        self.speed = [0.0, 0.0]
         self.c = c
         self.guard_w = [0.0, 0.0]
         self.guard_side = [0.0, 0.0]
@@ -64,8 +74,20 @@ class Guard:
     def guard_view(self) -> dict:
         return {"w": [*self.guard_w], "side": [*self.guard_side]}
 
+    def _hold(self, i: int, p: float, player: float) -> float:
+        c, band = self.c, self.c["guard_hold_band_mm"]
+        sp = 1.0 if p >= 0 else -1.0
+        if band <= 0 or sp * player <= 0:
+            return player
+        k, kd = c["guard_hold_k_deg_mm"], c["guard_hold_kd_deg_s_mm"]
+        allow = hold_line(sp * p, sp * self.speed[i], self.edge, band, self.cap[i], k, kd)
+        return sp * allow if sp * player > allow else player
+
     def _axis(self, i: int, p: float, v: float, player: float, dt: float) -> float:
         c, T = self.c, self.latency[i]
+        self.speed[i] = smooth(self.speed[i], v, dt, c["guard_speed_ema_s"])
+        # only ever lowers an outward push, a player resting or steering in is left alone
+        player = self._hold(i, p, player)
         s = stop_mm(p, v, T, self.brake[i])
         side = 1.0 if s >= 0 else -1.0
         target = smoothstep((abs(s) - self.r_in) / (self.r_out - self.r_in))

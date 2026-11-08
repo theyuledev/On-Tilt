@@ -1,7 +1,7 @@
 import pytest
 
 from src.contracts import BallState, PlateCommand
-from src.control.guard import Guard, need, stop_mm
+from src.control.guard import Guard, hold_line, need, stop_mm
 from src.io.settings import load
 from src.loop import Loop
 from src.modes import MODES, Guarded, make_mode
@@ -93,3 +93,27 @@ def test_only_the_hand_mode_is_guarded_and_guard_off_leaves_it_bare():
 def test_the_committed_settings_ship_with_the_guard_off():
     assert make_mode("hand", load()) is MODES["hand"]
     assert Loop(load()).snapshot()["guard"] is None
+
+
+def test_the_hold_line_eases_off_then_springs_back_but_never_past_the_cap():
+    assert hold_line(50.0, 0.0, 100.0, 25.0, 2.0, 0.1, 0.02) == 2.0
+    assert hold_line(100.0, 0.0, 100.0, 25.0, 2.0, 0.1, 0.02) == 0.0
+    assert hold_line(110.0, 0.0, 100.0, 25.0, 2.0, 0.1, 0.02) == pytest.approx(-1.0)
+    assert hold_line(110.0, 500.0, 100.0, 25.0, 2.0, 0.1, 0.02) == -2.0
+
+
+@pytest.mark.parametrize("player", [0.0, -1.0])
+def test_a_player_resting_or_steering_in_past_the_line_is_not_pushed(player):
+    g = Guard(cfg())
+    assert g(at(g.edge + 5.0), PlateCommand(player, 0.0)).tilt_x_deg == player
+
+
+def test_an_outward_push_past_the_line_meets_a_spring():
+    g = Guard(cfg())
+    out = g(at(-(g.edge + 5.0)), PlateCommand(-2.0, 0.0)).tilt_x_deg
+    assert out == pytest.approx(5.0 * g.c["guard_hold_k_deg_mm"])
+
+
+def test_a_zero_hold_band_turns_the_hold_line_off():
+    g = Guard(cfg(guard_hold_band_mm=0))
+    assert g(at(g.edge + 5.0), PlateCommand(2.0, 0.0)).tilt_x_deg == 2.0
