@@ -50,6 +50,40 @@ def scene(tip_y=4.0, tip_x=-3.0):
     return frame, r, (tx, ty)
 
 
+# plate +x to image right and +y up the image: the frame to_mm takes at plate_yaw_deg 0
+SQUARE = np.diag([1.0, -1.0, -1.0])
+
+
+def square_scene(xy, tip_y=0.0, tip_x=0.0):
+    r = SQUARE @ rot([0, 1, 0], tip_y) @ rot([1, 0, 0], tip_x)
+    return with_ball(render([(PLATE, r, T), (BASE, R_BASE, T_BASE)]), r, T, xy), r
+
+
+@pytest.mark.parametrize("xy, axis", [((60.0, 0.0), 0), ((0.0, 60.0), 1)])
+def test_marker_and_flat_routes_agree_on_the_axes(xy, axis):
+    frame, r = square_scene(xy)
+    c, right, up = plate_to_px([(0, 0), (50, 0), (0, 50)], STANDARD, cv2.Rodrigues(r)[0], T)
+    (dx, dy), (ux, uy) = right - c, up - c
+    assert dx > 10 * abs(dy) and -uy > 10 * abs(ux)
+    o = pipe().step(frame, 0.0)
+    assert not o.occluded and o.ball.valid
+    assert (o.ball.x_mm, o.ball.y_mm) == pytest.approx(xy, abs=2.0)
+    # this camera sits off the uncalibrated plate_centre_px: centre the flat route on the
+    # projected plate centre instead and compare signs only
+    flat = to_mm(o.ball_px, {**CFG["vision"], "plate_centre_px": c, "plate_yaw_deg": 0.0})
+    assert flat[axis] > 0 and abs(flat[1 - axis]) < flat[axis]
+
+
+@pytest.mark.parametrize("tip_y, tip_x, axis", [(5.0, 0.0, 0), (0.0, -5.0, 1)])
+def test_the_edge_farther_from_the_camera_tilts_positive(tip_y, tip_x, axis):
+    frame, r = square_scene(BALL_MM, tip_y, tip_x)
+    # depth of that plate axis in the camera: its + edge drops away, the base board is level
+    assert r[2, axis] > 0.05
+    o = pipe().step(frame, 0.0)
+    tilt = (o.tilt_x_deg, o.tilt_y_deg)
+    assert tilt[axis] == pytest.approx(5.0, abs=0.6) and abs(tilt[1 - axis]) < 0.6
+
+
 def test_tilt_ball_and_corners_from_a_marker_frame():
     frame, r, tilt = scene()
     o = pipe().step(frame, 0.0)
