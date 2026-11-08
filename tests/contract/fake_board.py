@@ -13,6 +13,8 @@ class FakeBoard:
         self.led = False
         self.silent = False
         self.late = False  # next reply misses the read and sits in the buffer
+        self.late_after_flush = False  # next reply misses the read and lands right after the flush
+        self._straggler = None
         self.unplugged = False  # the flush hits a port that is gone
         self.ramping = False  # levelling itself after a stall, armed stays 1 but L/A/P get ERR
         self.sent: list[str] = []
@@ -28,12 +30,19 @@ class FakeBoard:
         if self.late:
             self.late = False
             return b""
+        if self.late_after_flush:
+            self.late_after_flush = False
+            self._straggler = self._replies.pop(0) if self._replies else None
+            return b""
         return (self._replies.pop(0) + "\n").encode() if self._replies else b""
 
     def reset_input_buffer(self) -> None:
         if self.unplugged:
             raise termios.error(6, "Device not configured")
         self._replies.clear()
+        if self._straggler is not None:
+            self._replies.append(self._straggler)
+            self._straggler = None
 
     def _handle(self, parts: list[str]) -> str:
         if not parts or len(parts[0]) != 1:
