@@ -25,6 +25,13 @@ def integrate(acc: Integral, ball: BallState, c: dict) -> Integral:
     return Integral(add(acc.x, ball.x_mm), add(acc.y, ball.y_mm), ball.t_s)
 
 
+def smooth(prev: float, v: float, dt: float, tau_s: float) -> float:
+    # first order low pass on the velocity, a tau at or under a tick passes it straight through
+    if tau_s <= dt:
+        return v
+    return prev + (v - prev) * dt / tau_s
+
+
 def pid(pos: float, vel: float, integral: float, c: dict) -> float:
     d = min(max(c["kd_deg_s_mm"] * vel, -c["d_max_deg"]), c["d_max_deg"])
     return -(c["kp_deg_mm"] * pos + d + integral)

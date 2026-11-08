@@ -1,7 +1,7 @@
 import pytest
 
 from src.contracts import BallState
-from src.control.pid import Integral, integrate, pid
+from src.control.pid import Integral, integrate, pid, smooth
 
 pytestmark = pytest.mark.unit
 
@@ -42,3 +42,9 @@ def test_integral_is_clamped_and_cleared_when_the_ball_is_lost():
 def test_pid_adds_the_integral_and_still_clamps_the_d_term():
     assert pid(10.0, 0.0, 0.5, C) == pytest.approx(-1.5)
     assert pid(0.0, 1000.0, -0.5, C) == pytest.approx(-1.5)
+
+
+def test_smooth_is_a_first_order_lag_that_passes_through_at_or_under_a_tick():
+    assert smooth(0.0, 30.0, 0.01, 0.03) == pytest.approx(10.0)
+    assert smooth(0.0, 30.0, 0.01, 0.01) == 30.0
+    assert smooth(0.0, 30.0, 0.0, 0.03) == 0.0

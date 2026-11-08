@@ -13,6 +13,7 @@ CFG = {
         "ki_deg_s_mm": 0.015,
         "i_max_deg": 1.0,
         "i_err_max_mm": 30,
+        "vel_ema_s": 0.0,
     }
 }
 NO_INTENT = Intent(0.0, 0.0, valid=False, t_s=0.0)

@@ -91,7 +91,7 @@ class Loop:
             self.hand_calibrating = fresh and self.hand.calibrating
         stale = self.stale = now - intent.t_s > rig["stale_intent_s"]
 
-        if not self.safety.armed or self.safety.killing:
+        if not self.safety.armed or self.safety.killing or stale:
             self.step = make_mode(self.mode, self.cfg)  # fresh mode state, no kick on arm
         plate_cmd = self.step(ball, intent, self.cfg)
         target = tilt_to_pulse(plate_cmd, rig)
@@ -128,7 +128,15 @@ class Loop:
         if self.board_lost:
             return None, LEVEL
         sent = safety.step(self.safety, target, stale, dt, self.cfg["rig"])
-        self.band, sent = invert(self.band, sent, self.safety.killing or stale, self.cfg)
+        if self.cfg["control"]["inverter_on"]:
+            # only the closed loop modes get the dead band help, a player closes the loop himself
+            off = (
+                not self.safety.armed
+                or self.safety.killing
+                or stale
+                or self.mode not in ("balance", "path", "assist")
+            )
+            self.band, sent = invert(self.band, sent, off, self.cfg)
         try:
             return sent, self.actuator.send(sent, now)
         except LinkError as e:

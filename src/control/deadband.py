@@ -29,8 +29,9 @@ def _step(a: Axis, target: float, band: float, comp: float, flip: float, lo: flo
     # lead the servo by half the band the way it is heading, so a real turn round
     # jumps the pulse by a whole band and the servo really moves
     out = min(max(target + heading * comp / 2, lo), hi)
-    # a pulse pinned at a limit always goes out, the lead cannot carry it over the band there
-    hold = abs(out - a.committed) < band and lo < out < hi
+    # a pulse pinned at a limit always goes out, the lead cannot carry it over the band there,
+    # and the servo is never left more than comp from the pulse safety approved
+    hold = abs(out - a.committed) < band and lo < out < hi and abs(a.committed - target) <= comp
     return Axis(a.committed if hold else out, extreme, heading)
 
 

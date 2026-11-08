@@ -1,5 +1,5 @@
 from src.contracts import BallState, Intent, PlateCommand
-from src.control.pid import Integral, integrate, pid
+from src.control.pid import Integral, integrate, pid, smooth
 from src.modes.assist import goal_mm
 from src.modes.path import clip, target
 
@@ -30,15 +30,22 @@ def pd_toward(ball: BallState, goal: tuple[float, float], cfg: dict) -> PlateCom
 class Balance:
     def __init__(self, cfg: dict):
         self.acc = Integral()
+        self.vel: tuple[float, float] | None = None
 
     def __call__(self, ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
         c = cfg["control"]
+        dt = 0.0 if self.acc.t_s is None else max(ball.t_s - self.acc.t_s, 0.0)
         self.acc = integrate(self.acc, ball, c)
         if not ball.valid:
+            self.vel = None
             return LEVEL
+        raw = (ball.vx_mm_s, ball.vy_mm_s)
+        prev = self.vel or raw
+        vx, vy = (smooth(p, v, dt, c["vel_ema_s"]) for p, v in zip(prev, raw, strict=True))
+        self.vel = (vx, vy)
         return PlateCommand(
-            tilt_x_deg=pid(ball.x_mm, ball.vx_mm_s, self.acc.x, c),
-            tilt_y_deg=pid(ball.y_mm, ball.vy_mm_s, self.acc.y, c),
+            tilt_x_deg=pid(ball.x_mm, vx, self.acc.x, c),
+            tilt_y_deg=pid(ball.y_mm, vy, self.acc.y, c),
         )
 
 

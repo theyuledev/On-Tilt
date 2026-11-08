@@ -56,6 +56,8 @@ i_max_deg = { value = 1.5, label = "uncalibrated default (NOT TESTED, expected p
 i_err_max_mm = { value = 30, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 db_comp_us = { value = 14, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 db_flip_us = { value = 2, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+inverter_on = { value = false, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+vel_ema_s = { value = 0.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 
 [game]
 heartbeat_stale_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
