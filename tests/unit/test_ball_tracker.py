@@ -2,7 +2,7 @@ import cv2
 import pytest
 
 from src.vision.tracker import BG_MIN_SAMPLES, BallTracker
-from tests.unit.test_balls import CFG, ball, plate
+from tests.unit.test_balls import ANY_SHADE, CFG, ball, plate
 
 pytestmark = pytest.mark.unit
 
@@ -49,12 +49,19 @@ def test_coasts_then_goes_lost_then_picks_up_a_new_ball():
 
 
 def test_locked_on_a_dark_ball_never_takes_a_bright_one():
-    tr = BallTracker(CFG)
+    tr = BallTracker(ANY_SHADE)
     n = lock(tr, [ball(plate(level=120), 500, 400, 40) for _ in range(3)])
     swapped = ball(plate(level=120), 500, 400, 40, shade=240)
     outs = [tr.update(swapped, (n + i) * DT) for i in range(CFG["lost_after_misses"])]
     assert not outs[-1].valid
     assert tr.update(swapped, 10.0).valid and tr.dark is False
+
+
+def test_glare_blob_on_whiteboard_never_locks_when_balls_are_dark():
+    img = ball(plate(level=118), 640, 400, 40, shade=247)
+    tr = BallTracker({**CFG, "ball_dark": True})
+    assert not any(tr.update(img, i * DT).valid for i in range(3))
+    assert BallTracker(ANY_SHADE).update(img, 0.0).valid
 
 
 def test_resting_ball_stays_out_of_the_background_and_found_for_a_minute():
