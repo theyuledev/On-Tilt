@@ -39,6 +39,7 @@ class Loop:
         self.actuator = actuator or SimActuator(cfg["rig"], cfg["control"])
         self.board_lost = False
         self.stale = False
+        self.hand_seen = self.hand_calibrating = False
         self.mode = cfg["control"]["mode"]
         self.ball: BallState | None = None
         self.last: RunLogRecord | None = None
@@ -61,8 +62,12 @@ class Loop:
         intent = self.keys.latest()
         if self.hand is not None:
             hand = self.hand.latest()
-            if hand.valid and now - hand.t_s <= rig["stale_intent_s"]:
+            fresh = now - hand.t_s <= rig["stale_intent_s"]
+            if hand.valid and fresh:
                 intent = hand
+            # a dead hand process must not leave the page saying the hand is live
+            self.hand_seen = fresh and self.hand.seen
+            self.hand_calibrating = fresh and self.hand.calibrating
         stale = self.stale = now - intent.t_s > rig["stale_intent_s"]
 
         plate_cmd = MODES[self.mode](ball, intent, self.cfg)
@@ -117,8 +122,8 @@ class Loop:
         snap["stale"] = self.stale
         snap["board_lost"] = self.board_lost
         snap["camera_lost"] = self.camera_lost
-        snap["hand_seen"] = self.hand is not None and self.hand.seen
-        snap["hand_calibrating"] = self.hand is not None and self.hand.calibrating
+        snap["hand_seen"] = self.hand_seen
+        snap["hand_calibrating"] = self.hand_calibrating
         return snap
 
 

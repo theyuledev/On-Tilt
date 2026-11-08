@@ -157,8 +157,22 @@ def test_snapshot_carries_the_hand_flags():
     cfg = load()
     snap = Loop(cfg).snapshot()
     assert snap["hand_seen"] is False and snap["hand_calibrating"] is False
-    loop = Loop(cfg, FakeHand(Intent(0.0, 0.0, False, 1.0), seen=True, calibrating=True))
+    loop = Loop(cfg, FakeHand(Intent(0.0, 0.0, False, 10.0), seen=True, calibrating=True))
+    loop.tick(10.01, 0.01)
     snap = loop.snapshot()
     assert snap["hand_seen"] and snap["hand_calibrating"]
     loop.hand.calibrating = False
+    loop.tick(10.02, 0.01)
     assert not loop.snapshot()["hand_calibrating"]
+
+
+def test_hand_flags_drop_when_the_hand_process_goes_quiet():
+    cfg = load()
+    loop = Loop(cfg, FakeHand(Intent(0.5, 0.0, True, 10.0), seen=True, calibrating=True))
+    loop.tick(10.01, 0.01)
+    assert loop.snapshot()["hand_seen"] and loop.snapshot()["hand_calibrating"]
+    stale_s = cfg["rig"]["stale_intent_s"]
+    loop.tick(9.99 + stale_s, 0.01)
+    assert loop.snapshot()["hand_seen"]
+    loop.tick(10.01 + stale_s, 0.01)
+    assert not loop.snapshot()["hand_seen"] and not loop.snapshot()["hand_calibrating"]
