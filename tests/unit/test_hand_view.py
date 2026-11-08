@@ -14,10 +14,10 @@ from src.inputs.hand_view import JPEG_PERIOD_S, JPEG_WIDTH, draw, frame_jpg, pub
 from src.io.ports import Frame
 from src.io.settings import load
 from src.web.server import make_app
+from tests.unit.test_hand import CFG
 
 pytestmark = pytest.mark.unit
 
-CFG = {"hand_span": 0.25, "neutral_s": 1.0, "neutral_keep_s": 4.0, "smoothing": 0.0}
 LANDMARKS = [SimpleNamespace(x=0.3 + 0.01 * i, y=0.6 - 0.015 * i, z=0.0) for i in range(21)]
 INTENT = Intent(0.4, -0.1, True, 1.0)
 

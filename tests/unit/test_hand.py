@@ -17,7 +17,19 @@ from src.io.settings import load
 
 pytestmark = pytest.mark.unit
 
-CFG = {"hand_span": 0.25, "neutral_s": 1.0, "neutral_keep_s": 4.0, "smoothing": 0.0}
+CFG = {
+    "hand_span": 0.25,
+    "hand_tilt_span_deg": 25.0,
+    "neutral_s": 1.0,
+    "neutral_keep_s": 4.0,
+    "hand_mode": "palm",
+    "hand_flip_x": False,
+    "hand_flip_y": False,
+    # a filter that passes straight through
+    "hand_min_cutoff_hz": 1e9,
+    "hand_beta": 0.0,
+    "hand_d_cutoff_hz": 1.0,
+}
 
 
 def calibrated(cfg=CFG, at=(0.5, 0.5)):
@@ -81,22 +93,16 @@ def test_seen_and_calibrating_follow_the_palm():
 
 
 def test_moving_your_hand_right_and_up_is_plus_x_plus_y():
+    # the webcam looks down from above, so the player's right is image right
     hand, t = calibrated()
-    i = hand.update((0.5 - 0.125, 0.5 - 0.125), t)
+    i = hand.update((0.5 + 0.125, 0.5 - 0.125), t)
     assert i.x == pytest.approx(0.5) and i.y == pytest.approx(0.5)
 
 
 def test_intent_clamps_at_one():
     hand, t = calibrated()
-    i = hand.update((0.0, 1.0), t)
+    i = hand.update((1.0, 1.0), t)
     assert (i.x, i.y) == (1.0, -1.0)
-
-
-def test_smoothing_eases_in():
-    hand, t = calibrated({**CFG, "smoothing": 0.5})
-    first = hand.update((0.25, 0.5), t).x
-    second = hand.update((0.25, 0.5), t + 0.03).x
-    assert first == pytest.approx(0.5) and second == pytest.approx(0.75)
 
 
 def test_socket_round_trip():

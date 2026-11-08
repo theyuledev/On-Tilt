@@ -6,9 +6,11 @@ from dataclasses import asdict
 import numpy as np
 
 from src.contracts import Intent
+from src.inputs.one_euro import one_euro
 
 PALM = (0, 5, 9, 13, 17)  # wrist + the base of each finger
 RECENTRE = b"c"
+SPAN = {"tilt": "hand_tilt_span_deg", "palm": "hand_span"}
 
 
 def palm_center(landmarks) -> tuple[float, float]:
@@ -17,10 +19,12 @@ def palm_center(landmarks) -> tuple[float, float]:
     return sum(xs) / len(xs), sum(ys) / len(ys)
 
 
-def palm_angles(world) -> tuple[float, float]:
+def palm_angles(world) -> tuple[float, float] | None:
     """Roll and pitch in degrees of the palm normal, 0, 0 when the palm faces the camera."""
     o, a, b = (np.array([world[i].x, world[i].y, world[i].z]) for i in (0, 5, 17))
     n = np.cross(a - o, b - o)
+    if np.linalg.norm(n) == 0:
+        return None
     # the two hands wind the other way, so turn the normal to face the camera
     if n[2] > 0:
         n = -n
@@ -31,16 +35,24 @@ def _clamp(v: float) -> float:
     return max(-1.0, min(1.0, v))
 
 
+def _signs(cfg: dict) -> tuple[float, float]:
+    # webcam above the hand looking down, image top away from the player, not mirrored:
+    # tilt: right side down reads roll +, fingertips down reads pitch -
+    # palm: image x is the player's right, image y points back at the player
+    return (-1.0 if cfg["hand_flip_x"] else 1.0), (1.0 if cfg["hand_flip_y"] else -1.0)
+
+
 class HandIntent:
-    """Palm spot in the webcam image -> intent from -1 to 1."""
+    """Palm tilt in degrees or palm spot in the image -> intent from -1 to 1."""
 
     def __init__(self, cfg: dict):
         self.cfg = cfg
+        self.span = cfg[SPAN[cfg["hand_mode"]]]
         self.neutral: tuple[float, float] | None = None
         self.seen = False
         self._samples: list[tuple[float, float, float]] = []
         self._last_seen: float | None = None
-        self._x = self._y = 0.0
+        self._euro = (None, None)
 
     @property
     def calibrating(self) -> bool:
@@ -55,10 +67,13 @@ class HandIntent:
             return 0.0
         return min(1.0, (self._samples[-1][0] - self._samples[0][0]) / self.cfg["neutral_s"])
 
-    def update(self, palm: tuple[float, float] | None, t: float, recentre: bool = False) -> Intent:
+    def update(
+        self, reading: tuple[float, float] | None, t: float, recentre: bool = False
+    ) -> Intent:
         cfg = self.cfg
-        self.seen = palm is not None
-        if palm is None:
+        self.seen = reading is not None
+        if reading is None:
+            self._euro = (None, None)
             gone = t - self._last_seen if self._last_seen is not None else 0.0
             if gone > cfg["neutral_s"]:
                 self._samples = []
@@ -68,20 +83,27 @@ class HandIntent:
             return Intent(x=0.0, y=0.0, valid=False, t_s=t)
 
         self._last_seen = t
+        at = self._smooth(reading, t)
         if recentre:
-            self._set_neutral(palm)
+            self._set_neutral(at)
         if self.neutral is None:
-            self._samples.append((t, *palm))
+            self._samples.append((t, *at))
             if not self._lock_neutral(t):
                 return Intent(x=0.0, y=0.0, valid=False, t_s=t)
 
-        # the webcam faces the player, so their right is image left, and image y points down
-        raw_x = _clamp(-(palm[0] - self.neutral[0]) / cfg["hand_span"])
-        raw_y = _clamp(-(palm[1] - self.neutral[1]) / cfg["hand_span"])
-        s = cfg["smoothing"]
-        self._x = s * self._x + (1 - s) * raw_x
-        self._y = s * self._y + (1 - s) * raw_y
-        return Intent(x=self._x, y=self._y, valid=True, t_s=t)
+        sx, sy = _signs(cfg)
+        x = _clamp(sx * (at[0] - self.neutral[0]) / self.span)
+        y = _clamp(sy * (at[1] - self.neutral[1]) / self.span)
+        return Intent(x=x, y=y, valid=True, t_s=t)
+
+    def _smooth(self, reading: tuple[float, float], t: float) -> tuple[float, float]:
+        # filtered in spans so hand_beta means the same in both modes
+        out = [
+            one_euro(s, v / self.span, t, self.cfg)
+            for s, v in zip(self._euro, reading, strict=True)
+        ]
+        self._euro = tuple(s for _, s in out)
+        return out[0][0] * self.span, out[1][0] * self.span
 
     def _lock_neutral(self, t: float) -> bool:
         # a full window of a still hand sets neutral, a moving hand throws the window away
@@ -90,7 +112,7 @@ class HandIntent:
         xs = [s[1] for s in self._samples]
         ys = [s[2] for s in self._samples]
         self._samples = []
-        still = self.cfg["hand_span"] / 4
+        still = self.span / 4
         if max(xs) - min(xs) >= still or max(ys) - min(ys) >= still:
             return False
         self._set_neutral((sum(xs) / len(xs), sum(ys) / len(ys)))
@@ -99,7 +121,6 @@ class HandIntent:
     def _set_neutral(self, at: tuple[float, float]) -> None:
         self.neutral = at
         self._samples = []
-        self._x = self._y = 0.0
 
 
 def recentre_asked(sock: socket.socket) -> bool:

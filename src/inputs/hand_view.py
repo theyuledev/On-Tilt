@@ -38,7 +38,7 @@ def draw(img, landmarks, neutral, angles, intent):
         cv2.drawMarker(out, px(*neutral), CYAN, cv2.MARKER_CROSS, 20, 2)
     # selfie view, text goes on after the flip so it reads
     out = cv2.flip(out, 1)
-    top = "no hand" if landmarks is None else f"roll {angles[0]:+.0f}  pitch {angles[1]:+.0f}"
+    top = "no hand" if angles is None else f"roll {angles[0]:+.0f}  pitch {angles[1]:+.0f}"
     for i, line in enumerate((top, f"intent x {intent.x:+.2f} y {intent.y:+.2f}")):
         cv2.putText(out, line, (10, 30 + 30 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.8, WHITE, 2)
     return out
