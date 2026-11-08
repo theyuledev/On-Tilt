@@ -61,6 +61,10 @@ db_comp_us = { value = 14, label = "uncalibrated default (NOT TESTED, expected p
 db_flip_us = { value = 2, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 inverter_on = { value = false, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 vel_ema_s = { value = 0.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+map_window_s = { value = 0.3, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+map_s_bad = { value = 0.3, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+map_s_flip = { value = -0.5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+map_excite_mm = { value = 1.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 
 [game]
 heartbeat_stale_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
