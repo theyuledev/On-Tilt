@@ -22,6 +22,7 @@ console.log(JSON.stringify(cases.map(([s, ctx]) => box.guide(s, ctx))));
 ON = {"live": True, "watch": False, "hand": True, "lost": False}
 BALL = {"ball": {"valid": True}}
 ARMED = {**BALL, "armed": True, "hand_seen": True}
+MAPPING = "camera mapping looks wrong, plate levelled"
 
 
 def guide(*cases):
@@ -45,6 +46,7 @@ def test_each_branch_says_one_next_step():
         ("connecting...", "warn"): ({**ARMED, "board_lost": True}, {"live": False}),
         ("board lost, check the usb cable", "stop"): ({"board_lost": True}, {}),
         ("camera lost", "stop"): ({"camera_lost": True}, {}),
+        (MAPPING, "stop"): ({"mapping_bad": "x"}, {}),
         ("stopped", "stop"): ({"killing": True}, {}),
         ("", ""): ({}, {"watch": True}),
         ("mode needs a hand", "warn"): ({"arm_blocked": "mode needs a hand"}, {}),
@@ -80,6 +82,9 @@ def test_stop_states_win_in_order_and_watch_still_sees_them():
         (lost, {"watch": True, "lost": True}),
         (None, {}),
         ({**ARMED, "hand_calibrating": True, "stale": True}, {}),
+        ({**ARMED, "mapping_bad": "xy", "killing": True}, {}),
+        ({"board_lost": True, "mapping_bad": "y"}, {}),
+        ({"mapping_bad": "x"}, {"live": False}),
     ) == [
         ("stopped", "stop"),
         ("board lost, check the usb cable", "stop"),
@@ -87,4 +92,7 @@ def test_stop_states_win_in_order_and_watch_still_sees_them():
         ("", ""),
         ("put the ball on the plate", ""),
         ("hold still... locking neutral", "warn"),
+        (MAPPING, "stop"),
+        ("board lost, check the usb cable", "stop"),
+        ("connecting...", "warn"),
     ]

@@ -6,6 +6,7 @@ function guide(s, ctx) {
   if (!ctx.live) return say("connecting...", "warn");
   if (s.board_lost) return say("board lost, check the usb cable", "stop");
   if (s.camera_lost) return say("camera lost", "stop");
+  if (s.mapping_bad) return say("camera mapping looks wrong, plate levelled", "stop");
   if (s.killing) return say("stopped", "stop");
   if (ctx.watch) return say("");
   if (!s.armed && s.arm_blocked) return say(s.arm_blocked, "warn");
