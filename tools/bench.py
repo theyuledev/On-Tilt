@@ -55,6 +55,9 @@ class Bench:
         loading = words[:1] == ["l"] and len(words) <= 2
         if loading:
             if len(words) == 2:
+                if not words[1].isdigit():
+                    self.log.append(f"{line} needs a whole number")
+                    return ""
                 # bench-only limits, the settings file is untouched
                 self.rig["limit_x_us"] = self.rig["limit_y_us"] = int(words[1])
                 self.rig["startup_flag"] = False

@@ -92,6 +92,15 @@ def test_l_range_loads_limits_around_center_and_logs_headroom(setup):
     assert board.sent[-1] == "L 1300 1700 1300 1700 1500 1500"
 
 
+def test_l_with_a_bad_range_sends_nothing(setup):
+    board, bench, rig = setup
+    bench.submit("l abc")
+    bench.submit("l -5")
+    assert board.sent == []
+    assert bench.log == ["l abc needs a whole number", "l -5 needs a whole number"]
+    assert rig["startup_flag"] is True
+
+
 def test_plain_l_logs_headroom_for_settings_limits(setup):
     board, bench, _ = setup
     bench.submit("l")
