@@ -5,8 +5,8 @@ from src.app import Loop, check_exposure
 from src.contracts import BallState
 from src.io.camera import CameraSource, open_camera
 from src.io.serial_link import SerialActuator, open_board
-from src.io.settings import load
-from src.sim.fit import RELEASE_MM, hold_verdict
+from src.io.settings import BASE, load
+from src.sim.fit import RELEASE_MM, hold_verdict, release_limit
 from src.vision.pipeline import Pipeline
 from tools.autotest_board import Feed, Result, Rig, board_checks, to_level
 
@@ -29,7 +29,17 @@ def holding(rig: Rig, loop: Loop) -> str | None:
     return None
 
 
+def t20_limit(cfg: dict) -> float:
+    # the gate scales the checked-in gains; merging that file onto itself leaves just those
+    scale = cfg["control"]["kp_deg_mm"] / load(local=BASE)["control"]["kp_deg_mm"]
+    limit, on_gate = release_limit(scale)
+    if not on_gate:
+        print(f"gains are {scale:.2f}x the checked-in set, no gate scale, t20 gets {limit:g} s")
+    return limit
+
+
 def hold(rig: Rig) -> list[Result]:
+    limit = t20_limit(rig.cfg)
     loop = rig.hold_loop(rig)
     loop.keys, loop.mode = Feed(), "balance"
     for _ in range(rig.ticks(FIND_S)):
@@ -46,9 +56,12 @@ def hold(rig: Rig) -> list[Result]:
         return [("balance hold", why)]
     rows = ((r.t_s, r.ball.x_mm, r.ball.y_mm) for r in trace[: rig.ticks(HOLD_S)])
     t, x, y = zip(*rows, strict=True)
-    verdict = hold_verdict(t, x, y).items()
-    shown = ((k, ok, "n/a" if v is None else f"{v:.2f}") for k, (ok, v) in verdict)
-    return [(f"hold {k} {v}", None if ok else v) for k, ok, v in shown]
+    out = []
+    for k, (ok, v) in hold_verdict(t, x, y, limit).items():
+        v = "n/a" if v is None else f"{v:.2f}"
+        v += f", limit {limit:g} s" if k == "t20_s" else ""
+        out.append((f"hold {k} {v}", None if ok else v))
+    return out
 
 
 def show(results: list[Result]) -> bool:

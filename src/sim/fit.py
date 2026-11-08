@@ -152,17 +152,25 @@ AFTER_MM = {5.0: 15.0, 15.0: 12.0}
 # hold acceptance limits with no gate behind them
 OVERSHOOT_PCT = 20.0
 RMS_MM = 5.0
+SCALE_TOL = 0.05
 
 
-def hold_verdict(t, x, y) -> dict[str, tuple[bool, float | None]]:
+def release_limit(scale: float) -> tuple[float, bool]:
+    """RELEASE_S at the nearest gate scale; off every gate scale, the larger limit."""
+    near = min(RELEASE_S, key=lambda k: abs(k - scale))
+    if abs(near - scale) <= SCALE_TOL:
+        return RELEASE_S[near], True
+    return max(RELEASE_S.values()), False
+
+
+def hold_verdict(t, x, y, release_s: float) -> dict[str, tuple[bool, float | None]]:
     """t from the release on; name -> (ok, value), value None when not judged."""
     t, x, y = (np.asarray(a, dtype=float) for a in (t, x, y))
     s, r = settle(t, x, y), np.hypot(x, y)
     # a release from inside 20 mm has no settle to time and a wobble reads as huge overshoot
     out = {"t20_s": (True, None), "overshoot_pct": (True, None)}
     if r[0] >= 20.0:
-        # the run uses the settings gains, which the gate calls 1x
-        out["t20_s"] = (s.t20_s <= RELEASE_S[1.0], s.t20_s)
+        out["t20_s"] = (s.t20_s <= release_s, s.t20_s)
         out["overshoot_pct"] = (s.overshoot_pct < OVERSHOOT_PCT, s.overshoot_pct)
     for after, lim in AFTER_MM.items():
         held = r[t > t[0] + after]

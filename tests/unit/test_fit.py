@@ -7,7 +7,15 @@ from src.contracts import BallState, PlateCommand, PlateState
 from src.control.pulse_map import tilt_to_pulse
 from src.io.settings import load
 from src.sim.ball import roll
-from src.sim.fit import ball_accel, hold_verdict, pulse_fit, settle, step_response
+from src.sim.fit import (
+    RELEASE_S,
+    ball_accel,
+    hold_verdict,
+    pulse_fit,
+    release_limit,
+    settle,
+    step_response,
+)
 from src.sim.plate import SimActuator
 
 pytestmark = pytest.mark.unit
@@ -133,7 +141,8 @@ HOLD_T = np.arange(0, 35, 0.01)
 
 
 def failing(t, x):
-    return [k for k, (ok, _) in hold_verdict(t, x, np.zeros_like(t)).items() if not ok]
+    v = hold_verdict(t, x, np.zeros_like(t), RELEASE_S[1.0])
+    return [k for k, (ok, _) in v.items() if not ok]
 
 
 def test_hold_verdict_passes_a_clean_decay_from_60_mm():
@@ -152,19 +161,29 @@ def test_hold_verdict_fails_a_big_swing_past_the_centre():
 
 def test_hold_verdict_skips_settle_numbers_for_a_release_inside_20_mm():
     x = 3 * np.exp(-HOLD_T) + 2 * np.sin(2 * np.pi * HOLD_T)
-    v = hold_verdict(HOLD_T, x, np.zeros_like(HOLD_T))
+    v = hold_verdict(HOLD_T, x, np.zeros_like(HOLD_T), RELEASE_S[1.0])
     assert v["t20_s"] == (True, None) and v["overshoot_pct"] == (True, None)
     judged = [v[k] for k in ("after_5_s_mm", "after_15_s_mm", "rms_mm")]
     assert all(ok and value is not None for ok, value in judged)
 
 
-def test_hold_verdict_times_the_release_against_the_1x_gate():
-    # 60 mm closing at 16 mm/s crosses 20 mm at 2.5 s
-    def t20_ok(speed):
-        return hold_verdict(HOLD_T, np.maximum(60 - speed * HOLD_T, 0), 0 * HOLD_T)["t20_s"]
+def test_hold_verdict_times_the_release_against_the_given_limit():
+    # 60 mm closing at 15 mm/s crosses 20 mm at 2.67 s
+    def t20(speed, limit):
+        x = np.maximum(60 - speed * HOLD_T, 0)
+        return hold_verdict(HOLD_T, x, 0 * HOLD_T, limit)["t20_s"]
 
-    assert t20_ok(17.0)[0] and not t20_ok(15.0)[0]
-    assert t20_ok(15.0)[1] == pytest.approx(40 / 15, abs=0.01)
+    assert t20(17.0, RELEASE_S[1.0])[0] and not t20(15.0, RELEASE_S[1.0])[0]
+    assert t20(15.0, RELEASE_S[0.7])[0]
+    assert t20(15.0, RELEASE_S[1.0])[1] == pytest.approx(40 / 15, abs=0.01)
+
+
+@pytest.mark.parametrize(
+    "scale, want",
+    [(1.0, (2.5, True)), (1.03, (2.5, True)), (0.7, (3.5, True)), (0.85, (3.5, False))],
+)
+def test_release_limit_follows_the_nearest_gate_scale(scale, want):
+    assert release_limit(scale) == want
 
 
 def test_hold_verdict_fails_a_ball_parked_off_centre_and_a_short_trace():

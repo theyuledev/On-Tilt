@@ -3,7 +3,7 @@ import time
 import pytest
 
 from src.contracts import BallState, PlateCommand
-from src.io.settings import load
+from src.io.settings import BASE, load
 from tests.contract import timed_board
 from tests.contract.timed_board import TimedBoard
 from tools import autotest, autotest_board
@@ -72,7 +72,7 @@ def test_loop_that_disarms_on_stale_fails_only_the_stale_check(monkeypatch):
 
 
 def test_board_that_never_times_out_fails_the_timeout_and_ends_disarmed(monkeypatch):
-    monkeypatch.setattr(timed_board, "TIMEOUT_S", float("inf"))
+    monkeypatch.setattr(timed_board, "FW_TIMEOUT_S", float("inf"))
     results, board = board_run()
     assert results["board timeout"].startswith("still armed after 0.")
     assert results["kill"] is None and results["stale intent"] is None
@@ -86,6 +86,24 @@ def test_a_bigger_tilt_waits_longer_and_still_passes_the_timeout(monkeypatch):
     results, board = board_run()
     assert results["board timeout"] is None
     assert board.since_ms == round(autotest_board.quiet_s(150) * 1000)
+
+
+def scaled(k):
+    cfg = load(local=BASE)
+    gains = {g: cfg["control"][g] * k for g in ("kp_deg_mm", "kd_deg_s_mm", "ki_deg_s_mm")}
+    return {**cfg, "control": {**cfg["control"], **gains}}
+
+
+@pytest.mark.parametrize("k, limit", [(1.0, 2.5), (0.7, 3.5)])
+def test_t20_limit_follows_the_loaded_gains(k, limit, capsys):
+    assert autotest.t20_limit(scaled(k)) == limit
+    assert capsys.readouterr().out == ""
+
+
+def test_gains_off_every_gate_scale_get_the_larger_limit_and_a_note(capsys):
+    results = autotest.hold(autotest.sim_rig(scaled(0.85)))
+    assert capsys.readouterr().out.startswith("gains are 0.85x the checked-in set")
+    assert results[0][0].startswith("hold t20_s ") and results[0][0].endswith(", limit 3.5 s")
 
 
 class DropsOneReply(TimedBoard):
