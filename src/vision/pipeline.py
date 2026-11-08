@@ -78,6 +78,7 @@ class Pipeline:
             _check_ids(boards, self.cfg)
         self.plate_pose = None  # last frame's (rvec, tvec), the next solve's guess
         self.base_pose = None  # kept once seen: the table does not move
+        self.rim = None  # kept while the markers are hidden: the background must not see the floor
 
     def latest(self) -> Observation | None:
         return self.last
@@ -105,8 +106,9 @@ class Pipeline:
         if self.plate_pose is not None:
             quad = plate_to_px(self.corners_mm, self.lens, *self.plate_pose)
             # a ball against the edge reaches furthest out at its centre's height
-            rim = plate_to_px(self.outline_mm, self.lens, *self.plate_pose, z_mm=self.r_ball)
-            seen = floor_white(gray, rim)
+            self.rim = plate_to_px(self.outline_mm, self.lens, *self.plate_pose, z_mm=self.r_ball)
+        if self.rim is not None:
+            seen = floor_white(gray, self.rim)
         ball_px = self.tracker.update(seen, t_read)
         if ball_px.valid and self.last is not None and not self.last.ball_px.valid:
             self.history = []  # relock: the velocity must not bridge the gap

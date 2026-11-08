@@ -107,6 +107,17 @@ def test_board_ids_off_the_settings_print_once(capsys):
     assert len(out) == 1 and "base" in out[0] and "[4, 6]" in out[0]
 
 
+def test_hidden_markers_keep_the_last_floor_white():
+    frame, r, _ = scene()
+    p = pipe()
+    seen = []
+    update = p.tracker.update
+    p.tracker.update = lambda img, t: seen.append(img) or update(img, t)
+    p.step(frame, 0.0)
+    o = p.step(erase(frame.copy(), PLATE, r, T), 0.01)
+    painted = (seen[0] == 255) & (frame < 255)
+    assert o.occluded and painted.mean() > 0.3 and (seen[1][painted] == 255).all()
+
 def floor_past_left_edge(frame, r, t, width_mm=60.0):
     """Dark floor from the plate's -x edge out to width_mm, through the lens like the prints."""
     ys, xs = np.mgrid[: frame.shape[0], : frame.shape[1]]
