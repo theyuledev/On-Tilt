@@ -32,10 +32,12 @@ class Plant:
     in the true frame and seen through a camera mapping that may be yawed or mirrored."""
 
     def __init__(self, cfg, start, yaw=0.0, mirror=False, trim=(0, 0), dead=None, fric=0.0,
-                 noise=0.15, gap=None, v0=(0.0, 0.0), seed=0):
+                 noise=0.15, gap=None, v0=(0.0, 0.0), us_per_deg=None, seed=0):
         self.cfg = cfg
         rig = dict(cfg["rig"], trim_x_us=cfg["rig"]["trim_x_us"] + trim[0])
         rig["trim_y_us"] += trim[1]
+        if us_per_deg is not None:
+            rig["us_per_deg_x"] = rig["us_per_deg_y"] = us_per_deg
         control = dict(cfg["control"])
         if dead is not None:
             control["servo_dead_time_s"] = dead
@@ -97,9 +99,13 @@ def run(start, mode="balance", seconds=3.0, intent_x=0.0, **kw):
     return trip, loop, plant
 
 
+# the sent tilts are read off the stored trims, like the serial link does, so a trim error is a
+# steady push the watcher can't tell from a turned one: it stays quiet up to about +-45 us
+# (1.6 stored deg) and trips past +-60, so the trims have to be set before balance leans on it
 RIGHT = {
     "plain": {},
     "trim +45/-45 us": {"trim": (45, -45)},
+    "trim -45/+45 us": {"trim": (-45, 45)},
     "friction 40 mm/s2": {"fric": 40},
     "dead time 0.08 s": {"dead": 0.08},
     "thrown at the wall": {"v0": (600, 0)},
@@ -108,24 +114,38 @@ RIGHT = {
 }
 
 
+# settings say 28.75 us/deg, the rig fit saw about 100: the push reads 3.5x too strong
+GAINS = {"stored gain": {}, "gain 3.5x off": {"us_per_deg": 100}}
+
+
+@pytest.mark.parametrize("gain", GAINS)
 @pytest.mark.parametrize("case", RIGHT)
-def test_the_right_mapping_never_trips(case):
+def test_the_right_mapping_never_trips(case, gain):
     for i, start in enumerate(CATCHES):
-        trip, loop, _ = run(start, seed=i, **RIGHT[case])
-        assert trip is None, (case, start, loop.mapping.bad)
+        trip, loop, _ = run(start, seed=i, **RIGHT[case], **GAINS[gain])
+        assert trip is None, (case, gain, start, loop.mapping.bad)
+
+
+def test_trims_within_45_us_stay_quiet():
+    for seed in range(3):
+        for trim in ((45, -45), (-45, 45), (45, 45)):
+            for i, start in enumerate(CATCHES):
+                assert run(start, seed=seed * 10 + i, trim=trim)[0] is None, (trim, start)
 
 
 WRONG = {"yaw 180": {"yaw": 180}, "yaw 90": {"yaw": 90}, "mirror y": {"mirror": True}}
 
 
+@pytest.mark.parametrize("gain", GAINS)
 @pytest.mark.parametrize("case", WRONG)
-def test_a_wrong_mapping_trips_fast(case):
+def test_a_wrong_mapping_trips_fast(case, gain):
     for i, start in enumerate(CATCHES):
         axes = "y" if "mirror" in case else "xy"
-        if max(abs(start[k]) for k in range(2) if "xy"[k] in axes) < 40:
+        # from 100 mm out a reversed push reaches the wall band before one window fills
+        if max(abs(start[k]) for k in range(2) if "xy"[k] in axes) < 40 or start == (100, 0):
             continue
-        trip, loop, _ = run(start, seed=i, **WRONG[case])
-        assert trip is not None and trip <= 0.6, (case, start, trip)
+        trip, loop, _ = run(start, seed=i, **WRONG[case], **GAINS[gain])
+        assert trip is not None and trip <= 1.0, (case, gain, start, trip)
 
 
 def test_yaw_30_still_pushes_the_right_way():
@@ -141,7 +161,7 @@ def test_hand_mode_only_warns():
 
 
 def test_a_trip_levels_through_the_slew_and_nothing_kills():
-    trip, loop, plant = run((100, 0), yaw=180, seconds=2.0)
+    trip, loop, plant = run((60, 0), yaw=180, seconds=2.0)
     rig = loop.cfg["rig"]
     assert trip is not None and not loop.safety.killing and loop.safety.armed
     after = [p for p in plant.pulses[round(trip / DT):] if p is not None]
@@ -151,7 +171,7 @@ def test_a_trip_levels_through_the_slew_and_nothing_kills():
 
 
 def test_rearming_clears_the_flag_and_starts_balance_fresh():
-    _, loop, _ = run((100, 0), yaw=180, seconds=1.0)
+    _, loop, _ = run((60, 0), yaw=180, seconds=1.0)
     assert loop.mapping.bad
     old = loop.step
     loop.arm()

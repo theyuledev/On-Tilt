@@ -6,7 +6,8 @@ import numpy as np
 from src.contracts import BallState
 from src.control import ROLL
 
-STRIDE_S = 0.1  # a window is judged this often, a longer ball gap starts the window over
+STRIDE_S = 0.1  # a window is judged this often
+GAP_S = 0.25  # a longer ball gap starts the window over
 STEP_S = 0.001
 AXES = "xy"
 
@@ -29,59 +30,88 @@ def pushed_mm(cmds, t: np.ndarray, c: dict) -> np.ndarray:
     return np.column_stack([np.interp(t, grid, e[:, k] * STEP_S**2) for k in range(2)])
 
 
-def fit(t: np.ndarray, pos: np.ndarray, e: np.ndarray) -> tuple[float, float]:
-    """s of pos = p0 + v0 t + s e by least squares, and the rms of e a straight line can't
-    explain (how much the window says about s at all)."""
+def responses(t: np.ndarray, xy: np.ndarray, e: np.ndarray, excite: float) -> list:
+    """(push direction, ball response) for each main direction of the push e that a straight
+    line can't explain by at least excite rms, from xy = p0 + v0 t + S e by least squares.
+    Fitting along the main directions keeps a diagonal push, where e_x ~ e_y, well posed."""
     tt = t - t[0]
     line = np.column_stack([np.ones_like(tt), tt])
     rest = e - line @ np.linalg.lstsq(line, e, rcond=None)[0]
-    s = np.linalg.lstsq(np.column_stack([line, e]), pos, rcond=None)[0][2]
-    return float(s), float(np.sqrt(np.mean(rest**2)))
+    _, sv, dirs = np.linalg.svd(rest, full_matrices=False)
+    keep = dirs[sv / math.sqrt(len(t)) >= excite]
+    if not len(keep):
+        return []
+    coef = np.linalg.lstsq(np.column_stack([line, e @ keep.T]), xy, rcond=None)[0]
+    return list(zip(keep, coef[2:], strict=True))
+
+
+def angle_deg(d: np.ndarray, r: np.ndarray) -> float:
+    return math.degrees(math.atan2(d[0] * r[1] - d[1] * r[0], d @ r))
 
 
 class MappingWatch:
-    """Flags the axes where the ball doesn't move the way the sent tilts push it, which is what
-    a wrong plate yaw or a mirrored axis looks like."""
+    """Flags the axes where the ball runs off at an angle to the push of the tilts we sent,
+    which is what a wrong plate yaw or a mirrored axis looks like. Only the angle counts, so
+    a wrong us_per_deg doesn't trip it."""
 
     def __init__(self, cfg: dict):
         self.c = cfg["control"]
+        rig = cfg["rig"]
+        self.edge = (rig["plate_inner_mm"] - rig["ball_d_mm"]) / 2 - self.c["map_wall_mm"]
         self.cmds: deque[tuple[float, float, float]] = deque()
         self.balls: deque[tuple[float, float, float]] = deque()
         self.since = self.next_s = -math.inf
         self.low = [0, 0]
+        self.judged = [-math.inf, -math.inf]
         self.bad: str | None = None
 
     def step(self, now: float, ball: BallState, tilt: tuple[float, float]) -> bool:
         """One armed tick: the ball seen and the tilt sent. True when an axis newly looks wrong."""
+        c = self.c
         self.cmds.append((now, *tilt))
+        oldest = (self.balls[0][0] if self.balls else now - GAP_S) - c["servo_dead_time_s"]
+        while len(self.cmds) > 1 and self.cmds[1][0] <= oldest - 3 * c["servo_tau_s"]:
+            self.cmds.popleft()
         if not ball.valid or (self.balls and ball.t_s <= self.balls[-1][0]):
             return False
-        if not self.balls or ball.t_s - self.balls[-1][0] > STRIDE_S:
+        if max(abs(ball.x_mm), abs(ball.y_mm)) > self.edge:
+            self.balls.clear()  # a wall touch breaks the push model
+            return False
+        if not self.balls or ball.t_s - self.balls[-1][0] > GAP_S:
             self.balls.clear()
             self.since, self.low = ball.t_s, [0, 0]
         self.balls.append((ball.t_s, ball.x_mm, ball.y_mm))
-        win = self.c["map_window_s"]
-        while self.balls[0][0] <= ball.t_s - win:
+        while self.balls[0][0] <= ball.t_s - c["map_window_s"]:
             self.balls.popleft()
-        oldest = self.balls[0][0] - self.c["servo_dead_time_s"] - 3 * self.c["servo_tau_s"]
-        while len(self.cmds) > 1 and self.cmds[1][0] <= oldest:
-            self.cmds.popleft()
-        if ball.t_s - self.since < win or ball.t_s < self.next_s or len(self.balls) <= 3:
+        if ball.t_s - self.since < c["map_window_s"] or ball.t_s < self.next_s:
+            return False
+        if len(self.balls) < c["map_min_samples"]:
             return False
         self.next_s = ball.t_s + STRIDE_S
-        return self._judge()
+        return self._judge(ball.t_s)
 
-    def _judge(self) -> bool:
+    def _judge(self, now: float) -> bool:
+        c = self.c
         t, x, y = (np.array(v) for v in zip(*self.balls, strict=True))
-        e = pushed_mm(self.cmds, t, self.c)
+        e = pushed_mm(self.cmds, t, c)
+        seen, off, flip = [False, False], [False, False], [False, False]
+        for d, r in responses(t, np.column_stack([x, y]), e, c["map_excite_mm"]):
+            if math.hypot(*r) < c["map_floor"]:
+                continue  # the ball hardly answered, its angle is noise
+            phi = abs(angle_deg(d, r))
+            for k in range(2):
+                if abs(d[k]) >= 0.5:
+                    seen[k] = True
+                    off[k] = off[k] or phi > c["map_line_deg"]
+                    flip[k] = flip[k] or phi > c["map_flip_deg"]
         was = self.bad or ""
-        now = set(was)
-        for k, pos in enumerate((x, y)):
-            s, excite = fit(t, pos, e[:, k])
-            if excite < self.c["map_excite_mm"]:
-                continue
-            self.low[k] = self.low[k] + 1 if s < self.c["map_s_bad"] else 0
-            if s < self.c["map_s_flip"] or self.low[k] >= 2:
-                now.add(AXES[k])
-        self.bad = "".join(a for a in AXES if a in now) or None
+        bad = set(was)
+        for k in (k for k in range(2) if seen[k]):
+            if now - self.judged[k] > 2 * STRIDE_S:
+                self.low[k] = 0  # two in a row means two windows close together
+            self.judged[k] = now
+            self.low[k] = self.low[k] + 1 if off[k] else 0
+            if flip[k] or self.low[k] >= 2:
+                bad.add(AXES[k])
+        self.bad = "".join(a for a in AXES if a in bad) or None
         return (self.bad or "") != was
