@@ -26,19 +26,18 @@ CLAMP_DEG = (X_HI - X_LO) / 2 / US_PER_DEG
 FRICTION = REAL["control"]["rolling_friction_x_mm_s2"]
 
 
-def shaping(cap: float, us_per_deg: float, friction: bool) -> dict:
+def shaping(top: float, friction: bool) -> dict:
+    # full stick at top deg as far as shape can tell, the plant still stops at CLAMP_DEG
     cfg = copy.deepcopy(REAL)
-    cfg["input"]["intent_gain_deg"] = cap
-    cfg["control"].pop("player_max_deg", None)
-    cfg["rig"]["us_per_deg_x"] = us_per_deg
+    cfg["rig"]["us_per_deg_x"] = (X_HI - X_LO) / 2 / top
     if not friction:
         cfg["control"]["rolling_friction_x_mm_s2"] = 0.0
     return cfg
 
 
-NEW = shaping(6.0, US_PER_DEG, friction=True)
-# gain 6 and no floor, with the clamp out of the way
-TODAY = shaping(6.0, 1.0, friction=False)
+NEW = shaping(CLAMP_DEG, friction=True)
+# gain 6 and no floor
+TODAY = shaping(6.0, friction=False)
 
 
 def roll(x: float, v: float, tilt_deg: float) -> tuple[float, float]:

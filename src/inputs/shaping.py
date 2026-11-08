@@ -10,14 +10,14 @@ def _ease(r: float, dz: float) -> float:
 
 
 def top_deg(cfg: dict) -> tuple[float, float]:
-    """Full stick tilt per axis: the player cap, or the servo clamp if that comes first."""
-    rig = cfg["rig"]
-    cap = cfg["control"].get("player_max_deg", cfg["input"]["intent_gain_deg"])
+    """Full stick tilt per axis: the servo clamp, held to player_max_deg while guard_on."""
+    rig, c = cfg["rig"], cfg["control"]
+    cap = c["player_max_deg"] if c.get("guard_on", False) else math.inf
     x_lo, x_hi, y_lo, y_hi = limits(rig)
     sx, sy = abs(rig["us_per_deg_x"]), abs(rig["us_per_deg_y"])
-    # a zero scale never reaches the clamp
-    tx = min(cap, (x_hi - x_lo) / 2 / sx) if sx > 0 else cap
-    ty = min(cap, (y_hi - y_lo) / 2 / sy) if sy > 0 else cap
+    # a zero scale can't tilt the plate, keep it level
+    tx = min(cap, (x_hi - x_lo) / 2 / sx) if sx > 0 else 0.0
+    ty = min(cap, (y_hi - y_lo) / 2 / sy) if sy > 0 else 0.0
     return tx, ty
 
 

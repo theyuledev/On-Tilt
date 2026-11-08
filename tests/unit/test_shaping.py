@@ -10,7 +10,7 @@ from src.modes import MODES
 
 pytestmark = pytest.mark.unit
 
-INPUT = {"dead_zone": 0.08, "expo": 0.3, "intent_gain_deg": 6.0, "key_ramp_s": 0.3}
+INPUT = {"dead_zone": 0.08, "expo": 0.3, "key_ramp_s": 0.3}
 RIG = {
     "center_x_us": 1500,
     "center_y_us": 1500,
@@ -21,7 +21,7 @@ RIG = {
     "limit_x_us": 150,
     "limit_y_us": 150,
 }
-WIDE = {**RIG, "us_per_deg_x": 10.0, "us_per_deg_y": 10.0}
+WIDE = {**RIG, "us_per_deg_x": 25.0, "us_per_deg_y": 25.0}  # 6 deg at the clamp
 REAL = {**RIG, "us_per_deg_x": 100.0, "us_per_deg_y": -100.0}
 SLICK = {"sim_g_mm_s2": 9810, "rolling_friction_x_mm_s2": 0.0, "rolling_friction_y_mm_s2": 0.0}
 ROUGH = {"sim_g_mm_s2": 9810, "rolling_friction_x_mm_s2": 47, "rolling_friction_y_mm_s2": 39}
@@ -67,8 +67,8 @@ def test_expo_bends_the_middle_down_but_not_the_ends():
     assert shape(1.0, 0.0, CFG)[0] == pytest.approx(shape(1.0, 0.0, linear)[0])
 
 
-def test_gain_scales_the_output():
-    assert shape(1.0, 0.0, cfg(intent_gain_deg=12.0))[0] == pytest.approx(12.0)
+def test_the_clamp_scales_the_output():
+    assert shape(1.0, 0.0, cfg({**WIDE, "us_per_deg_x": 12.5}))[0] == pytest.approx(12.0)
 
 
 def test_inside_the_dead_zone_is_exactly_zero():
@@ -100,12 +100,18 @@ def test_floor_is_the_tilt_that_just_beats_rolling_friction():
     assert floor_deg(CFG) == (0.0, 0.0)
 
 
-def test_top_is_the_cap_or_the_servo_clamp_whichever_is_less():
-    assert top_deg(cfg(intent_gain_deg=3.0)) == (3.0, 3.0)
+def test_with_the_guard_off_top_is_the_servo_clamp():
+    assert top_deg(CFG) == (6.0, 6.0)
     assert top_deg(FELT) == (1.5, 1.5)
-    assert top_deg(cfg(REAL, {"player_max_deg": 1.0})) == (1.0, 1.0)
-    assert top_deg(cfg(WIDE, {"player_max_deg": 4.0})) == (4.0, 4.0)
-    assert top_deg(cfg(REAL, {"player_max_deg": 4.0})) == (1.5, 1.5)
+    assert top_deg(cfg(REAL, {"player_max_deg": 1.0})) == (1.5, 1.5)
+    assert top_deg(cfg(REAL, {"guard_on": False, "player_max_deg": 1.0})) == (1.5, 1.5)
+
+
+def test_with_the_guard_on_top_is_the_player_cap_or_the_clamp_whichever_is_less():
+    guarded = {"guard_on": True, "player_max_deg": 1.0}
+    assert top_deg(cfg(REAL, guarded)) == (1.0, 1.0)
+    assert top_deg(cfg(WIDE, {**guarded, "player_max_deg": 4.0})) == (4.0, 4.0)
+    assert top_deg(cfg(REAL, {**guarded, "player_max_deg": 4.0})) == (1.5, 1.5)
 
 
 def test_top_follows_the_startup_range_while_the_startup_flag_is_on():
@@ -131,7 +137,7 @@ def test_no_dead_zone_does_not_divide_by_zero():
 def test_odd_settings_never_divide_by_zero():
     assert shape(1.0, 0.0, cfg(dead_zone=0.7)) == pytest.approx((6.0, 0.0))
     assert shape(1.0, 1.0, cfg(dead_zone=1.0)) == (0.0, 0.0)
-    assert top_deg(cfg({**REAL, "us_per_deg_x": 0.0, "us_per_deg_y": 0.0})) == (6.0, 6.0)
+    assert top_deg(cfg({**REAL, "us_per_deg_x": 0.0, "us_per_deg_y": 0.0})) == (0.0, 0.0)
     assert floor_deg(cfg(control={**ROUGH, "sim_g_mm_s2": 0})) == (0.0, 0.0)
     assert floor_deg(cfg(control={**ROUGH, "sim_g_mm_s2": 1})) == (90.0, 90.0)
 
