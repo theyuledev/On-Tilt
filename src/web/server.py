@@ -1,11 +1,16 @@
 import time
+import tomllib
 from pathlib import Path
 
 import cv2
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
+
+from src.io.settings import ROOT
 
 STATIC = Path(__file__).parent / "static"
+MAZES = ROOT / "configs" / "mazes"
 JPEG_SCALE = 0.5  # 1280x800 camera -> 640x400 on the page
 JPEG_PERIOD_S = 1 / 15  # one encode per ~66 ms, the control loop shares this process
 FULL_JPEG_QUALITY = 95  # calibration fits the lens from these, keep the pixels honest
@@ -13,6 +18,7 @@ FULL_JPEG_QUALITY = 95  # calibration fits the lens from these, keep the pixels 
 
 def make_app(loop) -> FastAPI:
     app = FastAPI()
+    app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
     @app.get("/")
     def index():
@@ -27,6 +33,12 @@ def make_app(loop) -> FastAPI:
             "camera_width": rig["camera_width"],
             "heartbeat_stale_s": game["heartbeat_stale_s"],
         }
+
+    @app.get("/race/maze")
+    def maze():
+        with (MAZES / f"{loop.cfg['game']['maze']}.toml").open("rb") as f:
+            m = tomllib.load(f)
+        return {"points": m["points"], "checkpoints": m["checkpoints"], "start": m["start"]}
 
     jpeg = {"t": float("-inf"), "bytes": b""}
 
