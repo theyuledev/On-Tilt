@@ -1,4 +1,5 @@
 // the plate seen from above, drawn in mm: origin at the centre, +x right, +y up
+const TRAIL_S = 0.5;
 const trail = [];
 
 function fit(canvas) {
@@ -66,12 +67,12 @@ function tail(ctx, now, keepS, w) {
 
 function draw(ctx, cfg, maze, s) {
   const px = fit(ctx.canvas), mm = cfg.plate_inner_mm, r = cfg.ball_d_mm / 2;
-  keep(s.ball, s.t_s, cfg.trail_s);
+  keep(s.ball, s.t_s, TRAIL_S);
   ctx.setTransform(px / mm, 0, 0, -px / mm, px / 2, px / 2);
   plate(ctx, mm);
   ribbon(ctx, maze, cfg.ball_d_mm);
   gates(ctx, maze, r);
-  tail(ctx, s.t_s, cfg.trail_s, r / 2);
+  tail(ctx, s.t_s, TRAIL_S, r / 2);
   // the player's ball goes on last so nothing drawn later can cover it
   if (!s.ball.valid) return;
   ctx.fillStyle = "#ff8c1a";

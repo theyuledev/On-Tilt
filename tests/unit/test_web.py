@@ -60,7 +60,6 @@ def test_config_gives_plate_ball_and_stale_limit_from_settings(client):
         "ball_d_mm": cfg["rig"]["ball_d_mm"],
         "camera_width": cfg["rig"]["camera_width"],
         "heartbeat_stale_s": cfg["game"]["heartbeat_stale_s"],
-        "trail_s": cfg["game"]["trail_s"],
     }
 
 
@@ -75,7 +74,7 @@ def test_race_maze_is_the_configured_maze_file(client):
 def test_race_js_draws_the_plate_in_mm_with_a_ball_trail(client):
     js = static(client, "race.js")
     assert "function draw(ctx, cfg, maze, s)" in js
-    assert "cfg.plate_inner_mm" in js and "cfg.trail_s" in js and "s.ball.valid" in js
+    assert "cfg.plate_inner_mm" in js and "TRAIL_S" in js and "s.ball.valid" in js
 
 
 def test_page_rings_the_tracked_ball_on_the_camera_image(client):

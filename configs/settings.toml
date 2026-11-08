@@ -47,7 +47,6 @@ d_max_deg = { value = 3.0, label = "uncalibrated default (NOT TESTED, expected p
 heartbeat_stale_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 ghost = ""
 maze = "square"
-trail_s = { value = 0.5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 
 [vision]
 min_ball_r_px = { value = 10, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }

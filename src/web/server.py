@@ -32,7 +32,6 @@ def make_app(loop) -> FastAPI:
             "ball_d_mm": rig["ball_d_mm"],
             "camera_width": rig["camera_width"],
             "heartbeat_stale_s": game["heartbeat_stale_s"],
-            "trail_s": game["trail_s"],
         }
 
     @app.get("/race/maze")
