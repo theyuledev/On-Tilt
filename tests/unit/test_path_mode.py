@@ -105,4 +105,4 @@ def test_path_follower_parks_on_the_last_point_and_levels_without_a_ball():
 def test_each_run_gets_its_own_follower_and_plain_modes_come_back_as_is():
     assert make_mode("path", CFG) is not make_mode("path", CFG)
     assert make_mode("balance", CFG) is balance
-    assert set(MODES) == {"hand", "balance", "path"}
+    assert set(MODES) == {"hand", "balance", "path", "assist"}
