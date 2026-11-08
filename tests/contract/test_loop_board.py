@@ -5,7 +5,7 @@ import serial
 
 from src.app import Loop
 from src.control.pulse_map import center
-from src.io.serial_link import BoardLink, SerialActuator
+from src.io.serial_link import BoardLink, BoardRefused, SerialActuator
 from src.io.settings import load
 from src.sim.plate import SimActuator
 from tests.contract.fake_board import FakeBoard
@@ -48,6 +48,17 @@ def unplug(board):
 
 def go_silent(board):
     board.silent = True
+
+
+def unplug_before(board, cmd):
+    write = board.write
+
+    def gone(data):
+        if data.decode().strip() == cmd:
+            raise serial.SerialException("device disconnected")
+        write(data)
+
+    board.write = gone
 
 
 def garble(board):
@@ -96,7 +107,7 @@ def test_board_error_disarms_and_lets_the_page_arm_again(loop, board, clock):
     ticks(loop, clock, 3)
     board.armed = False  # board stalled 250 ms, self levelled and dropped out
     ticks(loop, clock, 1)
-    assert board.sent[-1].startswith("P")
+    assert board.sent[-1].startswith("P") and "S" not in board.sent
     snap = loop.snapshot()
     assert not snap["armed"] and not snap["board_lost"] and not loop.safety.armed
 
@@ -118,19 +129,106 @@ def test_silent_board_disarms_instead_of_latching_lost(loop, board, clock):
     assert not snap["armed"] and not snap["board_lost"]
 
 
-def test_late_reply_does_not_lock_out_the_next_arm(loop, board, clock):
+def test_late_reply_with_the_board_still_armed_carries_on(loop, board, clock):
+    loop.arm()
+    ticks(loop, clock, 3, key=(1.0, 0.0))
+    board.late = True
+    ticks(loop, clock, 1, key=(1.0, 0.0))
+    assert board.sent[-1] == "S" and loop.last.armed
+    ticks(loop, clock, 1, key=(1.0, 0.0))
+    assert board.sent[-1].startswith("P") and board.armed
+    assert "D" not in board.sent and board.sent.count("S") == 1
+    snap = loop.snapshot()
+    assert snap["armed"] and not snap["board_lost"]
+
+
+def test_late_reply_with_the_board_disarmed_disarms_without_d(loop, board, clock):
     loop.arm()
     ticks(loop, clock, 3)
     board.late = True
+    board.armed = False  # its own ramp already finished
     ticks(loop, clock, 1)
-    assert not loop.snapshot()["armed"] and board._replies  # the P reply landed after the timeout
+    snap = loop.snapshot()
+    assert not snap["armed"] and not snap["board_lost"]
+    n = len(board.sent)
+    ticks(loop, clock, 3)
+    assert board.sent[n:] == [] and "D" not in board.sent
 
-    board.armed = False  # 250 ms of silence, board self levelled
+
+def test_late_reply_then_status_fails_hard_marks_board_lost(loop, board, clock):
+    loop.arm()
+    ticks(loop, clock, 3)
+    board.late = True
+    unplug_before(board, "S")
+    ticks(loop, clock, 1)
+    snap = loop.snapshot()
+    assert snap["board_lost"] and not snap["armed"]
     n = len(board.sent)
     loop.arm()
     ticks(loop, clock, 3)
-    assert [s[0] for s in board.sent[n:]] == ["L", "A", "P", "P", "P"]
-    assert board.armed and loop.snapshot()["armed"]
+    assert board.sent[n:] == []
+
+
+def test_err_during_the_board_ramp_disarms_without_asking_or_sending_d(loop, board, clock):
+    loop.arm()
+    ticks(loop, clock, 3, key=(1.0, 0.0))
+    board.ramping = True  # a stall tripped the firmware ramp, it still reports armed
+    ticks(loop, clock, 1, key=(1.0, 0.0))
+    assert board.sent[-1].startswith("P") and "S" not in board.sent
+    snap = loop.snapshot()
+    assert not snap["armed"] and not snap["board_lost"]
+    loop.kill()
+    ticks(loop, clock, 5, key=(1.0, 0.0))
+    assert "D" not in board.sent and board.sent[-1].startswith("P")
+
+
+def test_no_d_when_the_last_level_pulse_timed_out_during_the_board_ramp(loop, board, clock):
+    loop.arm()
+    ticks(loop, clock, 3)
+    loop.kill()
+    ticks(loop, clock, 3)  # level hold, one tick to go
+    board.ramping = board.late = True  # the ERR P lands after the timeout, S still says armed
+    ticks(loop, clock, 1)
+    assert board.sent[-1] == "S" and loop.last.armed
+    ticks(loop, clock, 1)
+    assert not loop.last.armed and "D" not in board.sent and board.sent[-1] == "S"
+    snap = loop.snapshot()
+    assert not snap["armed"] and not snap["board_lost"]
+
+
+def test_arm_during_the_board_ramp_fails_quietly_then_works(loop, board, clock):
+    board.armed = board.ramping = True  # stalled earlier, firmware is levelling on its own
+    loop.arm()
+    ticks(loop, clock, 2)
+    assert [s[0] for s in board.sent] == ["L"]
+    snap = loop.snapshot()
+    assert not snap["armed"] and not snap["board_lost"]
+    board.ramping = board.armed = False  # ramp done, pulses stopped
+    loop.arm()
+    ticks(loop, clock, 3)
+    assert [s[0] for s in board.sent[1:]] == ["L", "A", "P", "P", "P"] and board.armed
+
+
+def test_fake_board_refuses_l_a_p_while_ramping_and_still_says_armed():
+    board = FakeBoard()
+    board.armed = board.ramping = True
+    link = BoardLink(board)
+    assert link.status()["armed"]
+    refused = [
+        ("L 1350 1650 1350 1650 1500 1500", "armed"),
+        ("A", "ramping"),
+        ("P 1500 1500", "disarmed"),
+    ]
+    for line, why in refused:
+        with pytest.raises(BoardRefused, match=why):
+            link.ask(line)
+
+
+def test_stray_reply_in_the_buffer_does_not_block_arming(loop, board, clock):
+    board._replies.append("OK P 1500 1500")  # landed after the last read
+    loop.arm()
+    ticks(loop, clock, 3)
+    assert [s[0] for s in board.sent] == ["L", "A", "P", "P", "P"] and board.armed
 
 
 def test_unplugged_at_arm_latches_board_lost_instead_of_raising(loop, board, clock):

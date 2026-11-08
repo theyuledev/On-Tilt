@@ -11,6 +11,10 @@ class LinkError(RuntimeError):
     pass
 
 
+class BoardRefused(LinkError):
+    """The board answered ERR, so its state is known."""
+
+
 def limits_line(rig: dict) -> str:
     cx, cy = center(rig)
     x_lo, x_hi, y_lo, y_hi = (round(v) for v in limits(rig))
@@ -23,6 +27,14 @@ class BoardLink:
     def __init__(self, port):
         self.port = port
 
+    def flush(self) -> None:
+        # a reply that landed after the timeout is still queued and would be read as the next one's
+        try:
+            self.port.reset_input_buffer()
+        except termios.error as e:
+            # gone port, and termios.error is not an OSError on its own
+            raise OSError(str(e)) from e
+
     def raw(self, line: str) -> str:
         self.port.write((line + "\n").encode())
         reply = self.port.readline().decode().strip()
@@ -33,6 +45,8 @@ class BoardLink:
     def ask(self, line: str) -> list[str]:
         reply = self.raw(line)
         parts = reply.split()
+        if parts[0] == "ERR":
+            raise BoardRefused(f"{line!r} -> {reply!r}")
         if parts[0] != "OK" or parts[1:2] != [line[0]]:
             raise LinkError(f"{line!r} -> {reply!r}")
         return parts[2:]
@@ -52,29 +66,41 @@ class SerialActuator:
         self.link = link
         self.rig = rig
         self.armed = False
+        self.acked = True  # the last P got its OK back
         self.state = PlateState(sent_x_deg=0.0, sent_y_deg=0.0, est_x_deg=0.0, est_y_deg=0.0)
 
     def _arm(self) -> None:
-        # a reply that came in after the timeout is still queued, it would be read as L's
-        try:
-            self.link.port.reset_input_buffer()
-        except termios.error as e:
-            # gone port, and termios.error is not an OSError on its own
-            raise OSError(str(e)) from e
+        self.link.flush()
         self.link.ask(limits_line(self.rig))
         self.link.ask("A")
         self.armed = True
 
+    def still_armed(self) -> bool:
+        self.link.flush()
+        return self.link.status()["armed"]
+
     def send(self, cmd: ServoCommand | None, now: float) -> PlateState:
         if cmd is None:
             if self.armed:
-                self.link.ask("D")
+                # after an unacknowledged P the board may be mid ramp, a D there detaches
+                # off level; its own timeout levels it and stops pulses instead
+                if self.acked:
+                    self.link.ask("D")
                 self.armed = False
             return self.state
 
         if not self.armed:
             self._arm()
-        x, y = (int(v) for v in self.link.ask(f"P {cmd.x_us} {cmd.y_us}"))
+        try:
+            x, y = (int(v) for v in self.link.ask(f"P {cmd.x_us} {cmd.y_us}"))
+        except LinkError as e:
+            # only a timeout leaves the board in doubt; an ERR is its own word, during its
+            # self ramp it still says armed=1 so asking S there would keep us going
+            if isinstance(e, BoardRefused) or not self.still_armed():
+                raise
+            self.acked = False
+            return self.state
+        self.acked = True
         tilt = pulse_to_tilt(ServoCommand(x_us=x, y_us=y), self.rig)
         self.state = PlateState(
             sent_x_deg=tilt.tilt_x_deg,

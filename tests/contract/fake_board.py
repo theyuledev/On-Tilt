@@ -14,6 +14,7 @@ class FakeBoard:
         self.silent = False
         self.late = False  # next reply misses the read and sits in the buffer
         self.unplugged = False  # the flush hits a port that is gone
+        self.ramping = False  # levelling itself after a stall, armed stays 1 but L/A/P get ERR
         self.sent: list[str] = []
         self._replies: list[str] = []
 
@@ -39,6 +40,8 @@ class FakeBoard:
             return "ERR ?"
         cmd, args = parts[0], [int(a) for a in parts[1:]]
 
+        if self.ramping and cmd in ("L", "A", "P"):
+            return {"L": "ERR L armed", "A": "ERR A ramping", "P": "ERR P disarmed"}[cmd]
         if cmd == "S" and not args:
             return f"OK S {int(self.armed)} {int(self.limits is not None)} 0 fake"
         if cmd == "L" and len(args) == 6:
