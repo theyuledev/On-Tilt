@@ -11,6 +11,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from src.io.settings import ROOT
 from src.vision.calib import undistort
 
 DICTS = {"DICT_4X4_50": cv2.aruco.DICT_4X4_50}
@@ -90,6 +91,9 @@ def relative_tilt(r_plate, r_base=None) -> tuple[float, float]:
 
 def _board(raw: dict) -> dict[int, np.ndarray]:
     return {int(k): np.asarray(v, np.float32).reshape(4, 3) for k, v in raw.items()}
+
+
+BOARD_PATH = ROOT / "configs" / "board.local.json"
 
 
 def load_board(path) -> tuple[dict[int, np.ndarray], dict[int, np.ndarray]]:
