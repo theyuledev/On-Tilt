@@ -246,6 +246,15 @@ def test_typing_in_a_field_skips_the_window_keys_but_still_lets_go_of_tilt(clien
     assert up.endswith("e.preventDefault(); held.delete(e.code); });")
 
 
+def test_space_kills_while_armed_even_from_the_name_field(client):
+    js = static(client, "app.js")
+    down = js[js.index('addEventListener("keydown"') : js.index('addEventListener("keyup"')]
+    kill = 'if (e.code === "Space" && armedNow) { pending.kill = true; e.preventDefault(); '
+    assert down.index(kill + "return; }") < down.index("if (typing(e)) return;")
+    show = js[js.index("function show(s) {") :]
+    assert show.index("armedNow = !!s.armed;") < show.index("\n}")
+
+
 def test_page_has_a_hand_pill_keyed_on_the_snapshot_flags(client):
     assert 'id="hand"' in client.get("/").text
     js = static(client, "app.js")
