@@ -38,7 +38,8 @@ class Loop:
         self.board_lost = False
         self.holding = False
         self.armed_s = 0.0
-        self.stale = False
+        self.stale = self.page_stale = False
+        self.page_t: float | None = None
         self.hand_seen = self.hand_calibrating = False
         self.mode = cfg["control"]["mode"]
         self.ball: BallState | None = None
@@ -71,6 +72,7 @@ class Loop:
             self.step = make_mode(self.mode, self.cfg)
             self.safety.arm()
             self.holding = False
+            self.page_t = None
 
     def hold(self) -> None:
         # level between runs so the next arm starts from level, not the sag; never arms
@@ -80,6 +82,9 @@ class Loop:
     def kill(self) -> None:
         self.holding = False
         self.safety.kill()
+
+    def page_seen(self, now: float) -> None:
+        self.page_t = now
 
     def tick(self, now: float, dt: float) -> RunLogRecord:
         if self.frames is not None:
@@ -128,7 +133,10 @@ class Loop:
             # a dead hand process must not leave the page saying the hand is live
             self.hand_seen = fresh and self.hand.seen
             self.hand_calibrating = fresh and self.hand.calibrating
-        self.stale = now - intent.t_s > rig["stale_intent_s"]
+        # kill lives on the page, so a page gone quiet while armed levels like a stale intent
+        page_t, quiet_s = self.page_t, self.cfg["game"]["heartbeat_stale_s"]
+        self.page_stale = self.safety.armed and page_t is not None and now - page_t > quiet_s
+        self.stale = now - intent.t_s > rig["stale_intent_s"] or self.page_stale
         return intent, self.stale
 
     def _see(self) -> None:
@@ -189,6 +197,7 @@ class Loop:
         snap["killing"] = self.safety.killing
         snap["holding"] = self.holding and self.safety.armed
         snap["stale"] = self.stale
+        snap["page_stale"] = self.page_stale
         snap["board_lost"] = self.board_lost
         snap["camera_lost"] = self.camera_lost
         px = self.ball_px
