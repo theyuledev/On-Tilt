@@ -1,7 +1,5 @@
 import numpy as np
 
-from src.vision.px_to_mm import SPAN
-
 PASS_DEG = 45
 
 
@@ -26,10 +24,10 @@ def phase_margin_deg(
 def balance_margin(cfg: dict) -> dict:
     c = cfg["control"]
     tick = 1 / c["sim_tick_hz"]
-    # each tick takes the newest frame, so the track gets one entry per tick
-    # unless the camera is slower than the loop
+    # the pipeline adds one entry per frame it gets to; charging at least a tick
+    # each stays on the safe side
     sample = max(tick, 1 / cfg["rig"]["camera_fps"])
-    vel_lag = SPAN / 2 * sample
+    vel_lag = cfg["vision"]["velocity_span_frames"] / 2 * sample
     dead, ema = c["servo_dead_time_s"], c["vel_ema_s"]
     # the velocity lags only hit the d path, so charging them to the whole loop is on the safe side
     delay = dead + tick + vel_lag + ema

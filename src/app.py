@@ -5,11 +5,13 @@ import uvicorn
 
 from src.inputs.hand import HandInput
 from src.io.camera import CameraSource, open_camera
+from src.io.camera_exposure import exposure_problem
 from src.io.run_log import start_run_log
 from src.io.serial_link import SerialActuator, open_board
 from src.io.settings import env, load
 from src.loop import Loop
 from src.modes import MODES
+from src.vision.pipeline import Pipeline
 from src.web.server import make_app
 
 
@@ -41,14 +43,15 @@ def main() -> None:
         print(f"hand input off: {e}")
         hand = None
     try:
-        frames = CameraSource(open_camera(cfg["rig"]))
+        frames = CameraSource(open_camera(cfg["rig"]), process=Pipeline(cfg).step)
+        exposure = exposure_problem(cfg["rig"])
     except RuntimeError as e:
         print(f"camera off: {e}")
-        frames = None
+        frames = exposure = None
     actuator = None
     if cfg["rig"]["actuator"] == "real":
         actuator = SerialActuator(open_board(cfg["rig"]), cfg["rig"])
-    loop = Loop(cfg, hand, frames, actuator)
+    loop = Loop(cfg, hand, frames, actuator, exposure)
     start_run_log(loop.bus)
     port = int(env("PORT", "8000"))
     server = uvicorn.Server(

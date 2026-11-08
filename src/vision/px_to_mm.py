@@ -3,8 +3,6 @@ import math
 from src.contracts import BallState
 from src.vision.tracker import BallPx
 
-SPAN = 4  # the loop's history length while it still runs the tracker itself
-
 
 def ball_state(ball: BallPx, prev: list[BallState], cfg: dict) -> BallState:
     """Plate mm from image px: origin at plate_centre_px, image y runs down so it flips,
