@@ -44,8 +44,15 @@ def test_config_gives_plate_ball_and_stale_limit_from_settings(client):
     assert client.get("/config").json() == {
         "plate_inner_mm": cfg["rig"]["plate_inner_mm"],
         "ball_d_mm": cfg["rig"]["ball_d_mm"],
+        "camera_width": cfg["rig"]["camera_width"],
         "heartbeat_stale_s": cfg["game"]["heartbeat_stale_s"],
     }
+
+
+def test_page_rings_the_tracked_ball_on_the_camera_image(client):
+    page = client.get("/").text
+    assert 'id="seen"' in page and 'class="view"' in page
+    assert "s.ball_px" in page and "cfg.camera_width" in page
 
 
 def test_camera_jpeg_is_half_res_and_cached_for_a_frame_period(monkeypatch):

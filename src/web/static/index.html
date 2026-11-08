@@ -9,7 +9,10 @@
   main { display: grid; gap: 20px; justify-items: center; }
   .stage { perspective: 700px; width: 320px; height: 320px; display: grid; place-items: center; }
   .plate { width: 260px; height: 260px; background: #c8a46a; border: 10px solid #8a6a3a; border-radius: 4px; transition: transform 30ms linear; position: relative; }
-  #cam { width: 400px; max-width: 45vw; border-radius: 4px; }
+  .view { position: relative; }
+  #cam { display: block; width: 400px; max-width: 45vw; border-radius: 4px; }
+  .ring { position: absolute; box-sizing: border-box; border: 2px solid #ff3; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+  .ring::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; background: #ff3; border-radius: 50%; transform: translate(-50%, -50%); }
   .ball { position: absolute; border-radius: 50%; background: #e8e8f0; box-shadow: 0 1px 3px #0009; transform: translate(-50%, -50%); }
   .row { display: flex; gap: 10px; align-items: center; }
   button { font: inherit; padding: 10px 22px; border: 0; border-radius: 6px; cursor: pointer; }
@@ -33,7 +36,8 @@
   </div>
   <div class="row">
     <div class="stage"><div id="plate" class="plate"><div id="ball" class="ball" hidden></div></div></div>
-    <img id="cam" alt="overhead cam"><span id="nocam" hidden>no camera</span>
+    <div class="view"><img id="cam" alt="overhead cam"><div id="seen" class="ring" hidden></div></div>
+    <span id="nocam" hidden>no camera</span>
   </div>
   <div class="row">
     <button id="arm">arm</button>
@@ -76,6 +80,14 @@ function show(s) {
   if (b.valid) {
     ball.style.left = `${50 + 100 * b.x_mm / cfg.plate_inner_mm}%`;
     ball.style.top = `${50 - 100 * b.y_mm / cfg.plate_inner_mm}%`;
+  }
+  const px = s.ball_px, ring = document.getElementById("seen");
+  ring.hidden = !px || cam.hidden;
+  if (px) {
+    const k = cam.clientWidth / cfg.camera_width;
+    ring.style.left = `${k * px[0]}px`;
+    ring.style.top = `${k * px[1]}px`;
+    ring.style.width = ring.style.height = `${2 * k * px[2]}px`;
   }
   const p = s.plate_state;
   document.getElementById("plate").style.transform =

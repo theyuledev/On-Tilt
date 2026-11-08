@@ -1,5 +1,6 @@
 import asyncio
 import time
+from dataclasses import replace
 
 import uvicorn
 
@@ -16,6 +17,8 @@ from src.io.settings import env, load
 from src.modes import MODES
 from src.sim.ball import roll
 from src.sim.plate import SimActuator
+from src.vision.px_to_mm import SPAN, ball_state
+from src.vision.tracker import BallPx, BallTracker
 from src.web.server import make_app
 
 LEVEL = PlateState(sent_x_deg=0.0, sent_y_deg=0.0, est_x_deg=0.0, est_y_deg=0.0)
@@ -28,6 +31,7 @@ class Loop:
         hand: InputSource | None = None,
         frames: FrameSource | None = None,
         actuator: TiltActuator | None = None,
+        tracker: BallTracker | None = None,
     ):
         self.cfg = cfg
         self.bus = Bus()
@@ -42,6 +46,9 @@ class Loop:
         self.hand_seen = self.hand_calibrating = False
         self.mode = cfg["control"]["mode"]
         self.ball: BallState | None = None
+        self.tracker = tracker or (BallTracker(cfg["vision"]) if frames is not None else None)
+        self.ball_px: BallPx | None = None
+        self.track: list[BallState] = []
         self.last: RunLogRecord | None = None
 
     def arm(self) -> None:
@@ -53,12 +60,13 @@ class Loop:
 
     def tick(self, now: float, dt: float) -> RunLogRecord:
         if self.frames is not None:
-            frame = self.frames.read()
-            if frame is not None:
-                self.frame = frame
+            self._see()
         rig = self.cfg["rig"]
-        sim = isinstance(self.actuator, SimActuator)
+        sim = isinstance(self.actuator, SimActuator) and self.tracker is None
         ball = self.ball or BallState(0.0, 0.0, 0.0, 0.0, valid=sim, t_s=now)
+        if now - ball.t_s > rig["stale_intent_s"]:
+            # an old frame says nothing about where the ball is now
+            ball = replace(ball, valid=False)
         intent = self.keys.latest()
         if self.hand is not None:
             hand = self.hand.latest()
@@ -89,6 +97,15 @@ class Loop:
         self.last = rec
         self.bus.publish("tick", rec)
         return rec
+
+    def _see(self) -> None:
+        frame = self.frames.read()
+        if frame is None:
+            return
+        self.frame = frame
+        self.ball_px = self.tracker.update(frame.image, frame.t_s)
+        self.ball = ball_state(self.ball_px, self.track, self.cfg["vision"])
+        self.track = [*self.track, self.ball][-SPAN:]
 
     def _drive(
         self, target: ServoCommand, stale: bool, dt: float, now: float
@@ -122,6 +139,8 @@ class Loop:
         snap["stale"] = self.stale
         snap["board_lost"] = self.board_lost
         snap["camera_lost"] = self.camera_lost
+        px = self.ball_px
+        snap["ball_px"] = [px.x_px, px.y_px, px.r_px] if px is not None and px.valid else None
         snap["hand_seen"] = self.hand_seen
         snap["hand_calibrating"] = self.hand_calibrating
         return snap
