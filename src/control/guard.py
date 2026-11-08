@@ -64,15 +64,29 @@ class Guard:
             min(max(t, -cap), cap)
             for t, cap in zip((cmd.tilt_x_deg, cmd.tilt_y_deg), self.cap, strict=True)
         ]
-        if not ball.valid:
-            return PlateCommand(*player)
         dt = 0.0 if self.t_s is None else max(ball.t_s - self.t_s, 0.0)
-        self.t_s = ball.t_s
+        self.t_s = ball.t_s if self.t_s is None else max(ball.t_s, self.t_s)
+        if not ball.valid:
+            # a stale frame keeps its old stamp, the fade still has to run
+            dt = dt or 1 / self.c["sim_tick_hz"]
+            return PlateCommand(*(self._lost(i, player[i], dt) for i in range(2)))
         pos, vel = (ball.x_mm, ball.y_mm), (ball.vx_mm_s, ball.vy_mm_s)
         return PlateCommand(*(self._axis(i, pos[i], vel[i], player[i], dt) for i in range(2)))
 
     def guard_view(self) -> dict:
         return {"w": [*self.guard_w], "side": [*self.guard_side]}
+
+    def _snap(self, w: float, target: float) -> float:
+        return 0.0 if target == 0 and w < self.c["guard_w_floor"] else w
+
+    def _lost(self, i: int, player: float, dt: float) -> float:
+        # no ball to brake on: the correction fades out over the release instead of dropping
+        tau = self.c["guard_release_s"]
+        self.corr[i] = smooth(self.corr[i], 0.0, dt, tau)
+        side = self.guard_side[i]
+        self.guard_w[i] = w = self._snap(smooth(self.guard_w[i], 0.0, dt, tau), 0.0)
+        self.guard_side[i] = side if w > 0 else 0.0
+        return player + self.corr[i] if side * self.corr[i] < 0 else player
 
     def _hold(self, i: int, p: float, player: float) -> float:
         c, band = self.c, self.c["guard_hold_band_mm"]
@@ -90,9 +104,12 @@ class Guard:
         player = self._hold(i, p, player)
         s = stop_mm(p, v, T, self.brake[i])
         side = 1.0 if s >= 0 else -1.0
+        if self.guard_side[i] and abs(s) < self.r_in:
+            # a stop near the middle flips on speed noise, keep the side till the far rim matters
+            side = self.guard_side[i]
         target = smoothstep((abs(s) - self.r_in) / (self.r_out - self.r_in))
         tau = c["guard_attack_s"] if target > self.guard_w[i] else c["guard_release_s"]
-        w = self.guard_w[i] + (target - self.guard_w[i]) * min(dt / tau, 1.0)
+        w = self._snap(self.guard_w[i] + (target - self.guard_w[i]) * min(dt / tau, 1.0), target)
         brake = (
             -side * self.clamp[i] * min(need(side * p, side * v, self.r_out, T, self.a_max[i]), 1.0)
         )

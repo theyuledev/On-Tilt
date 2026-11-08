@@ -117,3 +117,14 @@ def test_an_outward_push_past_the_line_meets_a_spring():
 def test_a_zero_hold_band_turns_the_hold_line_off():
     g = Guard(cfg(guard_hold_band_mm=0))
     assert g(at(g.edge + 5.0), PlateCommand(2.0, 0.0)).tilt_x_deg == 2.0
+
+
+def test_a_ball_lost_while_braking_at_the_rim_fades_the_brake_out():
+    g = Guard(cfg(guard_hold_band_mm=0))
+    for k in range(20):
+        braked = g(at(100.0, 200.0, t=0.01 * k), PlateCommand(2.0, 0.0)).tilt_x_deg
+    assert braked < 1.0
+    lost = [at(100.0, 200.0, t=0.2 + 0.01 * k, valid=False) for k in range(10)]
+    xs = [g(b, PlateCommand(2.0, 0.0)).tilt_x_deg for b in lost]
+    assert all(a <= b for a, b in zip([braked, *xs], xs, strict=False))
+    assert xs[-1] < 2.0 - 0.8 * (2.0 - braked)
