@@ -4,6 +4,7 @@ from src import safety
 from src.bus import Bus
 from src.contracts import BallState, Intent, PlateCommand, PlateState, RunLogRecord, ServoCommand
 from src.control.deadband import invert, start
+from src.control.mapping import MappingWatch
 from src.control.pulse_map import tilt_to_pulse
 from src.estimate import BallEstimator
 from src.inputs.keyboard import KeyboardInput
@@ -44,6 +45,7 @@ class Loop:
         self.ball_px: BallPx | None = None
         self.seen_t: float | None = None
         self.est = BallEstimator(cfg)
+        self.mapping = MappingWatch(cfg)
         self.exposure = exposure
         self.last: RunLogRecord | None = None
         self.game = game
@@ -67,6 +69,7 @@ class Loop:
     def arm(self) -> None:
         if not self.board_lost and not self.arm_blocked:
             self.step = make_mode(self.mode, self.cfg)
+            self.mapping = MappingWatch(self.cfg)
             self.safety.arm()
 
     def kill(self) -> None:
@@ -92,10 +95,14 @@ class Loop:
         if not self.safety.armed or self.safety.killing or stale:
             self.step = make_mode(self.mode, self.cfg)  # fresh mode state, no kick on arm
         plate_cmd = self.step(ball, intent, self.cfg)
+        if self.mapping.bad and self.mode in CLOSED_LOOP:
+            plate_cmd = PlateCommand(0.0, 0.0)  # steering on a wrong mapping throws the ball off
         target = tilt_to_pulse(plate_cmd, rig)
         sent, plate_state = self._drive(target, stale, dt, now)
         tilt = (plate_state.sent_x_deg, plate_state.sent_y_deg) if sent is not None else (0.0, 0.0)
         self._watch("command", now, PlateCommand(*tilt))
+        if sent is not None and self.mapping.step(now, ball, tilt):
+            print(f"plate mapping looks wrong on {self.mapping.bad}, re-arm after a fix")
         if sim:
             self.ball = roll(ball, plate_state, now, rig, self.cfg["control"])
 
@@ -197,4 +204,5 @@ class Loop:
         snap["arm_blocked"] = self.arm_blocked
         if self.game is not None:
             snap["race"] = self.game.view()
+        snap["mapping_bad"] = self.mapping.bad
         return snap
