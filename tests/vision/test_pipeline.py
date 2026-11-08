@@ -7,7 +7,6 @@ from src.io.settings import ROOT, load
 from src.vision import calib
 from src.vision.pipeline import Pipeline
 from tests.unit.test_balls import ball, plate
-from tests.unit.test_px_to_mm import LENS
 
 pytestmark = pytest.mark.unit
 
@@ -15,7 +14,7 @@ CFG = load()
 VIS = CFG["vision"]
 DT = 1 / 120
 SPAN = VIS["velocity_span_frames"]
-RIG = ROOT / "tests/fixtures/lens_rig.json"
+RIG = calib.load_calib(ROOT / "tests/fixtures/lens_rig.json")
 
 
 def rolling(n, start=0):
@@ -64,15 +63,12 @@ def test_tilt_is_nan_and_nothing_occluded_without_markers():
     assert o.ms > 0
 
 
-def test_a_calib_file_undistorts_the_ball_and_no_file_keeps_the_flat_map(tmp_path):
-    path = tmp_path / "calib.local.json"
-    flat = Pipeline(CFG, path)
+def test_a_lens_undistorts_the_ball_and_no_lens_keeps_the_flat_map():
+    # reads no file: module scoped fixtures build pipelines before any per test guard runs
+    flat = Pipeline(CFG)
     assert flat.lens is None
-    calib.save_calib(LENS, path)
-    bent = Pipeline(CFG, path)
-    assert bent.lens == LENS
     frame = [(ball(plate(), 1000, 650, 40), 0.0)]
-    a, b = run(flat, frame)[0].ball, run(bent, frame)[0].ball
+    a, b = run(flat, frame)[0].ball, run(Pipeline(CFG, RIG), frame)[0].ball
     assert math.hypot(b.x_mm, b.y_mm) > 1.05 * math.hypot(a.x_mm, a.y_mm)
 
 
@@ -83,14 +79,13 @@ def raw_px(lens, ideal):
     return calib.project(lens, np.column_stack([n, np.ones(len(n))]))
 
 
-def test_rig_lens_puts_a_corner_ball_back_out_where_it_is(tmp_path):
-    lens = calib.load_calib(RIG)
+def test_rig_lens_puts_a_corner_ball_back_out_where_it_is():
     s = VIS["px_per_mm"]
     # plate centre at (640, 400) and the ball near the top left corner, both undistorted px
-    centre, at = raw_px(lens, [(640, 400), (300, 120)])
+    centre, at = raw_px(RIG, [(640, 400), (300, 120)])
     cfg = {**CFG, "vision": {**VIS, "plate_centre_px": list(centre), "plate_yaw_deg": 0.0}}
     frame = [(ball(plate(), *np.round(at).astype(int), 40), 0.0)]
-    flat = run(Pipeline(cfg, tmp_path / "none.json"), frame)[0].ball
+    flat = run(Pipeline(cfg), frame)[0].ball
     bent = run(Pipeline(cfg, RIG), frame)[0].ball
     assert (bent.x_mm, bent.y_mm) == pytest.approx((-340 / s, 280 / s), rel=0.02)
     factor = math.hypot(340, 280) / math.dist(at, centre)
@@ -99,8 +94,8 @@ def test_rig_lens_puts_a_corner_ball_back_out_where_it_is(tmp_path):
     )
 
 
-def test_no_calib_file_is_main_flat_map_to_the_bit(tmp_path):
-    o = run(Pipeline(CFG, tmp_path / "none.json"), [(ball(plate(), 1000, 650, 40), 0.0)])[0]
+def test_no_lens_is_main_flat_map_to_the_bit():
+    o = run(Pipeline(CFG), [(ball(plate(), 1000, 650, 40), 0.0)])[0]
     (cx, cy), s = VIS["plate_centre_px"], VIS["px_per_mm"]
     assert VIS["plate_yaw_deg"] == 0.0
     assert (o.ball.x_mm, o.ball.y_mm) == ((o.ball_px.x_px - cx) / s, (cy - o.ball_px.y_px) / s)

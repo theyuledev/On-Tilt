@@ -48,11 +48,10 @@ def line_rms(p) -> float:
 
 @pytest.mark.parametrize("name", EDGES)
 def test_straight_plate_edges_come_out_straighter_through_the_lens(name):
-    """a real lens fit: a straight plate edge bends in the raw image and straightens undistorted"""
+    """Straight plate edges bend in the raw frame and come out straight through a real lens fit."""
     src, frame, roi = EDGES[name]
     if not src.exists():
         pytest.skip(f"{src.name} not on this machine")
     p = edge_px(gray(src, frame), *roi)
     raw, flat = line_rms(p), line_rms(ideal_px(LENS, p))
-    print(f"{name}: raw {raw:.2f} px, undistorted {flat:.2f} px")
     assert flat < raw and flat < 1.5

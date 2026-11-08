@@ -203,3 +203,11 @@ def test_plate_step_adds_the_homography_to_the_lens(tmp_path, capsys):
     assert np.abs(cb.plate_mm_to_px([[0, 0]], calib) - cb.project(PINHOLE, MID, *flat)).max() < 0.5
     edges = re.search(r"plate edges (\d+) x (\d+) mm", capsys.readouterr().out).groups()
     assert [float(e) for e in edges] == pytest.approx([265, 265], abs=3)
+
+
+@pytest.mark.parametrize("lens", [STANDARD, FISHEYE], ids=["standard", "fisheye"])
+def test_ideal_px_scales_each_axis_by_its_own_focal_length(lens):
+    lens = {**lens, "K": [[703.0, 0, 640], [0, 650.0, 400], [0, 0, 1]]}
+    n = np.array([[0, 0], [-0.5, -0.4], [0.3, -0.2], [0.4, 0.35]])
+    px = cb.project(lens, np.column_stack([n, np.ones(len(n))]))
+    assert np.allclose(cb.ideal_px(lens, px), n * [703.0, 650.0] + [640, 400], atol=1e-3)

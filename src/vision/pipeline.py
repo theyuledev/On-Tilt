@@ -1,12 +1,10 @@
 import math
 import time
-from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
 
 from src.contracts import BallState
-from src.vision.calib import load_lens
 from src.vision.px_to_mm import ball_state
 from src.vision.tracker import BallPx, BallTracker
 
@@ -24,9 +22,9 @@ class Observation(NamedTuple):
 class Pipeline:
     """One step per frame on the grab thread; the loop just reads latest()."""
 
-    def __init__(self, cfg: dict, calib_path: Path | None = None):
+    def __init__(self, cfg: dict, lens: dict | None = None):
         self.cfg = cfg["vision"]
-        self.lens = load_lens(calib_path)
+        self.lens = lens
         self.tracker = BallTracker(self.cfg)
         self.history: list[BallState] = []
         self.last: Observation | None = None

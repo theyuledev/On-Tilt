@@ -11,6 +11,7 @@ from src.io.serial_link import SerialActuator, open_board
 from src.io.settings import env, load
 from src.loop import Loop
 from src.modes import MODES
+from src.vision.calib import load_lens
 from src.vision.pipeline import Pipeline
 from src.web.server import make_app
 
@@ -51,7 +52,7 @@ def main() -> None:
         print(f"hand input off: {e}")
         hand = None
     try:
-        frames = CameraSource(open_camera(cfg["rig"]), process=Pipeline(cfg).step)
+        frames = CameraSource(open_camera(cfg["rig"]), process=Pipeline(cfg, lens=load_lens()).step)
     except (RuntimeError, OSError) as e:
         print(f"camera off: {e}")
         frames = None
