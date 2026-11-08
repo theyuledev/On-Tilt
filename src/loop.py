@@ -9,7 +9,7 @@ from src.estimate import BallEstimator
 from src.inputs.keyboard import KeyboardInput
 from src.io.ports import Frame, FrameSource, InputSource, TiltActuator
 from src.io.serial_link import LinkError
-from src.modes import make_mode
+from src.modes import CLOSED_LOOP, make_mode
 from src.sim.ball import roll
 from src.sim.plate import SimActuator
 from src.vision.tracker import BallPx
@@ -42,7 +42,6 @@ class Loop:
         self.ball: BallState | None = None
         self.ball_px: BallPx | None = None
         self.seen_t: float | None = None
-        # watches only: nothing it predicts reaches a mode yet
         self.est = BallEstimator(cfg)
         self.exposure = exposure
         self.last: RunLogRecord | None = None
@@ -59,9 +58,9 @@ class Loop:
     @property
     def arm_blocked(self) -> str | None:
         # a wrong exposure smears the ball, so the modes steering on it wait for a fix
-        e = self.exposure or ""
-        closed = self.mode in ("balance", "path", "assist")
-        return e if closed and e and not e.startswith("exposure unverified") else None
+        e = self.exposure
+        blocks = e and self.mode in CLOSED_LOOP and not e.startswith("exposure unverified")
+        return e if blocks else None
 
     def arm(self) -> None:
         if not self.board_lost and not self.arm_blocked:
@@ -80,8 +79,7 @@ class Loop:
         if now - ball.t_s > rig["stale_intent_s"]:
             # an old frame says nothing about where the ball is now
             ball = replace(ball, valid=False)
-        intent = self._intent(now)
-        stale = self.stale
+        intent, stale = self._intent(now)
 
         if not self.safety.armed or self.safety.killing or stale:
             self.step = make_mode(self.mode, self.cfg)  # fresh mode state, no kick on arm
@@ -89,7 +87,7 @@ class Loop:
         target = tilt_to_pulse(plate_cmd, rig)
         sent, plate_state = self._drive(target, stale, dt, now)
         tilt = (plate_state.sent_x_deg, plate_state.sent_y_deg) if sent is not None else (0.0, 0.0)
-        self.est.command(now, PlateCommand(*tilt))
+        self._watch("command", now, PlateCommand(*tilt))
         if sim:
             self.ball = roll(ball, plate_state, now, rig, self.cfg["control"])
 
@@ -107,7 +105,7 @@ class Loop:
         self.bus.publish("tick", rec)
         return rec
 
-    def _intent(self, now: float) -> Intent:
+    def _intent(self, now: float) -> tuple[Intent, bool]:
         rig = self.cfg["rig"]
         intent = self.keys.latest()
         if self.hand is not None:
@@ -119,22 +117,29 @@ class Loop:
             self.hand_seen = fresh and self.hand.seen
             self.hand_calibrating = fresh and self.hand.calibrating
         self.stale = now - intent.t_s > rig["stale_intent_s"]
-        return intent
+        return intent, self.stale
 
     def _see(self) -> None:
         frame = self.frames.read()
         if frame is not None:
             self.frame = frame
-        # the pipeline runs on the camera thread, so take its newest result once
         obs = self.frames.latest()
         if obs is None or obs.t_read == self.seen_t:
             return
         self.seen_t = obs.t_read
         self.ball_px, self.ball = obs.ball_px, obs.ball
         if obs.ball.valid:
-            self.est.update(obs.t_read, obs.ball.x_mm, obs.ball.y_mm)
+            self._watch("update", obs.t_read, obs.ball.x_mm, obs.ball.y_mm)
         else:
-            self.est.miss(obs.t_read)
+            self._watch("miss", obs.t_read)
+
+    def _watch(self, call: str, *args):
+        # the estimator only watches, so a fault in it switches it off and the plate carries on
+        try:
+            return getattr(self.est, call)(*args) if self.est is not None else None
+        except Exception as e:
+            print(f"estimator off: {e!r}")
+            self.est = None
 
     def _drive(
         self, target: ServoCommand, stale: bool, dt: float, now: float
@@ -144,12 +149,8 @@ class Loop:
         sent = safety.step(self.safety, target, stale, dt, self.cfg["rig"])
         if self.cfg["control"]["inverter_on"]:
             # only the closed loop modes get the dead band help, a player closes the loop himself
-            off = (
-                not self.safety.armed
-                or self.safety.killing
-                or stale
-                or self.mode not in ("balance", "path", "assist")
-            )
+            idle = not self.safety.armed or self.safety.killing or stale
+            off = idle or self.mode not in CLOSED_LOOP
             self.band, sent = invert(self.band, sent, off, self.cfg)
         try:
             return sent, self.actuator.send(sent, now)
@@ -182,7 +183,7 @@ class Loop:
         snap["hand_seen"] = self.hand_seen
         snap["hand_calibrating"] = self.hand_calibrating
         snap["hand_progress"] = self.hand.progress if self.hand is not None else 0.0
-        e = self.est.predict(self.last.t_s) if self.last else None
+        e = self._watch("predict", self.last.t_s) if self.last else None
         snap["est"] = [e.x_mm, e.y_mm, e.vx_mm_s, e.vy_mm_s] if e is not None and e.valid else None
         snap["exposure"] = self.exposure
         snap["arm_blocked"] = self.arm_blocked

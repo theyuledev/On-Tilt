@@ -32,6 +32,14 @@ def stop_on_error(ticker: asyncio.Task, server) -> None:
         server.should_exit = True
 
 
+def check_exposure(rig: dict) -> str | None:
+    try:
+        return exposure_problem(rig)
+    except OSError as e:
+        # uvc-util failing says nothing about the frames, so the camera stays on unverified
+        return f"exposure unverified: {e}"
+
+
 def main() -> None:
     cfg = load()
     mode = cfg["control"]["mode"]
@@ -44,10 +52,10 @@ def main() -> None:
         hand = None
     try:
         frames = CameraSource(open_camera(cfg["rig"]), process=Pipeline(cfg).step)
-        exposure = exposure_problem(cfg["rig"])
-    except RuntimeError as e:
+    except (RuntimeError, OSError) as e:
         print(f"camera off: {e}")
-        frames = exposure = None
+        frames = None
+    exposure = check_exposure(cfg["rig"]) if frames is not None else None
     actuator = None
     if cfg["rig"]["actuator"] == "real":
         actuator = SerialActuator(open_board(cfg["rig"]), cfg["rig"])

@@ -9,7 +9,7 @@ from src.io.camera import ClipSource
 from src.io.ports import Frame
 from src.io.settings import ROOT, load
 from src.loop import LEVEL, Loop
-from src.modes import make_mode
+from src.modes import CLOSED_LOOP, MODES, make_mode
 from src.vision.pipeline import Observation, Pipeline
 from src.vision.tracker import BallPx
 
@@ -75,6 +75,16 @@ class Spy:
         return [c for c in self.calls if c[0] != "command"]
 
 
+def broken(call):
+    spy = Spy()
+
+    def boom(*a):
+        raise ValueError("singular")
+
+    setattr(spy, call, boom)
+    return spy
+
+
 class Board:
     armed = True
 
@@ -125,6 +135,32 @@ def test_the_estimator_hears_the_sent_tilt_or_level():
     p = rec.plate_state
     assert rec.armed and p.sent_x_deg > 0
     assert loop.est.calls[-1] == ("command", hand.t, PlateCommand(p.sent_x_deg, p.sent_y_deg))
+
+
+def drive(est):
+    cam, hand = Cam(), Hand()
+    loop = Loop(load(), hand, frames=cam)
+    loop.mode, loop.est = "balance", est
+    loop.arm()
+    cmds = []
+    for i in range(6):
+        hand.t = t = 1.0 + i * 0.01
+        cam.see(10.0 + i, t, valid=i != 3)
+        cmds.append(loop.tick(t, 0.01).plate_cmd)
+        loop.snapshot()
+    return loop, cmds
+
+
+@pytest.mark.parametrize("call", ["command", "update", "miss", "predict"])
+def test_a_broken_estimator_switches_off_and_balance_carries_on(call, capsys):
+    loop, cmds = drive(broken(call))
+    assert cmds == drive(Spy())[1]
+    assert loop.last.armed and loop.est is None and loop.snapshot()["est"] is None
+    assert capsys.readouterr().out.count("estimator off") == 1
+
+
+def test_closed_loop_names_real_modes():
+    assert set(CLOSED_LOOP) <= set(MODES) and "hand" not in CLOSED_LOOP
 
 
 def test_the_real_estimator_shows_up_in_the_snapshot_as_plain_numbers():
