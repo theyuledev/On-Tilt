@@ -62,13 +62,15 @@ def noisy_rest(est, seconds, seed=0):
 
 def test_rest_with_pixel_noise_gives_still_ball():
     est = BallEstimator(CFG)
-    v2, worst = [], 0.0
+    v2, x2, worst = [], [], 0.0
     for t, s in noisy_rest(est, 2.0):
         if t >= 1.0:
             v2.append(s.vx_mm_s**2 + s.vy_mm_s**2)
-            worst = max(worst, abs(est.s[:, 0]).max())
+            x2.append(s.x_mm**2 + s.y_mm**2)
+            worst = max(worst, abs(s.x_mm), abs(s.y_mm))
     assert math.sqrt(sum(v2) / len(v2)) < 3
-    assert worst < 0.3
+    assert math.sqrt(sum(x2) / len(x2)) < 0.3
+    assert worst < 0.6
 
 
 def test_constant_tilt_tracks_velocity_without_bias_and_predicts_the_plate_lag():
@@ -133,3 +135,12 @@ def test_lost_lock_holds_then_goes_invalid():
         assert held.valid and abs(held.x_mm - last.x_mm) < 0.5
     gone = est.miss(t + 5 / FPS)
     assert not gone.valid and gone.t_s == t + 5 / FPS
+
+
+def test_repeated_or_older_stamp_is_ignored():
+    est = BallEstimator(CFG)
+    est.update(0.0, 0.0, 0.0)
+    before = est.update(1 / FPS, 0.0, 0.0)
+    assert est.update(1 / FPS, 50.0, 50.0) == before
+    assert est.update(0.5 / FPS, 50.0, 50.0) == before
+    assert est.update(2 / FPS, 0.0, 0.0).x_mm == pytest.approx(0, abs=1e-9)

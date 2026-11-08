@@ -36,6 +36,9 @@ class BallEstimator:
         self.cmds.append((t_s, cmd.tilt_x_deg, cmd.tilt_y_deg))
 
     def update(self, t_s: float, x_mm: float, y_mm: float) -> BallState:
+        if t_s <= self.seen_s:
+            # a repeated stamp would count the same frame twice, an older one would warp time
+            return self.predict(self.seen_s)
         self.misses = 0
         stale = t_s - self.seen_s > self.c["est_hold_s"]
         self.seen_s = t_s
