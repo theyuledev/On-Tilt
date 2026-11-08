@@ -1,4 +1,6 @@
+import json
 import socket
+from dataclasses import asdict
 from types import SimpleNamespace
 
 import pytest
@@ -105,6 +107,20 @@ def test_socket_round_trip():
     sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     send_intent(sender, Intent(0.1, -0.2, True, 5.0), hand_in.port, seen=True, calibrating=True)
     send_intent(sender, Intent(0.3, 0.4, True, 6.0), hand_in.port, seen=True, calibrating=False)
+    for _ in range(100):
+        if hand_in.latest().t_s == 6.0:
+            break
+    assert hand_in.latest() == Intent(0.3, 0.4, True, 6.0)
+    assert hand_in.seen and not hand_in.calibrating
+    sender.close()
+    hand_in.close()
+
+
+def test_an_intent_without_the_flags_still_counts_as_a_seen_hand():
+    hand_in = HandInput(0)
+    sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    msg = json.dumps(asdict(Intent(0.3, 0.4, True, 6.0))).encode()
+    sender.sendto(msg, ("127.0.0.1", hand_in.port))
     for _ in range(100):
         if hand_in.latest().t_s == 6.0:
             break

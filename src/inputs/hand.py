@@ -95,7 +95,9 @@ class HandInput:
             except BlockingIOError:
                 return self._intent
             msg = json.loads(data)
-            self.seen, self.calibrating = msg.pop("seen"), msg.pop("calibrating")
+            # an intent at all means a palm was there, older senders only send the intent
+            self.seen = msg.pop("seen", True)
+            self.calibrating = msg.pop("calibrating", False)
             self._intent = Intent(**msg)
 
     def close(self) -> None:
