@@ -94,9 +94,10 @@ def test_a_lens_maps_the_walls_like_the_tracker_maps_the_ball(tmp_path, monkeypa
     img, _ = drawn_maze()
     frame = tmp_path / "f.png"
     cv2.imwrite(str(frame), img)
+    lens = tmp_path / "calib.local.json"
+    monkeypatch.setattr(calib, "CALIB_PATH", lens)
     main([str(frame), "--out", str(tmp_path / "flat.toml")])
-    calib.save_calib(LENS, tmp_path / "calib.local.json")
-    monkeypatch.setattr(calib, "CALIB_PATH", tmp_path / "calib.local.json")
+    calib.save_calib(LENS, lens)
     main([str(frame), "--out", str(tmp_path / "bent.toml")])
     flat, bent = (tomllib.loads((tmp_path / f"{n}.toml").read_text()) for n in ("flat", "bent"))
     vis = load()["vision"]
