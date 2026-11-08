@@ -23,6 +23,14 @@ class BoardLink:
     def __init__(self, port):
         self.port = port
 
+    def flush(self) -> None:
+        # a reply that landed after the timeout is still queued and would be read as the next one's
+        try:
+            self.port.reset_input_buffer()
+        except termios.error as e:
+            # gone port, and termios.error is not an OSError on its own
+            raise OSError(str(e)) from e
+
     def raw(self, line: str) -> str:
         self.port.write((line + "\n").encode())
         reply = self.port.readline().decode().strip()
@@ -55,15 +63,14 @@ class SerialActuator:
         self.state = PlateState(sent_x_deg=0.0, sent_y_deg=0.0, est_x_deg=0.0, est_y_deg=0.0)
 
     def _arm(self) -> None:
-        # a reply that came in after the timeout is still queued, it would be read as L's
-        try:
-            self.link.port.reset_input_buffer()
-        except termios.error as e:
-            # gone port, and termios.error is not an OSError on its own
-            raise OSError(str(e)) from e
+        self.link.flush()
         self.link.ask(limits_line(self.rig))
         self.link.ask("A")
         self.armed = True
+
+    def still_armed(self) -> bool:
+        self.link.flush()
+        return self.link.status()["armed"]
 
     def send(self, cmd: ServoCommand | None, now: float) -> PlateState:
         if cmd is None:
@@ -74,7 +81,13 @@ class SerialActuator:
 
         if not self.armed:
             self._arm()
-        x, y = (int(v) for v in self.link.ask(f"P {cmd.x_us} {cmd.y_us}"))
+        try:
+            x, y = (int(v) for v in self.link.ask(f"P {cmd.x_us} {cmd.y_us}"))
+        except LinkError:
+            # late reply: the board most likely took the pulse and is still armed, so ask it
+            if not self.still_armed():
+                raise
+            return self.state
         tilt = pulse_to_tilt(ServoCommand(x_us=x, y_us=y), self.rig)
         self.state = PlateState(
             sent_x_deg=tilt.tilt_x_deg,
