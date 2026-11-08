@@ -1,6 +1,12 @@
 // the plate seen from above, drawn in mm: origin at the centre, +x right, +y up
 const TRAIL_S = 0.5;
+const PLAYER = "#fff";
+const GHOST = "#CC79A7";
+const GHOST_RING_PX = 4;
+const GHOST_TRAIL_PX = 3;
+const TAG_FONT = "700 20px system-ui, sans-serif";
 const trail = [];
+const ghostTrail = [];
 
 function fit(canvas) {
   const px = Math.round(canvas.clientWidth * devicePixelRatio);
@@ -8,9 +14,15 @@ function fit(canvas) {
   return px;
 }
 
-function keep(ball, now, keepS) {
-  if (ball.valid) trail.push({ x: ball.x_mm, y: ball.y_mm, t: now });
-  while (trail.length && now - trail[0].t > keepS) trail.shift();
+// pt is [x, y] in mm or falsy for "nothing to add this frame"
+function keep(buf, pt, now, keepS) {
+  if (pt) buf.push({ x: pt[0], y: pt[1], t: now });
+  while (buf.length && now - buf[0].t > keepS) buf.shift();
+}
+
+function fmtLap(s) {
+  const h = Math.round(s * 100), pad = (n) => String(n).padStart(2, "0");
+  return `${pad(Math.floor(h / 6000))}:${pad(Math.floor((h % 6000) / 100))}.${pad(h % 100)}`;
 }
 
 function polyline(ctx, pts) {
@@ -55,27 +67,58 @@ function gates(ctx, maze, r) {
   ctx.fill();
 }
 
-function tail(ctx, now, keepS, w) {
+function tail(ctx, buf, now, keepS, w, color, alpha) {
   ctx.lineWidth = w;
   ctx.lineCap = "round";
-  for (let i = 1; i < trail.length; i++) {
-    const a = trail[i - 1], b = trail[i];
-    ctx.strokeStyle = `rgba(255, 140, 26, ${1 - (now - b.t) / keepS})`;
+  ctx.strokeStyle = color;
+  for (let i = 1; i < buf.length; i++) {
+    const a = buf[i - 1], b = buf[i];
+    ctx.globalAlpha = alpha * (1 - (now - b.t) / keepS);
     polyline(ctx, [[a.x, a.y], [b.x, b.y]]);
   }
+  ctx.globalAlpha = 1;
+}
+
+// k is mm per device px; the text is drawn upright in device px, bottom-left at [x, y] mm
+function tag(ctx, [x, y], k, text) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(k, -k);
+  ctx.font = TAG_FONT;
+  ctx.textBaseline = "bottom";
+  ctx.fillStyle = GHOST;
+  ctx.fillText(text, 0, 0);
+  ctx.restore();
+}
+
+function ghost(ctx, race, r, k, now) {
+  const g = race.ghost_mm;
+  tail(ctx, ghostTrail, now, TRAIL_S, GHOST_TRAIL_PX * k, GHOST, 0.5);
+  circle(ctx, g, r);
+  ctx.fillStyle = GHOST;
+  ctx.globalAlpha = 0.25;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = GHOST_RING_PX * k;
+  ctx.strokeStyle = GHOST;
+  ctx.stroke();
+  if (typeof race.ghost_lap_s === "number") tag(ctx, [g[0] + r, g[1] + r], k, `BEST ${fmtLap(race.ghost_lap_s)}`);
 }
 
 function draw(ctx, cfg, maze, s) {
-  const px = fit(ctx.canvas), mm = cfg.plate_inner_mm, r = cfg.ball_d_mm / 2;
-  keep(s.ball, s.t_s, TRAIL_S);
+  const px = fit(ctx.canvas), mm = cfg.plate_inner_mm, r = cfg.ball_d_mm / 2, k = mm / px;
+  const g = s.race && s.race.ghost_mm;
+  keep(trail, s.ball.valid && [s.ball.x_mm, s.ball.y_mm], s.t_s, TRAIL_S);
+  if (g) keep(ghostTrail, g, s.t_s, TRAIL_S); else ghostTrail.length = 0;
   ctx.setTransform(px / mm, 0, 0, -px / mm, px / 2, px / 2);
   plate(ctx, mm);
   ribbon(ctx, maze, cfg.ball_d_mm);
   gates(ctx, maze, r);
-  tail(ctx, s.t_s, TRAIL_S, r / 2);
+  tail(ctx, trail, s.t_s, TRAIL_S, r / 2, PLAYER, 1);
+  if (g) ghost(ctx, s.race, r, k, s.t_s);
   // the player's ball goes on last so nothing drawn later can cover it
   if (!s.ball.valid) return;
-  ctx.fillStyle = "#ff8c1a";
+  ctx.fillStyle = PLAYER;
   circle(ctx, [s.ball.x_mm, s.ball.y_mm], r);
   ctx.fill();
 }
