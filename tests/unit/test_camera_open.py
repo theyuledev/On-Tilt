@@ -96,13 +96,31 @@ def test_exposure_goes_manual_in_100us_steps(monkeypatch):
     assert not set_exposure(RIG, ran.append) and len(ran) == 1
 
 
-def test_two_uvc_cameras_without_camera_uvc_skip_and_say_so(monkeypatch, capsys):
+def test_set_exposure_skips_two_uvc_cameras_quietly(monkeypatch, capsys):
     monkeypatch.setattr(shutil, "which", lambda name: TOOL)
     run, ran = fake_run(listing=TWO_CAMS)
     assert not set_exposure(CAM, run)
+    assert ran == [[TOOL, "-d"]]
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize("tool, said", [(TOOL, SEVERAL), (None, "camera: uvc-util not on PATH\n")])
+def test_revive_without_a_target_says_why_once(monkeypatch, capsys, tool, said):
+    monkeypatch.setattr(shutil, "which", lambda name: tool)
+    run, ran = fake_run(listing=TWO_CAMS)
     assert not revive_camera(CAM, run)
-    assert ran == [[TOOL, "-d"], [TOOL, "-d"]]
-    assert capsys.readouterr().out == SEVERAL * 2
+    assert ran == ([[TOOL, "-d"]] if tool else [])
+    assert capsys.readouterr().out == said
+
+
+def test_open_with_two_uvc_cameras_says_so_once(monkeypatch, capsys):
+    monkeypatch.setattr(shutil, "which", lambda name: TOOL)
+    cap_cls, _ = fake_cameras([(800, 1280, 3)])
+    run, _ = fake_run(listing=TWO_CAMS)
+    open_camera(CAM, cap_cls, run)
+    out = capsys.readouterr().out.splitlines()
+    lines = [s for s in out if s.startswith("camera:")]
+    assert len(lines) == 1 and "several uvc cameras" in lines[0]
 
 
 def test_one_uvc_camera_is_used_by_its_index(monkeypatch):

@@ -41,7 +41,7 @@ def overhead_shape(rig: dict) -> tuple[int, int]:
 
 def set_exposure(rig: dict, run=subprocess.run) -> bool:
     uvc = uvc_command(rig, run)
-    if uvc is None:
+    if isinstance(uvc, str):
         return False
     # the cam is back on auto exposure after every replug; units are 100 us
     steps = round(rig["camera_exposure_ms"] * 10)
@@ -51,7 +51,9 @@ def set_exposure(rig: dict, run=subprocess.run) -> bool:
 
 def revive_camera(rig: dict, run=subprocess.run) -> bool:
     uvc = uvc_command(rig, run)
-    if uvc is None:
+    if isinstance(uvc, str):
+        # a failed open has no readback line after it
+        print(f"camera: {uvc}")
         return False
     # a jammed stream comes back after a round trip through auto exposure; it has to
     # go both ways or a cam already sitting in auto sees nothing
