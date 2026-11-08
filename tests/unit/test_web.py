@@ -366,9 +366,30 @@ def test_config_gives_plate_ball_and_stale_limit_from_settings(client):
         "heartbeat_stale_s": cfg["game"]["heartbeat_stale_s"],
         "dead_zone": cfg["input"]["dead_zone"],
         "hand": False,
+        "tilt_full_deg": cfg["input"]["intent_gain_deg"],
     }
     with_hand = TestClient(make_app(SimpleNamespace(cfg=cfg, hand=object())))
     assert with_hand.get("/config").json()["hand"] is True
+
+
+def test_board_sits_in_the_hand_view_and_loads_after_race_before_app(client):
+    page = client.get("/").text
+    at = [page.index(i) for i in ('id="handview"', '<canvas id="tiltboard">', 'id="results"')]
+    assert at == sorted(at)
+    assert '<span id="handhint" hidden>hold your hand flat, palm down, then tilt</span>' in page
+    at = [page.index(f"/static/{f}.js") for f in ("race", "board", "app")]
+    assert at == sorted(at)
+    assert "  drawPad(padCtx, cfg, s);\n  board(s, cfg);\n}" in static(client, "app.js")
+    assert "#tiltboard {" in static(client, "style.css")
+
+
+def test_board_draws_cmd_real_ball_bars_and_the_ghost_hand(client):
+    js = static(client, "board.js")
+    assert "function board(s, cfg)" in js and "cfg.tilt_full_deg" in js
+    assert all(f in js for f in ("sent_x_deg", "est_x_deg", "b.valid", "s.intent.x"))
+    assert '["hand", ' in js and '["cmd", ' in js and '["real", ' in js
+    assert "if (g) glow(ctx, cmd, g);" in js and "performance.now()" in js
+    assert '$("handhint").hidden = !on;' in js
 
 
 def test_race_maze_is_the_configured_maze_file(client):
