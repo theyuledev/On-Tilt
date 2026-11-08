@@ -1,4 +1,5 @@
 import math
+import re
 import time
 
 import pytest
@@ -19,6 +20,7 @@ DT = 0.01
 TRIM_US = -80
 FULL = (1.0, 1.0)
 HALF = (0.5, 0.0)  # inside the startup range, so the faded target is never clamped
+ONE_SHOTS = ("arm", "hold", "race", "recentre")
 
 
 @pytest.fixture
@@ -201,11 +203,11 @@ def test_ws_hold_holds_and_a_kill_in_the_same_message_wins(loop, clock):
 
 def test_page_has_a_hold_button_an_h_key_and_a_holding_pill(loop):
     client = TestClient(make_app(loop))
-    assert '<button id="hold">hold (h)</button>' in client.get("/").text
+    assert '<button id="hold" disabled>hold (h)</button>' in client.get("/").text
     js = client.get("/static/app.js").text
     assert '"KeyH" && !e.metaKey && !e.ctrlKey) { pending.hold = true; return; }' in js
     assert '$("hold").onclick = e => { pending.hold = true; e.currentTarget.blur(); }' in js
-    assert '$("arm").disabled = $("hold").disabled = $("kill").disabled' in js
+    assert '$("hold").disabled = $("arm").disabled = $("kill").disabled' in js
     assert 's.armed ? (s.holding ? "holding" : "armed")' in js
 
 
@@ -213,3 +215,25 @@ def test_a_zero_fade_turns_the_fade_off():
     cmd = PlateCommand(3.0, -2.0)
     for fade_s in (0.0, -1.0):
         assert fade_in(cmd, False, 0.0, {"arm_fade_s": fade_s}) == cmd
+
+
+def handler(js, name):
+    m = re.search(rf"ws\.{name} = \(\) => \{{\n(.*?)\n  \}};", js, re.S)
+    assert m, name
+    return m.group(1)
+
+
+def test_offline_drops_a_pending_hold_and_locks_the_button_like_arm(loop):
+    js = TestClient(make_app(loop)).get("/static/app.js").text
+    close = handler(js, "onclose")
+    assert re.search(r"delete pending\.hold;", close)
+    assert re.search(r'\$\("hold"\)\.disabled = true;', close)
+
+
+def test_reconnect_drops_stale_one_shots_before_the_first_send(loop):
+    js = TestClient(make_app(loop)).get("/static/app.js").text
+    opened = handler(js, "onopen")
+    assert re.search(r'\$\("hold"\)\.disabled = watch;', opened)
+    dels = [re.search(rf"delete pending\.{k};", opened) for k in ONE_SHOTS]
+    assert all(dels) and "pending.kill" not in opened
+    assert max(m.start() for m in dels) < opened.index("frame();")

@@ -17,7 +17,7 @@ const typing = e => e.target.tagName === "INPUT" || e.target.tagName === "TEXTAR
 
 if (watch) {
   // a projector tab must never overwrite the player's keys
-  $("arm").disabled = $("hold").disabled = $("kill").disabled = $("racebtn").disabled = true;
+  $("hold").disabled = $("arm").disabled = $("kill").disabled = $("racebtn").disabled = true;
 } else {
   // a focused button clicks on enter or space keyup, so space after a kill could re-arm
   const clickKeys = new Set(["Space", "Enter", "NumpadEnter"]);
@@ -116,17 +116,21 @@ function show(s) {
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
   ws.onopen = () => {
+    // a click from before the link came up was meant for the app that went away
+    delete pending.arm; delete pending.race; delete pending.recentre; delete pending.hold;
     pill("link", "live", "on");
     $("arm").disabled = watch;
+    $("hold").disabled = watch;
     nextCam();
     nextHand();
     frame();
   };
   ws.onclose = () => {
     // one-shots clicked while offline must not fire on whatever app answers next, kill can wait
-    delete pending.arm; delete pending.race; delete pending.recentre;
+    delete pending.arm; delete pending.race; delete pending.recentre; delete pending.hold;
     pill("link", "offline", "warn"); banner(null, false, false);
     $("arm").disabled = true;
+    $("hold").disabled = true;
     setTimeout(connect, 1000);
   };
   ws.onmessage = e => { show(JSON.parse(e.data)); requestAnimationFrame(frame); };
