@@ -3,7 +3,8 @@ from pathlib import Path
 import pytest
 
 from src.contracts import PlateCommand
-from src.control.pulse_map import pulse_to_tilt, tilt_to_pulse
+from src.control.pulse_map import center, pulse_to_tilt, tilt_to_pulse
+from src.io import settings
 from src.io.settings import load, load_raw
 
 pytestmark = pytest.mark.unit
@@ -27,7 +28,8 @@ def test_pulse_map_round_trip():
 def test_positive_tilt_raises_pulse_with_positive_scale():
     rig = load()["rig"]
     cmd = tilt_to_pulse(PlateCommand(1.0, 1.0), rig)
-    assert cmd.x_us > rig["center_x_us"] and cmd.y_us > rig["center_y_us"]
+    cx, cy = center(rig)
+    assert cmd.x_us > cx and cmd.y_us > cy
 
 
 def test_every_number_in_settings_has_a_label():
@@ -50,3 +52,11 @@ def test_label_check_wants_the_whole_untested_string():
 def test_tests_ignore_the_local_settings_file():
     assert load() == load(local=Path("nope.toml"))
     assert load_raw() == load_raw(local=Path("nope.toml"))
+
+
+def test_local_trims_are_ignored_under_the_suite(tmp_path):
+    local = tmp_path / "trims.toml"
+    local.write_text('[rig]\ntrim_x_us = { value = -80, label = "measured (2026-11-08)" }\n')
+    assert load(local=local)["rig"]["trim_x_us"] == -80
+    assert settings.LOCAL != settings.ROOT / "configs" / "settings.local.toml"
+    assert load()["rig"]["trim_x_us"] == load(local=tmp_path / "nope.toml")["rig"]["trim_x_us"]

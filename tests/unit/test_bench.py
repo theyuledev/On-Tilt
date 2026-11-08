@@ -11,8 +11,13 @@ pytestmark = pytest.mark.unit
 @pytest.fixture
 def setup():
     board = FakeBoard()
-    rig = load()["rig"]
+    rig = level_rig()
     return board, Bench(BoardLink(board), rig), rig
+
+
+def level_rig():
+    # the exact lines below take level as 1500
+    return {**load()["rig"], "trim_x_us": 0, "trim_y_us": 0}
 
 
 def armed_at(bench, x, y):
@@ -96,7 +101,7 @@ def test_bare_l_goes_back_to_the_settings_limits(setup):
     bench.submit("l")
     assert board.sent == ["L 1200 1800 1200 1800 1500 1500", "L 1350 1650 1350 1650 1500 1500"]
     assert (rig["limit_x_us"], rig["limit_y_us"], rig["startup_flag"]) == (150, 150, True)
-    assert bench.log[-1] == headroom(load()["rig"])
+    assert bench.log[-1] == headroom(level_rig())
 
 
 def test_arm_starts_the_heartbeat_at_level(setup):
@@ -131,7 +136,7 @@ def test_l_range_refused_by_the_board_leaves_the_rig_alone(setup):
 def test_plain_l_logs_headroom_for_settings_limits(setup):
     board, bench, _ = setup
     bench.submit("l")
-    assert bench.log[-1] == headroom(load()["rig"])
+    assert bench.log[-1] == headroom(level_rig())
     assert headroom({**load()["rig"], "trim_x_us": 20, "trim_y_us": -10}) == (
         "headroom x: 320 below, 280 above | y: 290 below, 310 above"
     )

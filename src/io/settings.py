@@ -13,7 +13,8 @@ def _values(section: dict) -> dict:
     }
 
 
-def load_raw(base: Path = BASE, local: Path = LOCAL) -> dict:
+def load_raw(base: Path = BASE, local: Path | None = None) -> dict:
+    local = LOCAL if local is None else local
     with base.open("rb") as f:
         raw = tomllib.load(f)
     if local.exists():
@@ -23,7 +24,7 @@ def load_raw(base: Path = BASE, local: Path = LOCAL) -> dict:
     return raw
 
 
-def load(base: Path = BASE, local: Path = LOCAL) -> dict:
+def load(base: Path = BASE, local: Path | None = None) -> dict:
     return {name: _values(section) for name, section in load_raw(base, local).items()}
 
 

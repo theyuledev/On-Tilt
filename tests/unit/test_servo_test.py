@@ -42,10 +42,15 @@ class FakeCam:
         pass
 
 
+def level_rig():
+    # the exact pulses below take level as 1500
+    return {**load()["rig"], "trim_x_us": 0, "trim_y_us": 0}
+
+
 @pytest.fixture
 def bench():
     board = FakeBoard()
-    b = Bench(BoardLink(board), load()["rig"])
+    b = Bench(BoardLink(board), level_rig())
     b.submit("l")
     b.submit("A")
     return board, b
@@ -150,7 +155,7 @@ class TwitchyBoard(FakeBoard):
 
 def test_second_ctrl_c_during_the_ramp_does_nothing():
     board = TwitchyBoard()
-    b = Bench(BoardLink(board), load()["rig"])
+    b = Bench(BoardLink(board), level_rig())
     b.submit("l")
     b.submit("A")
     b.submit("P 1530 1500")
