@@ -3,8 +3,10 @@ import math
 import pytest
 
 from src.io.settings import load
+from src.vision import calib
 from src.vision.pipeline import Pipeline
 from tests.unit.test_balls import ball, plate
+from tests.unit.test_px_to_mm import LENS
 
 pytestmark = pytest.mark.unit
 
@@ -58,3 +60,15 @@ def test_tilt_is_nan_and_nothing_occluded_without_markers():
     assert math.isnan(o.tilt_x_deg) and math.isnan(o.tilt_y_deg)
     assert o.occluded is False
     assert o.ms > 0
+
+
+def test_a_calib_file_undistorts_the_ball_and_no_file_keeps_the_flat_map(tmp_path):
+    path = tmp_path / "calib.local.json"
+    flat = Pipeline(CFG, path)
+    assert flat.lens is None
+    calib.save_calib(LENS, path)
+    bent = Pipeline(CFG, path)
+    assert bent.lens == LENS
+    frame = [(ball(plate(), 1000, 650, 40), 0.0)]
+    a, b = run(flat, frame)[0].ball, run(bent, frame)[0].ball
+    assert math.hypot(b.x_mm, b.y_mm) > 1.05 * math.hypot(a.x_mm, a.y_mm)

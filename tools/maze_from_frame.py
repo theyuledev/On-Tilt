@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 
 from src.io.settings import ROOT, load
+from src.vision.calib import load_lens
 from src.vision.maze_path import checkpoints, length, maze_toml, polyline
 from src.vision.maze_read import read
 from src.vision.px_to_mm import plate_mm
@@ -47,7 +48,8 @@ def main(argv=None) -> str:
     print(f"board box px {m.board_box}  S px {_r(m.s_px)}  E px {_r(m.e_px)}")
     if m.path is None:
         raise SystemExit("no path from S to E, check the S / E px or pass --start / --end")
-    pts = polyline(_mm(m.path, scale, vis), args.tol_mm, args.step_mm)
+    lens = load_lens()
+    pts = polyline(_mm(m.path, scale, vis, lens), args.tol_mm, args.step_mm)
     gates = checkpoints(pts, args.gates, 2 * cfg["game"]["checkpoint_r_mm"])
     narrow = 2 * min(m.clear_px) * scale / vis["px_per_mm"] + 2 * args.margin_mm
     print(f"path {length(pts):.0f} mm in {len(pts)} points, gates {gates}, {len(m.lines)} walls")
@@ -55,13 +57,13 @@ def main(argv=None) -> str:
     out = args.out or ROOT / "configs" / "mazes" / f"{args.name}.toml"
     if out.stem == "square":
         raise SystemExit("square is the stock maze, pick another --name")
-    out.write_text(maze_toml(pts, gates, [_mm(w, scale, vis) for w in m.lines]))
+    out.write_text(maze_toml(pts, gates, [_mm(w, scale, vis, lens) for w in m.lines]))
     print(f"wrote {out}")
     return str(out)
 
 
-def _mm(line, scale: float, vis: dict) -> np.ndarray:
-    return np.array([plate_mm(x * scale, y * scale, vis) for x, y in line])
+def _mm(line, scale: float, vis: dict, lens: dict | None) -> np.ndarray:
+    return np.array([plate_mm(x * scale, y * scale, vis, lens) for x, y in line])
 
 
 def _r(p) -> tuple[int, int]:

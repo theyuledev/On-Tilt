@@ -1,10 +1,12 @@
 import math
 import time
+from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
 
 from src.contracts import BallState
+from src.vision.calib import load_lens
 from src.vision.px_to_mm import ball_state
 from src.vision.tracker import BallPx, BallTracker
 
@@ -22,8 +24,9 @@ class Observation(NamedTuple):
 class Pipeline:
     """One step per frame on the grab thread; the loop just reads latest()."""
 
-    def __init__(self, cfg: dict):
+    def __init__(self, cfg: dict, calib_path: Path | None = None):
         self.cfg = cfg["vision"]
+        self.lens = load_lens(calib_path)
         self.tracker = BallTracker(self.cfg)
         self.history: list[BallState] = []
         self.last: Observation | None = None
@@ -38,7 +41,7 @@ class Pipeline:
         ball_px = self.tracker.update(image, t_read)
         if ball_px.valid and self.last is not None and not self.last.ball_px.valid:
             self.history = []  # relock: the velocity must not bridge the gap
-        ball = ball_state(ball_px, self.history, self.cfg)
+        ball = ball_state(ball_px, self.history, self.cfg, self.lens)
         self.history = [*self.history, ball][-self.cfg["velocity_span_frames"] :]
         ms = (time.perf_counter() - t0) * 1e3
         self.last = Observation(ball, ball_px, math.nan, math.nan, False, t_read, ms)

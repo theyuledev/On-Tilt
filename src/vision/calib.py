@@ -75,6 +75,12 @@ def undistort(lens: dict, px) -> np.ndarray:
     return n.reshape(-1, 2)
 
 
+def ideal_px(lens: dict, px) -> np.ndarray:
+    """Pixels as the same K would see them with no distortion."""
+    K, _ = _kd(lens)
+    return undistort(lens, px) @ K[:2, :2].T + K[:2, 2]
+
+
 def _fit_fisheye(obj, views, size):
     flags = cv2.CALIB_RECOMPUTE_EXTRINSIC | cv2.CALIB_FIX_SKEW
     _, K, D, rvecs, tvecs = cv2.fisheye.calibrate(
@@ -170,3 +176,8 @@ def save_calib(calib: dict, path: Path = CALIB_PATH) -> None:
 
 def load_calib(path: Path = CALIB_PATH) -> dict:
     return json.loads(Path(path).read_text())
+
+
+def load_lens(path: Path | None = None) -> dict | None:
+    path = path or CALIB_PATH
+    return load_calib(path) if path.exists() else None
