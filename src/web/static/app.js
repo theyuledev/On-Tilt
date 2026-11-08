@@ -113,8 +113,20 @@ function show(s) {
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.onopen = () => { pill("link", "live", "on"); nextCam(); nextHand(); frame(); };
-  ws.onclose = () => { pill("link", "offline", "warn"); banner(null, false, false); setTimeout(connect, 1000); };
+  ws.onopen = () => {
+    pill("link", "live", "on");
+    $("arm").disabled = watch;
+    nextCam();
+    nextHand();
+    frame();
+  };
+  ws.onclose = () => {
+    // one-shots clicked while offline must not fire on whatever app answers next, kill can wait
+    delete pending.arm; delete pending.race; delete pending.recentre;
+    pill("link", "offline", "warn"); banner(null, false, false);
+    $("arm").disabled = true;
+    setTimeout(connect, 1000);
+  };
   ws.onmessage = e => { show(JSON.parse(e.data)); requestAnimationFrame(frame); };
 }
 
