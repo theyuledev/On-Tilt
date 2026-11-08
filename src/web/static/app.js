@@ -5,6 +5,7 @@ const keymap = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowD
 let pending = {};
 let ws, cfg, maze, lastT, lastSeen, handWasSeen = false;
 let armedNow = false;
+let showFailed = false;
 const $ = id => document.getElementById(id);
 const cam = $("cam"), nocam = $("nocam"), ctx = $("race").getContext("2d");
 const padCtx = $("pad").getContext("2d");
@@ -128,7 +129,17 @@ function connect() {
     $("arm").disabled = true;
     setTimeout(connect, 1000);
   };
-  ws.onmessage = e => { show(JSON.parse(e.data)); requestAnimationFrame(frame); };
+  ws.onmessage = e => {
+    // frame() carries kill, so one bad state must not stop it
+    try {
+      show(JSON.parse(e.data));
+    } catch (err) {
+      if (!showFailed) console.error(err);
+      showFailed = true;
+    } finally {
+      requestAnimationFrame(frame);
+    }
+  };
 }
 
 function frame() {
