@@ -91,16 +91,16 @@ class Guard:
     def _hold(self, i: int, p: float, player: float) -> float:
         c, band = self.c, self.c["guard_hold_band_mm"]
         sp = 1.0 if p >= 0 else -1.0
-        if band <= 0 or sp * player <= 0:
+        if band <= 0:
             return player
         k, kd = c["guard_hold_k_deg_mm"], c["guard_hold_kd_deg_s_mm"]
         allow = hold_line(sp * p, sp * self.speed[i], self.edge, band, self.cap[i], k, kd)
-        return sp * allow if sp * player > allow else player
+        return sp * min(sp * player, allow)
 
     def _axis(self, i: int, p: float, v: float, player: float, dt: float) -> float:
         c, T = self.c, self.latency[i]
         self.speed[i] = smooth(self.speed[i], v, dt, c["guard_speed_ema_s"])
-        # only ever lowers an outward push, a player resting or steering in is left alone
+        # never more outward than the player, and no step as his command crosses zero
         player = self._hold(i, p, player)
         s = stop_mm(p, v, T, self.brake[i])
         side = 1.0 if s >= 0 else -1.0

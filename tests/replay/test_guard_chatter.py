@@ -68,6 +68,6 @@ def rates():
 
 @pytest.mark.parametrize("axis", "xy")
 def test_the_guard_does_not_add_chatter_on_tracker_noise(rates, axis):
-    # over the 3.8 s clip: x 7 on / 7 off and y 15 / 6 before the side was held, now 9 / 7 and 8 / 6
+    # over the 3.8 s clip: x 7 on / 7 off and y 15 / 6 before the side was held, now 9 / 7 and 6 / 6
     on, off = rates
     assert on[axis] <= off[axis] + 2

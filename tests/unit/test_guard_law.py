@@ -102,10 +102,29 @@ def test_the_hold_line_eases_off_then_springs_back_but_never_past_the_cap():
     assert hold_line(110.0, 500.0, 100.0, 25.0, 2.0, 0.1, 0.02) == -2.0
 
 
-@pytest.mark.parametrize("player", [0.0, -1.0])
-def test_a_player_resting_or_steering_in_past_the_line_is_not_pushed(player):
+def test_past_the_line_a_resting_player_is_pushed_in_and_inside_it_he_is_not():
     g = Guard(cfg())
-    assert g(at(g.edge + 5.0), PlateCommand(player, 0.0)).tilt_x_deg == player
+    k = g.c["guard_hold_k_deg_mm"]
+    assert g(at(g.edge + 5.0), PlateCommand(0.0, 0.0)).tilt_x_deg == pytest.approx(-5.0 * k)
+    assert Guard(cfg())(at(g.edge + 5.0), PlateCommand(-1.0, 0.0)).tilt_x_deg == -1.0
+    for player in (0.0, -1.0):
+        g = Guard(cfg())
+        assert g(at(g.edge - 5.0), PlateCommand(player, 0.0)).tilt_x_deg == player
+
+
+@pytest.mark.parametrize("q", [10.0, 15.0])
+@pytest.mark.parametrize("sp", [1.0, -1.0])
+def test_the_hold_line_has_no_step_as_the_player_crosses_zero(q, sp):
+    top = Guard(cfg()).cap[0]
+    sweep = [-top + 2 * top * k / 400 for k in range(401)]
+    out = []
+    for player in sweep:
+        g = Guard(cfg())
+        out.append(g(at(sp * (g.edge + q)), PlateCommand(player, 0.0)).tilt_x_deg)
+    for a, b, pa, pb in zip(out, out[1:], sweep, sweep[1:], strict=False):
+        assert a - 1e-9 <= b <= a + (pb - pa) + 1e-9
+    for o, player in zip(out, sweep, strict=True):
+        assert sp * o <= sp * player + 1e-9 and -top <= o <= top
 
 
 def test_an_outward_push_past_the_line_meets_a_spring():
