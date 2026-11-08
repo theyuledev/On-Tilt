@@ -65,7 +65,7 @@ uvc-util -I 0 -s auto-exposure-mode=1 -s exposure-time-abs=30
 
 the page shows `board lost` when the serial port vanished or answered garbage. the loop stops sending and will not re-arm until the app is restarted. the board stops hearing us, ramps to level within ~250 ms + ramp and stops pulses on its own. do the reset drill.
 
-`board disarmed: ...` in the app log is the softer case (board said ERR or missed one reply): the loop disarms, the page can arm again.
+`board disarmed: ...` in the app log is the softer case: the board answered ERR, or a P got no reply and `S` said the board is not armed any more (a missed reply with the board still armed is carried on, nothing disarms). the loop disarms, the page can arm again.
 
 ## limits + trims slot
 

@@ -52,25 +52,31 @@ class Bench:
             self.log.append("quiet: no more heartbeat")
             return ""
         words = line.split()
-        loading = words[:1] == ["l"] and len(words) <= 2
-        if loading:
-            if len(words) == 2:
-                if not words[1].isdigit():
-                    self.log.append(f"{line} needs a whole number")
-                    return ""
-                # bench-only limits, the settings file is untouched
-                self.rig["limit_x_us"] = self.rig["limit_y_us"] = int(words[1])
-                self.rig["startup_flag"] = False
-            line = limits_line(self.rig)
+        if words[:1] == ["l"] and len(words) <= 2:
+            return self._load(words)
         reply = self._send(line) or ""
-        if loading:
-            self.log.append(headroom(self.rig))
         parts = reply.split()
         if parts[:2] == ["OK", "P"]:
             self.last_p = (int(parts[2]), int(parts[3]))
             self.quiet = False
         elif parts[:2] == ["OK", "D"] or "disarmed" in parts:
             self.last_p = None
+        return reply
+
+    def _load(self, words: list[str]) -> str:
+        rig = self.rig
+        if len(words) == 2:
+            if not words[1].isdigit():
+                self.log.append(f"{' '.join(words)} needs a whole number")
+                return ""
+            # bench-only limits, the settings file is untouched
+            rng = int(words[1])
+            rig = {**self.rig, "limit_x_us": rng, "limit_y_us": rng, "startup_flag": False}
+        reply = self._send(limits_line(rig)) or ""
+        if reply == "OK L":
+            # the board took them, so they are the bench's limits now
+            self.rig.update(rig)
+            self.log.append(headroom(self.rig))
         return reply
 
     def nudge(self, dx: int, dy: int) -> None:

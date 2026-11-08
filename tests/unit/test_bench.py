@@ -101,6 +101,17 @@ def test_l_with_a_bad_range_sends_nothing(setup):
     assert rig["startup_flag"] is True
 
 
+def test_l_range_refused_by_the_board_leaves_the_rig_alone(setup):
+    board, bench, rig = setup
+    armed_at(bench, 1500, 1500)
+    n = len(bench.log)
+    bench.submit("l 300")
+    assert board.sent[-1] == "L 1200 1800 1200 1800 1500 1500"
+    assert board.limits[:4] == [1350, 1650, 1350, 1650]
+    assert (rig["limit_x_us"], rig["limit_y_us"], rig["startup_flag"]) == (150, 150, True)
+    assert bench.log[n:] == ["L 1200 1800 1200 1800 1500 1500  ->  ERR L armed"]
+
+
 def test_plain_l_logs_headroom_for_settings_limits(setup):
     board, bench, _ = setup
     bench.submit("l")
