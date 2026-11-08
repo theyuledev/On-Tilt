@@ -46,7 +46,7 @@ class Loop:
         self.ball_px: BallPx | None = None
         self.seen_t: float | None = None
         self.est = BallEstimator(cfg)
-        self.mapping = MappingWatch(cfg)
+        self.mapping, self.mapping_held = MappingWatch(cfg), None
         self.exposure = exposure
         self.last: RunLogRecord | None = None
         self.game = game
@@ -70,7 +70,7 @@ class Loop:
     def arm(self) -> None:
         if not self.board_lost and not self.arm_blocked:
             self.step = make_mode(self.mode, self.cfg)
-            self.mapping = MappingWatch(self.cfg)
+            self.mapping, self.mapping_held = MappingWatch(self.cfg), None
             self.safety.arm()
 
     def kill(self) -> None:
@@ -96,7 +96,7 @@ class Loop:
         if not self.safety.armed or self.safety.killing or stale:
             self.step = make_mode(self.mode, self.cfg)  # fresh mode state, no kick on arm
         plate_cmd = self.step(ball, intent, self.cfg)
-        if self.mapping and self.mapping.bad and self.mode in CLOSED_LOOP:
+        if (self.mapping.bad if self.mapping else self.mapping_held) and self.mode in CLOSED_LOOP:
             plate_cmd = PlateCommand(0.0, 0.0)  # steering on a wrong mapping throws the ball off
         target = tilt_to_pulse(plate_cmd, rig)
         sent, plate_state = self._drive(target, stale, dt, now)
@@ -156,6 +156,8 @@ class Loop:
             return getattr(watcher, call)(*args) if watcher is not None else None
         except Exception as e:
             print(f"{WATCHERS[part]} off: {e!r}")
+            if part == "mapping":
+                self.mapping_held = watcher.bad  # a tripped watch stays tripped till re-arm
             setattr(self, part, None)
 
     def _drive(
@@ -206,5 +208,5 @@ class Loop:
         snap["arm_blocked"] = self.arm_blocked
         if self.game is not None:
             snap["race"] = self.game.view()
-        snap["mapping_bad"] = self.mapping and self.mapping.bad
+        snap["mapping_bad"] = self.mapping.bad if self.mapping else self.mapping_held
         return snap
