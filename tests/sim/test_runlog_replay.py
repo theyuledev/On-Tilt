@@ -128,6 +128,5 @@ def errors(log, fitted):
 def test_fitted_sim_follows_the_logged_ball_far_closer_than_the_settings_sim():
     log = load_log(LOG)
     now, fitted = np.mean(errors(log, False)), np.mean(errors(log, True))
-    print(f"replay rms: settings {now:.1f} mm, fitted {fitted:.1f} mm")
     assert fitted < 0.5 * now
-    assert fitted < 8
+    assert fitted < 7
