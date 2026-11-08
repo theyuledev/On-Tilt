@@ -2,6 +2,7 @@ import shutil
 import subprocess
 import threading
 import time
+import traceback
 from pathlib import Path
 
 import cv2
@@ -87,10 +88,35 @@ def open_camera(rig: dict, video_capture=cv2.VideoCapture, run=subprocess.run):
     raise RuntimeError(f"camera gives no frames after {OPEN_TRIES} opens")
 
 
-class CameraSource:
-    """Grabs on its own thread and keeps only the newest frame."""
+class _Hooked:
+    """Runs an optional process(image, t) on every frame and keeps its newest result."""
 
-    def __init__(self, capture):
+    def __init__(self, process):
+        self._process = process
+        self._result = None
+        self._warned = False
+
+    def _run(self, image, t):
+        if self._process is None:
+            return None
+        try:
+            return self._process(image, t)
+        except Exception:
+            # a broken hook must not stop the frames; say why once and keep going
+            if not self._warned:
+                self._warned = True
+                traceback.print_exc()
+            return None
+
+    def latest(self):
+        return self._result
+
+
+class CameraSource(_Hooked):
+    """Grabs on its own thread, runs the hook there and keeps only the newest frame."""
+
+    def __init__(self, capture, process=None):
+        super().__init__(process)
         self._cap = capture
         self._lock = threading.Lock()
         self._frame: Frame | None = None
@@ -104,9 +130,12 @@ class CameraSource:
             if not ok:
                 self.running = False
                 break
-            frame = Frame(image, time.monotonic())
+            t = time.monotonic()
+            frame = Frame(image, t)
+            result = self._run(image, t)
             with self._lock:
                 self._frame = frame
+                self._result = result
 
     def read(self) -> Frame | None:
         with self._lock:
@@ -119,10 +148,11 @@ class CameraSource:
         self._cap.release()
 
 
-class ClipSource:
+class ClipSource(_Hooked):
     """Replays a clip. Uses the capture times from <clip>.csv when the recorder wrote one."""
 
-    def __init__(self, path, start: int = 0):
+    def __init__(self, path, start: int = 0, process=None):
+        super().__init__(process)
         path = Path(path)
         self._cap = cv2.VideoCapture(str(path))
         if not self._cap.isOpened():
@@ -142,6 +172,7 @@ class ClipSource:
         else:
             t = self._cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
         self._i += 1
+        self._result = self._run(image, t)
         return Frame(image, t)
 
     def close(self) -> None:
