@@ -1,7 +1,7 @@
 #include <Servo.h>
 #include <WDT.h>
 
-const char FW_VERSION[] = "0.1";
+const char FW_VERSION[] = "0.2";
 
 const int SERVO_X_PIN = 9;
 const int SERVO_Y_PIN = 10;
@@ -73,7 +73,7 @@ void handle(char *cmd) {
   char buf[48];
   switch (name[0]) {
     case 'S':
-      snprintf(buf, sizeof buf, "OK S %d %d %lu %s", armed, limitsLoaded, sinceLastCmdMs, FW_VERSION);
+      snprintf(buf, sizeof buf, "OK S %d %d %lu %s %d", armed, limitsLoaded, sinceLastCmdMs, FW_VERSION, ramping);
       Serial.println(buf);
       break;
 

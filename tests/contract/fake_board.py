@@ -17,6 +17,7 @@ class FakeBoard:
         self._straggler = None
         self.unplugged = False  # the flush hits a port that is gone
         self.ramping = False  # levelling itself after a stall, armed stays 1 but L/A/P get ERR
+        self.old_fw = False  # fw 0.1 style S reply, no ramping field
         self.sent: list[str] = []
         self._replies: list[str] = []
 
@@ -52,7 +53,8 @@ class FakeBoard:
         if self.ramping and cmd in ("L", "A", "P"):
             return {"L": "ERR L armed", "A": "ERR A ramping", "P": "ERR P disarmed"}[cmd]
         if cmd == "S" and not args:
-            return f"OK S {int(self.armed)} {int(self.limits is not None)} 0 fake"
+            reply = f"OK S {int(self.armed)} {int(self.limits is not None)} 0 fake"
+            return reply if self.old_fw else f"{reply} {int(self.ramping)}"
         if cmd == "L" and len(args) == 6:
             if self.armed:
                 return "ERR L armed"
