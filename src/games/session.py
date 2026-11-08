@@ -84,7 +84,8 @@ class Game:
     def save(self, name: str) -> None:
         if self.race.state != "finished":
             return
-        time_s = self.view()["score"]["time_s"]
+        v = self.view()
+        time_s = v["score"]["time_s"]
         ghost.save(self.records, ROOT / "data" / "runs" / f"{name}-{int(time_s * 1000)}.jsonl")
-        if not self.trace or time_s < self.trace[-1][0]:
+        if not self.trace or v["elapsed_s"] < self.trace[-1][0]:
             self.set_ghost(self.records)
