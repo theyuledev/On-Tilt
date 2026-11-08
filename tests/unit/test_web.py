@@ -24,7 +24,7 @@ RESULT_IDS = ("restime", "respen", "resdelta", "resghost", "resname", "ressaved"
 
 @pytest.fixture
 def client():
-    return TestClient(make_app(SimpleNamespace(cfg=load())))
+    return TestClient(make_app(SimpleNamespace(cfg=load(), hand=None)))
 
 
 def static(client, name):
@@ -52,8 +52,19 @@ def test_race_hud_hides_without_a_race_and_tilt_reads_big(client):
 def test_page_has_the_race_hud_and_loads_it_between_race_and_app(client):
     page = client.get("/").text
     assert all(f'id="{i}"' in page for i in RACE_IDS)
-    at = [page.index(f"/static/{f}") for f in ("race.js", "hud.js", "app.js")]
+    order = ("race.js", "hud.js", "results.js", "guide.js", "app.js")
+    at = [page.index(f"/static/{f}") for f in order]
     assert at == sorted(at)
+
+
+def test_banner_line_comes_from_guide_and_starts_on_connecting(client):
+    assert "function guide(s, ctx)" in static(client, "guide.js")
+    assert 'data-tone="warn">connecting...</span>' in client.get("/").text
+    js = static(client, "app.js")
+    assert "guide(s, { live, watch, hand: cfg.hand, lost })" in js
+    assert 'pill("link", "offline", "warn"); banner(null, false, false);' in js
+    css = static(client, "style.css")
+    assert '#banner[data-tone="stop"] { color: #f33; font-size: 12vmin; }' in css
 
 
 def test_hud_is_keyed_on_the_race_view(client):
@@ -274,7 +285,7 @@ def test_pad_draws_dead_zone_intent_dot_and_guards_the_progress_ring(client):
 
 def test_hand_lost_banner_needs_a_hand_seen_since_arming(client):
     js = static(client, "app.js")
-    assert '"HAND LOST"' in js and "if (!s.armed) handWasSeen = false" in js
+    assert '"HAND LOST"' in static(client, "guide.js") and "if (!s.armed) handWasSeen = false" in js
     assert "s.armed && handWasSeen && !s.hand_seen" in js
     assert '$("level").hidden = !(s.stale && s.armed)' in js
 
@@ -351,7 +362,10 @@ def test_config_gives_plate_ball_and_stale_limit_from_settings(client):
         "camera_width": cfg["rig"]["camera_width"],
         "heartbeat_stale_s": cfg["game"]["heartbeat_stale_s"],
         "dead_zone": cfg["input"]["dead_zone"],
+        "hand": False,
     }
+    with_hand = TestClient(make_app(SimpleNamespace(cfg=cfg, hand=object())))
+    assert with_hand.get("/config").json()["hand"] is True
 
 
 def test_race_maze_is_the_configured_maze_file(client):
