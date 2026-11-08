@@ -141,8 +141,11 @@ def _parse(data: bytes) -> tuple | None:
             msg.pop("progress", 0.0),
             msg.pop("lag_s", None),
         )
+        # "false" is truthy, so only a real bool counts
+        if not all(isinstance(v, bool) for v in (msg["valid"], *flags[:2])):
+            return None
         return Intent(**msg), *flags
-    except (ValueError, KeyError, TypeError):
+    except (ValueError, KeyError, TypeError, OverflowError):
         return None
 
 
