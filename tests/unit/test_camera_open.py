@@ -10,7 +10,8 @@ pytestmark = pytest.mark.unit
 
 RIG = {"camera_width": 1280, "camera_height": 800, "camera_fps": 120, "camera_exposure_ms": 3.0}
 TOOL = "/x/uvc-util"
-REVIVE = [TOOL, "-I", "0", "-s", "auto-exposure-mode=8"]
+MODE8 = [TOOL, "-I", "0", "-s", "auto-exposure-mode=8"]
+MODE1 = [TOOL, "-I", "0", "-s", "auto-exposure-mode=1"]
 EXPOSURE = [TOOL, "-I", "0", "-s", "auto-exposure-mode=1", "-s", "exposure-time-abs=30"]
 
 
@@ -84,7 +85,7 @@ def test_reopens_once_when_the_stream_dies_after_warm_up(monkeypatch):
     assert not ran
 
 
-@pytest.mark.parametrize("tool, cmds", [(TOOL, [REVIVE, EXPOSURE]), (None, [])])
+@pytest.mark.parametrize("tool, cmds", [(TOOL, [MODE8, MODE1, EXPOSURE]), (None, [])])
 def test_blank_first_open_gets_an_exposure_toggle_then_a_reopen(monkeypatch, tool, cmds):
     monkeypatch.setattr(shutil, "which", lambda name: tool)
     cap_cls, opened = fake_cameras([(800, 1280, 3)], blank_opens=1)
@@ -104,7 +105,7 @@ def test_gives_up_after_three_opens(monkeypatch):
         open_camera(RIG, cap_cls, ran.append)
     assert len([c for c in opened if c.sets]) == 3
     assert all(c.released for c in opened)
-    assert ran == [REVIVE, REVIVE]
+    assert ran == [MODE8, MODE1, MODE8, MODE1]
 
 
 def test_no_matching_camera_fails_clearly():

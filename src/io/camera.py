@@ -52,8 +52,10 @@ def revive_camera(run=subprocess.run) -> bool:
     tool = shutil.which("uvc-util")
     if tool is None:
         return False
-    # a jammed stream comes back after a round trip through auto exposure
+    # a jammed stream comes back after a round trip through auto exposure; it has to
+    # go both ways or a cam already sitting in auto sees nothing
     run([tool, "-I", "0", "-s", "auto-exposure-mode=8"])
+    run([tool, "-I", "0", "-s", "auto-exposure-mode=1"])
     return True
 
 
