@@ -55,6 +55,8 @@ button:disabled { opacity: .4; cursor: default; }
 @keyframes pop { from { scale: 1.4; } }
 @keyframes brief { 70% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes blink { 50% { opacity: .2; } }
+#handview { display: grid; gap: 4px; margin-bottom: 16px; color: #aaa; font-variant-numeric: tabular-nums; }
+#handcam { display: block; max-width: 100%; border-radius: 4px; }
 #results { display: grid; gap: 8px; justify-items: start; font-variant-numeric: tabular-nums; }
 #restime { font-size: 48px; }
 #resdelta { font-size: 32px; font-weight: 700; }
