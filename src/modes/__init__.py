@@ -73,6 +73,8 @@ class PathFollower:
 
 
 MODES = {"hand": hand, "balance": Balance, "path": PathFollower, "assist": assist}
+# the modes that steer on the tracked ball rather than a player
+CLOSED_LOOP = ("balance", "path", "assist")
 
 
 def make_mode(name: str, cfg: dict):

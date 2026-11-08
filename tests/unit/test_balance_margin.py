@@ -6,7 +6,7 @@ from tools import margin_check
 pytestmark = pytest.mark.unit
 
 
-def cfg(kp, kd, ki, dead=0.046, fps=120, ema=0.0):
+def cfg(kp, kd, ki, dead=0.046, fps=120, ema=0.0, span=4):
     control = {
         "sim_tick_hz": 100,
         "servo_dead_time_s": dead,
@@ -17,7 +17,11 @@ def cfg(kp, kd, ki, dead=0.046, fps=120, ema=0.0):
         "kd_deg_s_mm": kd,
         "ki_deg_s_mm": ki,
     }
-    return {"control": control, "rig": {"camera_fps": fps}}
+    return {
+        "control": control,
+        "rig": {"camera_fps": fps},
+        "vision": {"velocity_span_frames": span},
+    }
 
 
 def test_delay_is_dead_time_plus_a_tick_plus_half_the_velocity_window():
@@ -30,6 +34,10 @@ def test_delay_is_dead_time_plus_a_tick_plus_half_the_velocity_window():
 
 def test_a_camera_slower_than_the_loop_sets_the_velocity_window():
     assert balance_margin(cfg(0.05, 0.0375, 0.02, fps=50))["vel_lag_s"] == pytest.approx(0.04)
+
+
+def test_the_velocity_window_comes_from_the_vision_settings():
+    assert balance_margin(cfg(0.05, 0.0375, 0.02, span=8))["vel_lag_s"] == pytest.approx(0.04)
 
 
 @pytest.mark.parametrize(

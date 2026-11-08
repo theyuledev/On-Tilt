@@ -18,6 +18,9 @@ class FakeFrames:
     def read(self):
         return self.frames.pop(0) if self.frames else None
 
+    def latest(self):
+        return None
+
     def close(self):
         pass
 

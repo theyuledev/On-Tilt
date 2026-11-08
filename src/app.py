@@ -1,174 +1,18 @@
 import asyncio
 import time
-from dataclasses import replace
 
 import uvicorn
 
-from src import safety
-from src.bus import Bus
-from src.contracts import BallState, PlateState, RunLogRecord, ServoCommand
-from src.control.deadband import invert, start
-from src.control.pulse_map import tilt_to_pulse
 from src.inputs.hand import HandInput
-from src.inputs.keyboard import KeyboardInput
 from src.io.camera import CameraSource, open_camera
-from src.io.ports import Frame, FrameSource, InputSource, TiltActuator
+from src.io.camera_exposure import exposure_problem
 from src.io.run_log import start_run_log
-from src.io.serial_link import LinkError, SerialActuator, open_board
+from src.io.serial_link import SerialActuator, open_board
 from src.io.settings import env, load
-from src.modes import MODES, make_mode
-from src.sim.ball import roll
-from src.sim.plate import SimActuator
-from src.vision.px_to_mm import SPAN, ball_state
-from src.vision.tracker import BallPx, BallTracker
+from src.loop import Loop
+from src.modes import MODES
+from src.vision.pipeline import Pipeline
 from src.web.server import make_app
-
-LEVEL = PlateState(sent_x_deg=0.0, sent_y_deg=0.0, est_x_deg=0.0, est_y_deg=0.0)
-
-
-class Loop:
-    def __init__(
-        self,
-        cfg: dict,
-        hand: InputSource | None = None,
-        frames: FrameSource | None = None,
-        actuator: TiltActuator | None = None,
-        tracker: BallTracker | None = None,
-    ):
-        self.cfg = cfg
-        self.bus = Bus()
-        self.keys = KeyboardInput(cfg["input"])
-        self.hand = hand
-        self.frames = frames
-        self.frame: Frame | None = None
-        self.safety = safety.SafetyState()
-        self.band = start(cfg["rig"])
-        self.actuator = actuator or SimActuator(cfg["rig"], cfg["control"])
-        self.board_lost = False
-        self.stale = False
-        self.hand_seen = self.hand_calibrating = False
-        self.mode = cfg["control"]["mode"]
-        self.ball: BallState | None = None
-        self.tracker = tracker or (BallTracker(cfg["vision"]) if frames is not None else None)
-        self.ball_px: BallPx | None = None
-        self.track: list[BallState] = []
-        self.last: RunLogRecord | None = None
-
-    @property
-    def mode(self) -> str:
-        return self._mode
-
-    @mode.setter
-    def mode(self, name: str) -> None:
-        # picking a mode by name builds its callable; a path starts over at its first segment
-        self._mode, self.step = name, make_mode(name, self.cfg)
-
-    def arm(self) -> None:
-        if not self.board_lost:
-            self.step = make_mode(self.mode, self.cfg)
-            self.safety.arm()
-
-    def kill(self) -> None:
-        self.safety.kill()
-
-    def tick(self, now: float, dt: float) -> RunLogRecord:
-        if self.frames is not None:
-            self._see()
-        rig = self.cfg["rig"]
-        sim = isinstance(self.actuator, SimActuator) and self.tracker is None
-        ball = self.ball or BallState(0.0, 0.0, 0.0, 0.0, valid=sim, t_s=now)
-        if now - ball.t_s > rig["stale_intent_s"]:
-            # an old frame says nothing about where the ball is now
-            ball = replace(ball, valid=False)
-        intent = self.keys.latest()
-        if self.hand is not None:
-            hand = self.hand.latest()
-            fresh = now - hand.t_s <= rig["stale_intent_s"]
-            if hand.valid and fresh:
-                intent = hand
-            # a dead hand process must not leave the page saying the hand is live
-            self.hand_seen = fresh and self.hand.seen
-            self.hand_calibrating = fresh and self.hand.calibrating
-        stale = self.stale = now - intent.t_s > rig["stale_intent_s"]
-
-        if not self.safety.armed or self.safety.killing or stale:
-            self.step = make_mode(self.mode, self.cfg)  # fresh mode state, no kick on arm
-        plate_cmd = self.step(ball, intent, self.cfg)
-        target = tilt_to_pulse(plate_cmd, rig)
-        sent, plate_state = self._drive(target, stale, dt, now)
-        if sim:
-            self.ball = roll(ball, plate_state, now, rig, self.cfg["control"])
-
-        rec = RunLogRecord(
-            t_s=now,
-            mode=self.mode,
-            armed=sent is not None,
-            ball=ball,
-            intent=intent,
-            plate_cmd=plate_cmd,
-            servo_cmd=sent or target,
-            plate_state=plate_state,
-        )
-        self.last = rec
-        self.bus.publish("tick", rec)
-        return rec
-
-    def _see(self) -> None:
-        frame = self.frames.read()
-        if frame is None:
-            return
-        self.frame = frame
-        self.ball_px = self.tracker.update(frame.image, frame.t_s)
-        self.ball = ball_state(self.ball_px, self.track, self.cfg["vision"])
-        self.track = [*self.track, self.ball][-SPAN:]
-
-    def _drive(
-        self, target: ServoCommand, stale: bool, dt: float, now: float
-    ) -> tuple[ServoCommand | None, PlateState]:
-        if self.board_lost:
-            return None, LEVEL
-        sent = safety.step(self.safety, target, stale, dt, self.cfg["rig"])
-        if self.cfg["control"]["inverter_on"]:
-            # only the closed loop modes get the dead band help, a player closes the loop himself
-            off = (
-                not self.safety.armed
-                or self.safety.killing
-                or stale
-                or self.mode not in ("balance", "path", "assist")
-            )
-            self.band, sent = invert(self.band, sent, off, self.cfg)
-        try:
-            return sent, self.actuator.send(sent, now)
-        except LinkError as e:
-            # board refused or went quiet and levels itself, so disarm and let the page re-arm
-            print(f"board disarmed: {e}")
-            self.actuator.armed = False
-            self.safety = safety.SafetyState()
-            return None, LEVEL
-        except (OSError, ValueError) as e:
-            # port gone or garbled, nothing sane to send any more
-            print(f"board lost: {e}")
-            self.board_lost = True
-            self.safety = safety.SafetyState()
-            return None, LEVEL
-
-    @property
-    def camera_lost(self) -> bool:
-        # the grab thread stops on a failed read; clip sources have no thread
-        return self.frames is not None and not getattr(self.frames, "running", True)
-
-    def snapshot(self) -> dict:
-        snap = self.last.to_dict() if self.last else {}
-        snap["killing"] = self.safety.killing
-        snap["stale"] = self.stale
-        snap["board_lost"] = self.board_lost
-        snap["camera_lost"] = self.camera_lost
-        px = self.ball_px
-        snap["ball_px"] = [px.x_px, px.y_px, px.r_px] if px is not None and px.valid else None
-        snap["hand_seen"] = self.hand_seen
-        snap["hand_calibrating"] = self.hand_calibrating
-        snap["hand_progress"] = self.hand.progress if self.hand is not None else 0.0
-        return snap
 
 
 async def run(loop: Loop) -> None:
@@ -188,6 +32,14 @@ def stop_on_error(ticker: asyncio.Task, server) -> None:
         server.should_exit = True
 
 
+def check_exposure(rig: dict) -> str | None:
+    try:
+        return exposure_problem(rig)
+    except OSError as e:
+        # uvc-util failing says nothing about the frames, so the camera stays on unverified
+        return f"exposure unverified: {e}"
+
+
 def main() -> None:
     cfg = load()
     mode = cfg["control"]["mode"]
@@ -199,14 +51,15 @@ def main() -> None:
         print(f"hand input off: {e}")
         hand = None
     try:
-        frames = CameraSource(open_camera(cfg["rig"]))
-    except RuntimeError as e:
+        frames = CameraSource(open_camera(cfg["rig"]), process=Pipeline(cfg).step)
+    except (RuntimeError, OSError) as e:
         print(f"camera off: {e}")
         frames = None
+    exposure = check_exposure(cfg["rig"]) if frames is not None else None
     actuator = None
     if cfg["rig"]["actuator"] == "real":
         actuator = SerialActuator(open_board(cfg["rig"]), cfg["rig"])
-    loop = Loop(cfg, hand, frames, actuator)
+    loop = Loop(cfg, hand, frames, actuator, exposure)
     start_run_log(loop.bus)
     port = int(env("PORT", "8000"))
     server = uvicorn.Server(
