@@ -1,9 +1,7 @@
-import math
 from pathlib import Path
 
 import pytest
 
-from src.contracts import Intent
 from src.control.guard import Guard
 from src.control.pulse_map import center
 from src.io.camera import ClipSource
@@ -11,37 +9,11 @@ from src.io.settings import load
 from src.loop import Loop
 from src.safety import limits
 from src.vision.pipeline import Pipeline
-from tests.replay.test_guard_clip import CLIP
-from tests.sim.test_edge_guard import reversals
+from tests.replay.test_guard_chatter import CLIP, FRAMES, START, Pusher
 
 pytestmark = pytest.mark.replay
 
-START, FRAMES = 13000, 460
 MOST = 0.5
-
-
-class Pusher:
-    """Full stick toward the rim nearest the ball the loop last saw."""
-
-    seen = calibrating = False
-    progress = 0.0
-
-    def __init__(self):
-        self.intent = Intent(0.0, 0.0, valid=False, t_s=0.0)
-
-    def latest(self) -> Intent:
-        return self.intent
-
-    def recentre(self) -> None:
-        pass
-
-    def push(self, ball, now: float) -> None:
-        if ball is None or not ball.valid:
-            self.intent = Intent(0.0, 0.0, valid=True, t_s=now)
-            return
-        r = math.hypot(ball.x_mm, ball.y_mm) or 1.0
-        x, y = (min(max(v / r, -1.0), 1.0) for v in (ball.x_mm, ball.y_mm))
-        self.intent = Intent(x, y, valid=True, t_s=now)
 
 
 def run(guard_on: bool, stamps: list[float]):
@@ -116,19 +88,8 @@ def test_a_weighted_axis_leans_inward_of_the_player(runs):
             if a[k][1].ball.valid:
                 seen.append(lean[-1])
     assert max(lean) <= 0
-    # a lost ball gets the player straight through; with it seen the guard only holds off
-    # when the ball heads for the far rim against the push. seen 584 of 657
+    # a lost ball fades the guard out, so only seen-ball ticks count. seen 643 of 657
     assert sum(d < 0 for d in seen) / len(seen) > MOST
-
-
-@pytest.mark.xfail(strict=True, reason="side flips on velocity noise while w decays, y chatters")
-def test_the_sent_pulse_does_not_chatter_on_tracker_noise(runs):
-    cfg, a, _ = runs
-    band = cfg["control"]["servo_dead_band_us"]
-    seconds = a[-1][0] - a[0][0]
-    for axis in ("x_us", "y_us"):
-        pulses = [getattr(rec.servo_cmd, axis) for _, rec, _ in a]
-        assert reversals(pulses, band) / seconds < 2
 
 
 def test_guarded_pulses_stay_in_limits_and_slew(runs):
