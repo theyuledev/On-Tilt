@@ -1,7 +1,7 @@
 import pytest
 
 from src.contracts import ServoCommand
-from src.io.serial_link import BoardLink, LinkError, SerialActuator
+from src.io.serial_link import BoardLink, LinkError, SerialActuator, limits_line
 from src.io.settings import load
 from tests.contract.fake_board import FakeBoard
 
@@ -26,12 +26,37 @@ def test_first_command_loads_limits_arms_then_sends_pulses(board, rig):
     assert board.armed and board.pulses == (1520, 1480)
 
 
-def test_board_clamp_shows_up_in_plate_state(board, rig):
-    act = SerialActuator(BoardLink(board), rig)
-    state = act.send(ServoCommand(1900, 1100), 0.0)
+def test_board_clamp_is_visible_on_the_raw_link(board, rig):
+    link = BoardLink(board)
+    link.ask(limits_line(rig))
+    link.ask("A")
+    assert link.ask("P 1900 1100") == ["1650", "1350"]
     assert board.pulses == (1650, 1350)
-    assert state.sent_x_deg == pytest.approx(150 / rig["us_per_deg_x"])
-    assert state.sent_y_deg == pytest.approx(-150 / rig["us_per_deg_y"])
+
+
+def test_actuator_refuses_a_clamped_echo(board, rig):
+    act = SerialActuator(BoardLink(board), rig)
+    with pytest.raises(LinkError, match="'P 1900 1100' -> 'OK P 1650 1350' echo mismatch"):
+        act.send(ServoCommand(1900, 1100), 0.0)
+    assert [s[0] for s in board.sent] == ["L", "A", "P"]
+
+
+def test_stale_p_echo_is_skipped_not_taken_as_this_reply(board, rig):
+    act = SerialActuator(BoardLink(board), rig)
+    act.send(ServoCommand(1490, 1490), 0.0)
+    board._replies.append("OK P 1490 1490")  # last tick's reply turning up late
+    state = act.send(ServoCommand(1500, 1500), 0.01)
+    assert (state.sent_x_deg, state.sent_y_deg) == (0.0, 0.0)
+    assert board.sent[-1] == "P 1500 1500" and board._replies == []
+
+
+def test_three_stale_p_echoes_fail_as_an_echo_mismatch(board, rig):
+    act = SerialActuator(BoardLink(board), rig)
+    act.send(ServoCommand(1500, 1500), 0.0)
+    board._replies += ["OK P 1490 1490"] * 3
+    with pytest.raises(LinkError, match="'P 1500 1500' -> 'OK P 1490 1490' echo mismatch"):
+        act.send(ServoCommand(1500, 1500), 0.01)
+    assert board.sent[-1] == "P 1500 1500"
 
 
 def test_none_disarms_once(board, rig):
