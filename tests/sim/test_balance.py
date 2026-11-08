@@ -29,9 +29,9 @@ class Run:
     step: float = 0.0  # worst tick to tick change of the pulse that goes out
 
 
-def config(integral=True, inverter=None):
+def config(integral=True, inverter=None, tuning=None):
     cfg = load()
-    control = dict(cfg["control"])
+    control = dict(cfg["control"], **(tuning or {}))
     if not integral:
         control["ki_deg_s_mm"] = 0.0
     if inverter is not None:
@@ -40,13 +40,20 @@ def config(integral=True, inverter=None):
 
 
 def run(
-    start_pos, inverter=None, integral=True, noise_mm=0.0, offset_deg=0.0, hold_s=0.0, frames=0
+    start_pos,
+    inverter=None,
+    integral=True,
+    noise_mm=0.0,
+    offset_deg=0.0,
+    hold_s=0.0,
+    frames=0,
+    tuning=None,
 ):
     """Servo numbers, gains and the inverter switch come from settings unless given.
     offset_deg is a wrong trim on both axes, hold_s pins the ball where it started (a hand
     holding it) before letting go, frames hands the controller a frame difference velocity
-    from the noisy positions, like vision does."""
-    cfg = config(integral, inverter)
+    from the noisy positions, like vision does, tuning overrides control numbers."""
+    cfg = config(integral, inverter, tuning)
     rig, control = cfg["rig"], cfg["control"]
     dt = 1 / control["sim_tick_hz"]
     plate = SimActuator(rig, control)
@@ -102,7 +109,12 @@ def test_loop_phase_margin_is_at_least_45_deg():
     # dead time is command to first visible motion, so the camera is already in it
     delay = c["servo_dead_time_s"] + 1 / c["sim_tick_hz"]
     margin = phase_margin_deg(
-        c["kp_deg_mm"], c["kd_deg_s_mm"], delay, c["servo_tau_s"], c["sim_g_mm_s2"]
+        c["kp_deg_mm"],
+        c["kd_deg_s_mm"],
+        delay,
+        c["servo_tau_s"],
+        c["sim_g_mm_s2"],
+        ki=c["ki_deg_s_mm"],
     )
     assert margin >= 45
 
@@ -111,6 +123,21 @@ def test_loop_phase_margin_is_at_least_45_deg():
 @pytest.mark.parametrize("start_pos", STARTS)
 def test_holds_within_20_mm_for_30_s_with_a_1_deg_trim_error(start_pos, inverter):
     assert worst(run(start_pos, inverter, offset_deg=1.0).balls, 5) < 20
+
+
+# a 2 deg trim parks the ball at trim / kp = 40 mm, past the default window, so the integral
+# never winds there; the window needs i_err_max_mm >= trim / kp and i_max_deg >= trim
+WIDE = {"ki_deg_s_mm": 0.03, "i_max_deg": 3.0, "i_err_max_mm": 60}
+
+
+@pytest.mark.parametrize("start_pos", STARTS)
+def test_a_wider_integral_window_holds_through_a_2_deg_trim_error(start_pos):
+    assert worst(run(start_pos, offset_deg=2.0, tuning=WIDE).balls, 5) < 20
+
+
+@pytest.mark.parametrize("start_pos", STARTS)
+def test_the_default_window_does_not_reach_a_2_deg_trim_error(start_pos):
+    assert worst(run(start_pos, offset_deg=2.0).balls, 5) >= 20
 
 
 @pytest.mark.parametrize("inverter", [False, True])
@@ -128,6 +155,8 @@ def test_release_after_holding_100_mm_out_adds_no_windup_overshoot():
     with_i = -min(b.x_mm for b in run((100, 0, 0, 0), hold_s=5.0).balls)
     pd_only = -min(b.x_mm for b in run((100, 0, 0, 0), integral=False, hold_s=5.0).balls)
     assert with_i <= pd_only + 0.5
+    # pd alone releasing from the plate limit already overshoots ~20 mm
+    assert with_i < 25
 
 
 def test_inverter_never_strays_more_than_comp_and_steps_stay_bounded():
