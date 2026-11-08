@@ -50,7 +50,7 @@ maze = "square"
 
 [vision]
 min_ball_r_px = { value = 10, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-max_ball_r_px = { value = 90, label = "measured (2026-11-07)" }
+max_ball_r_px = { value = 90, label = "sim-tuned (PR #138)" }
 min_contrast = { value = 0.4, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 min_fill = { value = 0.75, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 radius_tol = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
