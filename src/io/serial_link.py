@@ -6,6 +6,7 @@ from src.contracts import PlateState, ServoCommand
 from src.control.pulse_map import center, pulse_to_tilt
 from src.safety import limits
 
+ENVELOPE_US = (1050, 1950)  # firmware refuses anything outside
 STRAGGLERS = 2  # late replies to earlier commands that may turn up before this one's
 
 

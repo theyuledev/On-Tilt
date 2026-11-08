@@ -5,8 +5,25 @@ import time
 
 from src import safety
 from src.contracts import ServoCommand
-from src.io.serial_link import BoardLink, LinkError, limits_line, open_board
+from src.control.pulse_map import center
+from src.io.serial_link import ENVELOPE_US, BoardLink, LinkError, limits_line, open_board
 from src.io.settings import load
+
+NUDGE_US = 5
+
+
+def headroom(rig: dict) -> str:
+    lo, hi = ENVELOPE_US
+    x_lo, x_hi, y_lo, y_hi = (round(v) for v in safety.limits(rig))
+    return (
+        f"headroom x: {x_lo - lo} below, {hi - x_hi} above"
+        f" | y: {y_lo - lo} below, {hi - y_hi} above"
+    )
+
+
+def offset(pulses: tuple[int, int], rig: dict) -> str:
+    cx, cy = center(rig)
+    return f"off ({round(pulses[0] - cx):+d}, {round(pulses[1] - cy):+d}) us"
 
 
 class Bench:
@@ -34,9 +51,17 @@ class Bench:
             self.quiet = True
             self.log.append("quiet: no more heartbeat")
             return ""
-        if line == "l":
+        words = line.split()
+        loading = words[:1] == ["l"] and len(words) <= 2
+        if loading:
+            if len(words) == 2:
+                # bench-only limits, the settings file is untouched
+                self.rig["limit_x_us"] = self.rig["limit_y_us"] = int(words[1])
+                self.rig["startup_flag"] = False
             line = limits_line(self.rig)
         reply = self._send(line) or ""
+        if loading:
+            self.log.append(headroom(self.rig))
         parts = reply.split()
         if parts[:2] == ["OK", "P"]:
             self.last_p = (int(parts[2]), int(parts[3]))
@@ -44,6 +69,11 @@ class Bench:
         elif parts[:2] == ["OK", "D"] or "disarmed" in parts:
             self.last_p = None
         return reply
+
+    def nudge(self, dx: int, dy: int) -> None:
+        if self.last_p is None or self.killing:
+            return
+        self.submit(f"P {self.last_p[0] + dx} {self.last_p[1] + dy}")
 
     def kill(self) -> None:
         if self.killing:
@@ -83,11 +113,13 @@ def kill_and_wait(bench: Bench, period: float) -> None:
 def draw(scr, bench: Bench, line: str) -> None:
     h, w = scr.getmaxyx()
     scr.erase()
-    state = f"pulses {bench.last_p}" if bench.last_p else "no pulses"
+    state = "no pulses"
+    if bench.last_p:
+        state = f"pulses {bench.last_p} {offset(bench.last_p, bench.rig)}"
     if bench.killing:
         state = "KILLING"
     hb = "quiet" if bench.quiet else "heartbeat on"
-    keys = "space kill | l limits | quiet | ctrl-c"
+    keys = f"space kill | l [range] | arrows nudge {NUDGE_US} us (lr x, ud y) | quiet | ctrl-c"
     scr.addnstr(0, 0, f"{state} | {hb} | {keys}", w - 1)
     for i, entry in enumerate(bench.log[-(h - 3) :]):
         scr.addnstr(i + 1, 0, entry, w - 1)
@@ -96,6 +128,12 @@ def draw(scr, bench: Bench, line: str) -> None:
 
 
 def run(scr, bench: Bench, period: float) -> None:
+    arrows = {
+        curses.KEY_LEFT: (-NUDGE_US, 0),
+        curses.KEY_RIGHT: (NUDGE_US, 0),
+        curses.KEY_UP: (0, NUDGE_US),
+        curses.KEY_DOWN: (0, -NUDGE_US),
+    }
     scr.nodelay(True)
     line = ""
     last = time.monotonic()
@@ -104,6 +142,8 @@ def run(scr, bench: Bench, period: float) -> None:
             ch = scr.getch()
             if ch == ord(" ") and not line:
                 bench.kill()
+            elif ch in arrows:
+                bench.nudge(*arrows[ch])
             elif ch in (curses.KEY_ENTER, 10, 13):
                 if line:
                     bench.submit(line)

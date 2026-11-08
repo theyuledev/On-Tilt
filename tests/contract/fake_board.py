@@ -1,6 +1,6 @@
 import termios
 
-ENVELOPE = (1050, 1950)
+from src.io.serial_link import ENVELOPE_US
 
 
 class FakeBoard:
@@ -57,7 +57,7 @@ class FakeBoard:
             if self.armed:
                 return "ERR L armed"
             x_lo, x_hi, y_lo, y_hi, x_lvl, y_lvl = args
-            ok = all(ENVELOPE[0] <= v <= ENVELOPE[1] for v in args)
+            ok = all(ENVELOPE_US[0] <= v <= ENVELOPE_US[1] for v in args)
             ok = ok and x_lo < x_hi and y_lo < y_hi
             ok = ok and x_lo <= x_lvl <= x_hi and y_lo <= y_lvl <= y_hi
             if not ok:
