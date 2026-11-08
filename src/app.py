@@ -12,6 +12,7 @@ from src.inputs.hand import HandInput
 from src.inputs.keyboard import KeyboardInput
 from src.io.camera import CameraSource, open_camera
 from src.io.ports import Frame, FrameSource, InputSource, TiltActuator
+from src.io.run_log import start_run_log
 from src.io.serial_link import LinkError, SerialActuator, open_board
 from src.io.settings import env, load
 from src.modes import MODES
@@ -182,6 +183,7 @@ def main() -> None:
     if cfg["rig"]["actuator"] == "real":
         actuator = SerialActuator(open_board(cfg["rig"]), cfg["rig"])
     loop = Loop(cfg, hand, frames, actuator)
+    start_run_log(loop.bus)
     port = int(env("PORT", "8000"))
     server = uvicorn.Server(
         uvicorn.Config(make_app(loop), host="127.0.0.1", port=port, log_level="warning")
