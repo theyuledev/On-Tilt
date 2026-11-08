@@ -16,6 +16,7 @@ from src.sim.plate import SimActuator
 from src.vision.tracker import BallPx
 
 LEVEL = PlateState(sent_x_deg=0.0, sent_y_deg=0.0, est_x_deg=0.0, est_y_deg=0.0)
+WATCHERS = {"est": "estimator", "mapping": "mapping watch"}
 
 
 class Loop:
@@ -95,13 +96,13 @@ class Loop:
         if not self.safety.armed or self.safety.killing or stale:
             self.step = make_mode(self.mode, self.cfg)  # fresh mode state, no kick on arm
         plate_cmd = self.step(ball, intent, self.cfg)
-        if self.mapping.bad and self.mode in CLOSED_LOOP:
+        if self.mapping and self.mapping.bad and self.mode in CLOSED_LOOP:
             plate_cmd = PlateCommand(0.0, 0.0)  # steering on a wrong mapping throws the ball off
         target = tilt_to_pulse(plate_cmd, rig)
         sent, plate_state = self._drive(target, stale, dt, now)
         tilt = (plate_state.sent_x_deg, plate_state.sent_y_deg) if sent is not None else (0.0, 0.0)
         self._watch("command", now, PlateCommand(*tilt))
-        if sent is not None and self.mapping.step(now, ball, tilt):
+        if sent is not None and self._watch("step", now, ball, tilt, part="mapping"):
             print(f"plate mapping looks wrong on {self.mapping.bad}, re-arm after a fix")
         if sim:
             self.ball = roll(ball, plate_state, now, rig, self.cfg["control"])
@@ -148,13 +149,14 @@ class Loop:
         else:
             self._watch("miss", obs.t_read)
 
-    def _watch(self, call: str, *args):
-        # the estimator only watches, so a fault in it switches it off and the plate carries on
+    def _watch(self, call: str, *args, part: str = "est"):
+        # these only watch, so a fault in one switches it off and the plate carries on
+        watcher = getattr(self, part)
         try:
-            return getattr(self.est, call)(*args) if self.est is not None else None
+            return getattr(watcher, call)(*args) if watcher is not None else None
         except Exception as e:
-            print(f"estimator off: {e!r}")
-            self.est = None
+            print(f"{WATCHERS[part]} off: {e!r}")
+            setattr(self, part, None)
 
     def _drive(
         self, target: ServoCommand, stale: bool, dt: float, now: float
@@ -204,5 +206,5 @@ class Loop:
         snap["arm_blocked"] = self.arm_blocked
         if self.game is not None:
             snap["race"] = self.game.view()
-        snap["mapping_bad"] = self.mapping.bad
+        snap["mapping_bad"] = self.mapping and self.mapping.bad
         return snap

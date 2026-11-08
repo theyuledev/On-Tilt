@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from src.contracts import BallState, Intent, PlateCommand
+from src.control.mapping import MappingWatch
 from src.io.camera import ClipSource
 from src.io.ports import Frame
 from src.io.settings import ROOT, load
@@ -157,6 +158,19 @@ def test_a_broken_estimator_switches_off_and_balance_carries_on(call, capsys):
     assert cmds == drive(Spy())[1]
     assert loop.last.armed and loop.est is None and loop.snapshot()["est"] is None
     assert capsys.readouterr().out.count("estimator off") == 1
+
+
+def test_a_broken_mapping_watch_switches_off_and_balance_carries_on(monkeypatch, capsys):
+    want = drive(Spy())[1]
+
+    def boom(*a):
+        raise ValueError("singular")
+
+    monkeypatch.setattr(MappingWatch, "step", boom)
+    loop, cmds = drive(Spy())
+    assert cmds == want
+    assert loop.last.armed and loop.mapping is None and loop.snapshot()["mapping_bad"] is None
+    assert capsys.readouterr().out.count("mapping watch off") == 1
 
 
 def test_closed_loop_names_real_modes():

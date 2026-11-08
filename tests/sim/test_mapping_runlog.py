@@ -1,6 +1,6 @@
+import functools
 import json
 import math
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -8,20 +8,15 @@ import pytest
 from src.contracts import BallState
 from src.control import mapping
 from src.control.mapping import STRIDE_S, MappingWatch, angle_deg
-from src.io.settings import load
-
-pytestmark = [
-    pytest.mark.sim,
-    pytest.mark.skipif(
-        not (Path(__file__).resolve().parents[2] / "data" / "runs").exists(),
-        reason="run logs not on this machine",
-    ),
-]
+from src.io.settings import ROOT, load
 
 # hand play on the rig with the mapping right, 5 armed stretches
-LOG = Path(__file__).resolve().parents[2] / "data" / "runs" / "20261108-025857.jsonl"
+LOG = ROOT / "data" / "runs" / "20261108-025857.jsonl"
+
+pytestmark = [pytest.mark.sim, pytest.mark.skipif(not LOG.exists(), reason="run log not here")]
 
 
+@functools.cache
 def stretches():
     out, cur = [], []
     for line in LOG.open():
@@ -79,8 +74,7 @@ def test_the_right_mapping_on_the_rig_never_trips_with_room_to_spare(judged):
     for rows in stretches():
         assert replay(rows) == (None, None)
     single, pair = worst(judged)
-    print(f"worst single window {single:.0f} deg, worst two in a row {pair:.0f} deg")
-    assert pair <= c["map_line_deg"] - 5 and single < c["map_flip_deg"]
+    assert pair <= c["map_line_deg"] - 5 and single < c["map_flip_deg"], (single, pair)
 
 
 def test_the_rig_pushes_where_the_run_log_fit_says(judged):
@@ -89,22 +83,21 @@ def test_the_rig_pushes_where_the_run_log_fit_says(judged):
         replay(rows)
     for k, axis_deg in ((0, 18), (1, 116 - 90)):
         phis = [phi for _, d, phi in judged if abs(d[k]) >= 0.9]
-        print(f"{'xy'[k]} push answers at {np.median(phis):.0f} deg from its axis")
-        assert abs(np.median(phis) - axis_deg) < 25
+        assert abs(np.median(phis) - axis_deg) < 25, ("xy"[k], np.median(phis))
 
 
 @pytest.mark.parametrize("sign, axis", [((-1, 1), "x"), ((1, -1), "y")])
 def test_a_mirrored_camera_axis_on_the_rig_trips_within_a_few_windows(judged, sign, axis):
-    trips = 0
+    k, lags = "xy".index(axis), []
     for rows in stretches():
         judged.clear()
         t, bad = replay(rows, sign)
+        # a stretch that doesn't trip judges this axis once at most, too little push along it
         if t is None:
             continue
-        trips += 1
         assert axis in bad
-        k = "xy".index(axis)
-        before = sorted({w for w, d, _ in judged if w < t and abs(d[k]) >= 0.5})
-        assert len(before) <= 3, (len(before), bad)
-    print(f"mirrored {axis}: {trips} of {len(stretches())} stretches trip")
-    assert trips >= 3
+        on = sorted({w for w, d, _ in judged if abs(d[k]) >= 0.5})
+        assert len(on) <= 4, (len(on), bad)
+        lags.append(round(float(t - on[0]), 2))
+    print(f"mirrored {axis}: trips {lags} s after the first excited window")
+    assert len(lags) >= 3 and max(lags) <= 3 * STRIDE_S + 0.01, lags
