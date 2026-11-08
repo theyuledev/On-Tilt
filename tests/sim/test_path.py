@@ -53,7 +53,7 @@ def test_a_one_point_path_parks_the_ball_on_the_point(clock):
 
 def test_mode_is_picked_by_name_and_arming_again_starts_the_path_over():
     loop = Loop(load())
-    assert loop.step.mode is MODES["hand"]
+    assert loop.step is MODES["hand"]
     loop.mode = "path"
     loop.step.seg = 2
     loop.arm()

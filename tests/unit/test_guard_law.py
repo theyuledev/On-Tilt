@@ -3,6 +3,7 @@ import pytest
 from src.contracts import BallState, PlateCommand
 from src.control.guard import Guard, need, stop_mm
 from src.io.settings import load
+from src.loop import Loop
 from src.modes import MODES, Guarded, make_mode
 
 pytestmark = pytest.mark.unit
@@ -12,7 +13,7 @@ def cfg(**control):
     c = load()
     c["rig"].update(us_per_deg_x=57.0, us_per_deg_y=57.0, limit_x_us=150, limit_y_us=150)
     c["rig"].update(startup_flag=True, startup_range_us=150, ball_d_mm=61.8)
-    c["control"].update(control)
+    c["control"].update({"guard_on": True, **control})
     return c
 
 
@@ -87,3 +88,8 @@ def test_only_the_hand_mode_is_guarded_and_guard_off_leaves_it_bare():
     assert not isinstance(make_mode("balance", cfg()), Guarded)
     assert make_mode("assist", cfg()) is MODES["assist"]
     assert make_mode("hand", cfg(guard_on=False)) is MODES["hand"]
+
+
+def test_the_committed_settings_ship_with_the_guard_off():
+    assert make_mode("hand", load()) is MODES["hand"]
+    assert Loop(load()).snapshot()["guard"] is None

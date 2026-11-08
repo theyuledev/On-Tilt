@@ -29,7 +29,9 @@ def track():
 
 def test_the_guard_sees_where_a_hand_rolled_ball_will_be(track):
     # the hand rolls it round the plate and along the edge up to ~13385, the plate stays level
-    T = Guard(load()).latency[0]
+    cfg = load()
+    cfg["control"]["guard_on"] = True
+    T = Guard(cfg).latency[0]
     ts = [b.t_s for b in track]
     moved, still = [], []
     for k, b in enumerate(track):

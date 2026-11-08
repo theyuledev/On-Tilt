@@ -1,12 +1,13 @@
 import math
 import random
 import time
+import tomllib
 
 import pytest
 
 from src.app import Loop
 from src.contracts import BallState, Intent
-from src.io.settings import load
+from src.io.settings import ROOT, load
 from src.modes.path import target
 from src.sim.ball import roll
 from src.sim.plate import SimActuator
@@ -21,7 +22,9 @@ PUSHES = {
     "push then let go": lambda t: (1.0 if t < 0.6 else 0.0, 0.0),
     "panic sawtooth": lambda t: (1.0 if int(t) % 2 == 0 else -1.0, 0.0),
 }
-SQ = [(100, 100), (-100, 100), (-100, -100), (100, -100), (100, 100)]
+MAZE = tomllib.loads((ROOT / "configs/mazes/square.toml").read_text())
+SQ = [tuple(p) for p in MAZE["points"]]
+START = tuple(float(v) for v in MAZE["start"])
 
 
 class Hand:
@@ -49,6 +52,7 @@ def rig_cfg(ball_d=61.8, lim=150, upd=57.0, cap=None):
     rig.update(startup_flag=lim <= 150, us_per_deg_x=upd, us_per_deg_y=upd)
     # no rolling friction on purpose: friction helps the brake, so this is the worst case
     cfg["control"].update(rolling_friction_x_mm_s2=0.0, rolling_friction_y_mm_s2=0.0)
+    cfg["control"]["guard_on"] = True
     if cap is not None:
         cfg["control"]["player_max_deg"] = cap
     return cfg
@@ -156,27 +160,27 @@ def corners_hit(track, ball_d):
 def test_a_lap_of_the_square_maze_is_barely_touched(clock, ball_d):
     cfg = linear_hand(rig_cfg(ball_d))
     player, _ = lap()
-    r = run(cfg, clock, player, seconds=20.0, start=(100.0, 100.0))
+    r = run(cfg, clock, player, seconds=20.0, start=START)
     assert corners_hit(r["track"], ball_d) and r["corr"] < 0.10
 
 
 @pytest.mark.parametrize("ball_d", BALLS)
 def test_holding_the_start_ring_does_not_drift(clock, ball_d):
-    hold = pd((100.0, 100.0))
+    hold = pd(START)
     cfg = linear_hand(rig_cfg(ball_d))
-    r = run(cfg, clock, lambda t, b: hold(b), seconds=4.0, start=(100.0, 100.0))
-    assert max(math.dist(p, (100, 100)) for p in r["track"][50:]) < 5
+    r = run(cfg, clock, lambda t, b: hold(b), seconds=4.0, start=START)
+    assert max(math.dist(p, START) for p in r["track"][50:]) < 5
 
 
 @pytest.mark.parametrize("ball_d", BALLS)
 def test_a_hard_player_overshooting_the_corners_never_reaches_the_rim(clock, ball_d):
     cfg = linear_hand(rig_cfg(ball_d))
     player, _ = lap(ahead=80.0, kp=0.1, kd=0.0375)
-    assert run(cfg, clock, player, seconds=10.0, start=(100.0, 100.0))["gap"] > 5
-    hold = pd((100.0, 100.0), kp=0.1)
+    assert run(cfg, clock, player, seconds=10.0, start=START)["gap"] > 5
+    hold = pd(START, kp=0.1)
     # starts 20 mm short of the goal so the overshoot heads for the rim
-    r = run(cfg, clock, lambda t, b: hold(b), seconds=3.0, start=(80.0, 100.0))
-    assert r["gap"] > 5 and math.dist(r["track"][-1], (100, 100)) < 30
+    r = run(cfg, clock, lambda t, b: hold(b), seconds=3.0, start=(START[0] - 20, START[1]))
+    assert r["gap"] > 5 and math.dist(r["track"][-1], START) < 30
 
 
 def reversals(pulses, band):
