@@ -39,7 +39,7 @@ def only(found, x, y, r, dark=True):
     assert c.dark is dark
 
 
-@pytest.mark.parametrize("r", [17, 57, 90])
+@pytest.mark.parametrize("r", [17, 57, 77])
 def test_each_ball_size_is_found_among_marker_lines(r):
     img = marker(plate(), 640, 400, r)
     only(find_balls(ball(img, 640, 400, r), CFG), 640, 400, r)

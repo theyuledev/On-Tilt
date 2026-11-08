@@ -81,3 +81,42 @@ def test_reset_background_starts_over_and_the_ball_is_still_tracked():
     tr.reset_background()
     assert tr.background.level is None and tr.background.samples == []
     assert tr.update(ball(plate(), 640, 400, 45), t + period).valid
+
+
+def test_frame_stall_does_not_fling_the_prediction():
+    tr = BallTracker(CFG)
+    n = lock(tr, [ball(plate(), 400 + 15 * i, 400, 45) for i in range(3)])
+    x = 400 + 15 * (n - 1) + 30
+    t = (n - 1) * DT + 0.07
+    assert tr.predict(t)[0] == pytest.approx(x, abs=45)
+    out = tr.update(ball(plate(), x, 400, 45), t)
+    assert out.valid and out.x_px == pytest.approx(x, abs=2)
+
+
+def test_two_stamps_a_millisecond_apart_do_not_fling_the_prediction():
+    tr = BallTracker(CFG)
+    assert tr.update(ball(plate(), 400, 400, 45), 0.0).valid
+    assert tr.update(ball(plate(), 410, 400, 45), DT).valid
+    assert tr.update(ball(plate(), 420, 400, 45), DT + 0.0009).valid
+    assert tr.predict(2 * DT + 0.0009)[0] == pytest.approx(430, abs=45)
+
+
+def test_blob_cut_by_the_search_box_is_skipped_and_the_ball_inside_taken():
+    tr = BallTracker(CFG)
+    n = lock(tr, [ball(plate(), 400 + 5 * i, 400, 45) for i in range(3)])
+    img = ball(plate(), 415, 400, 45)
+    # a hand coming in from the right: its edge sits inside the box, the rest outside
+    cv2.rectangle(img, (480, 300), (900, 500), 25, -1)
+    out = tr.update(img, n * DT)
+    assert out.valid and out.x_px == pytest.approx(415, abs=2)
+    # the ball itself half out of the box: found whole by the full frame pass instead
+    out = tr.update(ball(plate(), 415 + 90, 400, 45), (n + 1) * DT)
+    assert out.valid and out.x_px == pytest.approx(505, abs=2)
+    assert out.r_px == pytest.approx(45, abs=2)
+
+
+def test_ball_at_the_frame_edge_is_found_with_the_box_clamped():
+    tr = BallTracker(CFG)
+    n = lock(tr, [ball(plate(), 60 - 5 * i, 400, 45) for i in range(3)])
+    out = tr.update(ball(plate(), 45, 400, 45), n * DT)
+    assert out.valid and tr.misses == 0 and out.x_px == pytest.approx(45, abs=2)
