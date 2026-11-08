@@ -6,7 +6,7 @@ from src.contracts import BallState, PlateCommand
 from src.io.settings import load
 from tests.contract import timed_board
 from tests.contract.timed_board import TimedBoard
-from tools import autotest
+from tools import autotest, autotest_board
 
 pytestmark = pytest.mark.sim
 
@@ -15,7 +15,7 @@ CHECKS = ["kill", "stale intent", "board timeout"]
 
 def board_run(board=TimedBoard):
     rig = autotest.sim_rig(load(), board)
-    return dict(autotest.board_checks(rig)), rig.tap.port
+    return dict(autotest_board.board_checks(rig)), rig.tap.port
 
 
 def test_sim_passes_every_check_in_well_under_a_second(capsys):
@@ -52,7 +52,7 @@ def test_board_that_stays_armed_after_d_fails_kill():
     assert results["kill"] == "S says armed 1"
 
 
-class DisarmsOnStale(autotest.Loop):
+class DisarmsOnStale(autotest_board.Loop):
     def tick(self, now, dt):
         rec = super().tick(now, dt)
         if self.stale:
@@ -61,7 +61,7 @@ class DisarmsOnStale(autotest.Loop):
 
 
 def test_loop_that_disarms_on_stale_fails_only_the_stale_check(monkeypatch):
-    monkeypatch.setattr(autotest, "Loop", DisarmsOnStale)
+    monkeypatch.setattr(autotest_board, "Loop", DisarmsOnStale)
     results, board = board_run()
     assert results == {
         "kill": None,
@@ -74,7 +74,7 @@ def test_loop_that_disarms_on_stale_fails_only_the_stale_check(monkeypatch):
 def test_board_that_never_times_out_fails_the_timeout_and_ends_disarmed(monkeypatch):
     monkeypatch.setattr(timed_board, "TIMEOUT_S", float("inf"))
     results, board = board_run()
-    assert results["board timeout"] == f"still armed after {autotest.QUIET_S} s quiet"
+    assert results["board timeout"] == f"still armed after {autotest_board.QUIET_S} s quiet"
     assert results["kill"] is None and results["stale intent"] is None
     assert board.sent[-1] == "D" and not board.armed
 
