@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from src.control import autocal as stepper
 from src.io.settings import BASE, load
 from src.sim.rig import TRUTH, SimLink, SimRig
 from tools import autocal
@@ -26,7 +27,25 @@ def value(out: str, key: str) -> str:
     return re.search(rf"^{key} = {{ value = (\S+?),", out, re.M).group(1)
 
 
-def stops_at_level(link: SimLink, level=(1515, 1475)) -> None:
+def watch(monkeypatch, link, bench, hook=None) -> dict:
+    # the stepper's latest pulse and how many pulses were out before it
+    mark = {"n": 0, "cmd": None}
+
+    class Spy(autocal.Autocal):
+        def step(self, now, obs):
+            cmd = super().step(now, obs)
+            mark["n"] = sum(1 for line in link.sent if line[0] == "P")
+            if cmd is not None:
+                mark["cmd"] = (cmd.x_us, cmd.y_us)
+            if hook:
+                hook(self)
+            return cmd
+
+    monkeypatch.setattr(autocal, "Autocal", Spy)
+    return mark
+
+
+def stops_at_level(link: SimLink, level=(1515, 1475), mark=None) -> None:
     # every pulse stays inside the startup range around level, the last ones are level, then D
     span = CFG["rig"]["startup_range_us"]
     sent = [tuple(int(v) for v in line.split()[1:]) for line in link.sent if line[0] == "P"]
@@ -34,6 +53,12 @@ def stops_at_level(link: SimLink, level=(1515, 1475)) -> None:
     last = max(i for i, p in enumerate(sent) if p != level)
     assert sent[last + 1 :] and all(p == level for p in sent[last + 1 :])
     assert link.sent[-1] == "D"
+    if mark is not None:
+        # past resends of the stepper's last pulse, the next one is level itself, not a ramp step
+        rest = [p for p in sent[mark["n"] :]]
+        while rest and rest[0] == mark["cmd"]:
+            rest.pop(0)
+        assert (rest[0] if rest else mark["cmd"]) == level
 
 
 @pytest.mark.parametrize("d_mm", [61.8, 38.0, 13.0])
@@ -89,26 +114,62 @@ def interrupt_at(world, after_s: float, hit=None):
     return sleep
 
 
-def test_ctrl_c_mid_pulse_levels_then_disarms():
+def test_ctrl_c_mid_pulse_levels_then_disarms(monkeypatch):
     cfg, world, link, bench = setup()
+    mark = watch(monkeypatch, link, bench)
     with pytest.raises(KeyboardInterrupt):
         autocal.run(bench, world, cfg, world.clock, interrupt_at(world, 1.4), lambda _: "")
-    stops_at_level(link)
+    stops_at_level(link, mark=mark)
 
 
-def test_lost_ball_levels_then_disarms():
+def aborts(monkeypatch, match, hide=None, control=None):
     cfg, world, link, bench = setup()
+    cfg["control"].update(control or {})
 
-    def hide():
-        world.visible = False
+    def hook(cal):
+        if hide and hide(cal):
+            world.visible = False
 
-    with pytest.raises(autocal.Abort, match="lost"):
-        autocal.run(bench, world, cfg, world.clock, interrupt_at(world, 1.4, hide), lambda _: "")
-    stops_at_level(link)
+    mark = watch(monkeypatch, link, bench, hook)
+    with pytest.raises(autocal.Abort, match=match):
+        autocal.run(bench, world, cfg, world.clock, world.advance, lambda _: "")
+    stops_at_level(link, mark=mark)
 
 
-def test_a_refused_pulse_stops_the_run():
+STATES = {
+    "probe": lambda cal: cal.M is None and len(cal.rows) > 30,
+    "hold": lambda cal: cal.hold,
+    "doublet": lambda cal: cal.M is not None and not cal.hold,
+}
+
+
+@pytest.mark.parametrize("state", STATES)
+def test_lost_ball_levels_then_disarms(monkeypatch, state):
+    aborts(monkeypatch, "lost", hide=STATES[state])
+
+
+@pytest.mark.parametrize(
+    "control,match",
+    [
+        ({"autocal_probe_rms_mm": 0.0}, "did not answer the probe"),
+        ({"hold_v_mm_s": 0.0}, "could not hold"),
+        ({"autocal_rim_margin_mm": 110.0}, "rim"),
+    ],
+    ids=["probe", "hold-timeout", "rim"],
+)
+def test_each_abort_levels_then_disarms(monkeypatch, control, match):
+    aborts(monkeypatch, match, control=control)
+
+
+def test_a_wrong_mapping_levels_then_disarms(monkeypatch):
+    fit = stepper.probe_fit
+    monkeypatch.setattr(stepper, "probe_fit", lambda *a: (lambda m, b, r: (-m, b, r))(*fit(*a)))
+    aborts(monkeypatch, "mapping looks wrong")
+
+
+def test_a_refused_pulse_mid_probe_stops_the_run(monkeypatch):
     cfg, world, link, bench = setup()
+    mark = watch(monkeypatch, link, bench)
     answer = link.raw
 
     def refuse_once(line):
@@ -121,7 +182,7 @@ def test_a_refused_pulse_stops_the_run():
     link.refused, link.raw = False, refuse_once
     with pytest.raises(autocal.Abort, match="ERR"):
         autocal.run(bench, world, cfg, world.clock, world.advance, lambda _: "")
-    stops_at_level(link)
+    stops_at_level(link, mark=mark)
 
 
 def test_a_missed_heartbeat_disarms_the_board():

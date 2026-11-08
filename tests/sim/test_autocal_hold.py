@@ -103,6 +103,17 @@ def test_a_wrong_mapping_stops_inside_the_clamp(monkeypatch, f, trims):
     assert np.abs(sent - cal.c0).max() <= CFG["rig"]["startup_range_us"]
 
 
+@pytest.mark.parametrize(
+    "f,trims",
+    [(FLIPS[0], (15, -25)), (FLIPS[0], (60, -60)), (FLIPS[1], (60, -60)), (FLIPS[2], (60, -60))],
+    ids=["negated", "negated-60", "swapped-60", "rotated-60"],
+)
+def test_a_wrong_mapping_reads_as_diverging(monkeypatch, f, trims):
+    bad_probe(monkeypatch, f)
+    cal, _ = run(trims, 37)
+    assert cal.aborted == DIVERGED
+
+
 @pytest.mark.parametrize("upd", [100.0, 57.0])
 @pytest.mark.parametrize("fric", [47.0, 15.0])
 @pytest.mark.parametrize("trims,yaw,mirror", [((60, -60), 37, True), ((-60, 60), 90, False)])
