@@ -71,6 +71,10 @@ def make_app(loop) -> FastAPI:
                     loop.arm()
                 if msg.get("kill"):
                     loop.kill()
+                if msg.get("race") == "start":
+                    loop.game.start()
+                elif msg.get("race") == "abort":
+                    loop.game.abort()
                 await sock.send_json(loop.snapshot())
         except WebSocketDisconnect:
             pass

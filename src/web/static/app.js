@@ -9,10 +9,11 @@ const cam = $("cam"), nocam = $("nocam"), ctx = $("race").getContext("2d");
 const padCtx = $("pad").getContext("2d");
 const nextCam = () => { cam.src = "/camera.jpg?" + performance.now(); };
 let camRetry;
+const typing = e => e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
 
 if (watch) {
   // a projector tab must never overwrite the player's keys
-  $("arm").disabled = $("kill").disabled = true;
+  $("arm").disabled = $("kill").disabled = $("racebtn").disabled = true;
 } else {
   // a focused button clicks on enter or space keyup, so space after a kill could re-arm
   const clickKeys = new Set(["Space", "Enter", "NumpadEnter"]);
@@ -21,11 +22,15 @@ if (watch) {
     if (e.code === "Space") { pending.kill = true; return; }
     if (e.code === "KeyC" && !e.metaKey && !e.ctrlKey) { pending.recentre = true; return; }
     if (keymap[e.code]) { held.add(e.code); e.preventDefault(); }
+    if (e.code === "KeyR" && !(e.repeat || e.metaKey || e.ctrlKey || e.altKey || typing(e))) {
+      pending.race = raceCmd();
+    }
   });
   addEventListener("keyup", e => { if (clickKeys.has(e.code)) e.preventDefault(); held.delete(e.code); });
   addEventListener("blur", () => held.clear());
   $("arm").onclick = e => { pending.arm = true; e.currentTarget.blur(); };
   $("kill").onclick = e => { pending.kill = true; e.currentTarget.blur(); };
+  $("racebtn").onclick = () => { pending.race = raceCmd(); };
 }
 cam.onload = () => { cam.hidden = false; nocam.hidden = true; nextCam(); };
 cam.onerror = () => {
@@ -79,6 +84,7 @@ function show(s) {
   $("tilt").textContent = `tilt x ${p.sent_x_deg.toFixed(2)}°  y ${p.sent_y_deg.toFixed(2)}°`;
   ring(s.ball_px);
   strip(cfg, s);
+  hud(s, maze);
   draw(ctx, cfg, maze, s);
   drawPad(padCtx, cfg, s);
 }

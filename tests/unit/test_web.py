@@ -16,6 +16,8 @@ pytestmark = pytest.mark.unit
 
 HUD_IDS = ("race", "timer", "speed", "cps", "banner", "ballpill", "kill", "seen", "pad", "level")
 PILL_IDS = ("hand", "beat", "board", "stale")
+RACE_IDS = ("racebtn", "count", "delta", "pen", "result")
+RACE_FIELDS = ("state", "elapsed_s", "reached", "delta_s", "penalty_s", "reason", "ghost_lap_s")
 
 
 @pytest.fixture
@@ -43,6 +45,53 @@ def test_race_hud_hides_without_a_race_and_tilt_reads_big(client):
     assert '$("timer").hidden = $("cps").hidden = s.race === undefined' in static(client, "app.js")
     css = static(client, "style.css")
     assert "#tilt { font: 24px" in css and "color: #fff; white-space: pre" in css
+
+
+def test_page_has_the_race_hud_and_loads_it_between_race_and_app(client):
+    page = client.get("/").text
+    assert all(f'id="{i}"' in page for i in RACE_IDS)
+    at = [page.index(f"/static/{f}") for f in ("race.js", "hud.js", "app.js")]
+    assert at == sorted(at)
+
+
+def test_hud_is_keyed_on_the_race_view(client):
+    js = static(client, "hud.js")
+    assert "function hud(s, maze)" in js and "hud(s, maze)" in static(client, "app.js")
+    assert all(f"r.{f}" in js for f in RACE_FIELDS)
+    assert "s.race && s.race.state" in js and "r.off_path === true" in js
+    assert "#56B4E9" in js and "#E69F00" in js and "FIRST LAP" in js
+    assert "fmtLap(" in js and "maze.checkpoints.length" in js
+    assert '"false start"' in js and "arm, then R" in js
+
+
+def test_race_js_lights_reached_gates_and_pulses_the_next(client):
+    js = static(client, "race.js")
+    assert "function gates(ctx, maze, r, race)" in js and "gates(ctx, maze, r, s.race)" in js
+    assert "race.reached" in js and "GATE_PULSE_MS" in js and "GATE_FLASH_MS" in js
+
+
+def test_r_key_and_race_button_send_a_one_shot_start_or_abort(client):
+    js = static(client, "app.js")
+    assert '"KeyR"' in js and "pending.race = raceCmd()" in js
+    assert all(g in js for g in ("e.repeat", "e.metaKey", "e.ctrlKey", "e.altKey"))
+    assert '"INPUT"' in js and '"TEXTAREA"' in js
+    hud = static(client, "hud.js")
+    assert '"abort" : "start"' in hud and '["countdown", "running"]' in hud
+
+
+def test_watch_tab_disables_the_race_button(client):
+    assert '$("racebtn").disabled = true' in static(client, "app.js")
+
+
+def test_ws_race_start_and_abort_reach_the_game():
+    calls = []
+    game = SimpleNamespace(start=lambda: calls.append("start"), abort=lambda: calls.append("abort"))
+    loop = SimpleNamespace(cfg=load(), game=game, snapshot=lambda: {})
+    with TestClient(make_app(loop)).websocket_connect("/ws") as sock:
+        for msg in ({"race": "start"}, {}, {"race": "abort"}, {"race": "nope"}):
+            sock.send_json(msg)
+            sock.receive_json()
+    assert calls == ["start", "abort"]
 
 
 def test_page_has_a_hand_pill_keyed_on_the_snapshot_flags(client):
