@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from src.inputs.keyboard import KeyboardInput
 from src.io.ports import Frame
 from src.io.settings import ROOT, load
+from src.safety import SafetyState
 from src.web.server import JPEG_PERIOD_S, make_app
 
 pytestmark = pytest.mark.unit
@@ -183,6 +184,27 @@ def test_ws_save_that_raises_keeps_the_socket_open():
         sock.send_json({"kill": True})
         sock.receive_json()
     assert calls == ["kill"]
+
+
+def _safety_loop():
+    st = SafetyState()
+    return st, SimpleNamespace(cfg=load(), arm=st.arm, kill=st.kill, snapshot=lambda: {})
+
+
+def test_ws_arm_and_kill_in_one_message_from_disarmed_stays_disarmed():
+    st, loop = _safety_loop()
+    with TestClient(make_app(loop)).websocket_connect("/ws") as sock:
+        sock.send_json({"arm": True, "kill": True})
+        sock.receive_json()
+    assert not st.armed
+
+
+def test_ws_arm_alone_from_disarmed_arms():
+    st, loop = _safety_loop()
+    with TestClient(make_app(loop)).websocket_connect("/ws") as sock:
+        sock.send_json({"arm": True})
+        sock.receive_json()
+    assert st.armed and not st.killing
 
 
 def test_page_has_a_results_panel_loaded_after_hud_and_before_app(client):

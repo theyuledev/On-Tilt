@@ -78,7 +78,7 @@ def make_app(loop) -> FastAPI:
                         x, y = float(msg["x"]), float(msg["y"])
                         if math.isfinite(x + y):
                             loop.keys.set(x, y)
-                    if msg.get("arm"):
+                    if msg.get("arm") and not msg.get("kill"):
                         loop.arm()
                     game = getattr(loop, "game", None)
                     if game is not None and msg.get("race") == "start":
