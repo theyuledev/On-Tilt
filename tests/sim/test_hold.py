@@ -5,11 +5,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.app import Loop
-from src.contracts import BallState
+from src.contracts import BallState, PlateCommand
 from src.control.pulse_map import center, tilt_to_pulse
 from src.io.serial_link import BoardLink, SerialActuator
 from src.io.settings import load
-from src.modes import hand
+from src.modes import fade_in, hand
 from src.web.server import make_app
 from tests.contract.fake_board import FakeBoard
 
@@ -207,3 +207,9 @@ def test_page_has_a_hold_button_an_h_key_and_a_holding_pill(loop):
     assert '$("hold").onclick = e => { pending.hold = true; e.currentTarget.blur(); }' in js
     assert '$("arm").disabled = $("hold").disabled = $("kill").disabled' in js
     assert 's.armed ? (s.holding ? "holding" : "armed")' in js
+
+
+def test_a_zero_fade_turns_the_fade_off():
+    cmd = PlateCommand(3.0, -2.0)
+    for fade_s in (0.0, -1.0):
+        assert fade_in(cmd, False, 0.0, {"arm_fade_s": fade_s}) == cmd

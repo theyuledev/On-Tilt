@@ -87,5 +87,6 @@ def fade_in(cmd: PlateCommand, holding: bool, armed_s: float, rig: dict) -> Plat
     """Level while holding, else the tilt fades in from level after an arm."""
     if holding:
         return LEVEL
-    k = min(1.0, armed_s / rig["arm_fade_s"])
+    fade_s = rig["arm_fade_s"]
+    k = 1.0 if fade_s <= 0 else min(1.0, armed_s / fade_s)
     return PlateCommand(cmd.tilt_x_deg * k, cmd.tilt_y_deg * k)
