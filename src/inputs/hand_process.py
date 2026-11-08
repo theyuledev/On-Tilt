@@ -24,7 +24,7 @@ def run(
     show=lambda img, intent: None,
 ) -> None:
     """Runs the model on the newest frame; frames that queued up while it ran are dropped."""
-    shown = float("-inf")
+    shown, view_ok = float("-inf"), True
     while frames.running:
         frame = frames.read()
         if frame is None:
@@ -41,7 +41,13 @@ def run(
         )
         if now - shown >= JPEG_PERIOD_S:
             shown = now
-            show(frame.image, intent)
+            try:
+                show(frame.image, intent)
+            except Exception as e:
+                # the view is display only, it must never stop the intents
+                if view_ok:
+                    print(f"hand view off: {e!r}")
+                view_ok = False
 
 
 def main() -> None:

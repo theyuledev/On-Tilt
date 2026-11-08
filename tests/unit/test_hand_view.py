@@ -127,3 +127,23 @@ def test_page_shows_the_hand_cam_above_the_results_and_retries_it():
     js = client.get("/static/app.js").text
     assert '"/hand.jpg?"' in js and "handRetry = setTimeout(nextHand, 1000)" in js
     assert '$("handtilt").textContent = `plate x ${p.sent_x_deg' in js
+
+
+def test_a_broken_view_never_stops_the_intents(capsys):
+    sent, tries = [], []
+
+    def broken(img, intent):
+        tries.append(intent)
+        raise OSError("disk full")
+
+    times = iter(i * STEP_S for i in range(100))
+    hand_process.run(
+        Frames(10),
+        lambda img, t: (0.5, 0.5),
+        HandIntent(CFG),
+        lambda intent, **flags: sent.append(intent),
+        clock=lambda: next(times),
+        show=broken,
+    )
+    assert len(sent) == 10 and len(tries) == 5
+    assert capsys.readouterr().out == "hand view off: OSError('disk full')\n"
