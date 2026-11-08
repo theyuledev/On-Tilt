@@ -12,6 +12,7 @@ from src.control.pulse_map import tilt_to_pulse
 from src.io.settings import load
 from src.modes import make_mode
 from src.sim.ball import roll
+from src.sim.fit import AFTER_MM, RELEASE_MM, RELEASE_S
 from src.sim.plate import SimActuator
 from src.vision.px_to_mm import ball_state
 from src.vision.tracker import BallPx
@@ -88,7 +89,7 @@ def measure(horn, scale):
     return {
         "after_5_s": max(worst(b, 5) for b in holds),
         "after_15_s": max(worst(b, 15) for b in holds),
-        "settle_60_s": settle_s(run(cfg, (60, 0, 0, 0), seconds=5.0)),
+        "settle_60_s": settle_s(run(cfg, (RELEASE_MM, 0, 0, 0), seconds=5.0)),
     }
 
 
@@ -101,14 +102,14 @@ def name(case):
 
 @pytest.mark.parametrize("case", CASES, ids=name)
 def test_worst_radius_after_5_s_under_15_mm(case):
-    assert measure(*case)["after_5_s"] < 15
+    assert measure(*case)["after_5_s"] < AFTER_MM[5.0]
 
 
 @pytest.mark.parametrize("case", CASES, ids=name)
 def test_worst_radius_after_15_s_under_12_mm(case):
-    assert measure(*case)["after_15_s"] < 12
+    assert measure(*case)["after_15_s"] < AFTER_MM[15.0]
 
 
 @pytest.mark.parametrize("case", CASES, ids=name)
 def test_60_mm_release_stays_inside_20_mm_in_time(case):
-    assert measure(*case)["settle_60_s"] <= {1.0: 2.5, 0.7: 3.5}[case[1]]
+    assert measure(*case)["settle_60_s"] <= RELEASE_S[case[1]]
