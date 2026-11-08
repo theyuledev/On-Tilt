@@ -25,6 +25,7 @@ class Loop:
         frames: FrameSource | None = None,
         actuator: TiltActuator | None = None,
         exposure: str | None = None,
+        game=None,
     ):
         self.cfg = cfg
         self.bus = Bus()
@@ -45,6 +46,7 @@ class Loop:
         self.est = BallEstimator(cfg)
         self.exposure = exposure
         self.last: RunLogRecord | None = None
+        self.game = game
 
     @property
     def mode(self) -> str:
@@ -80,6 +82,12 @@ class Loop:
             # an old frame says nothing about where the ball is now
             ball = replace(ball, valid=False)
         intent, stale = self._intent(now)
+        if self.game is not None:
+            want = self.game.mode() or self.cfg["control"]["mode"]
+            if want != self.mode:
+                self.mode = want
+                if self.safety.armed and self.arm_blocked:
+                    self.kill()
 
         if not self.safety.armed or self.safety.killing or stale:
             self.step = make_mode(self.mode, self.cfg)  # fresh mode state, no kick on arm
@@ -187,4 +195,6 @@ class Loop:
         snap["est"] = [e.x_mm, e.y_mm, e.vx_mm_s, e.vy_mm_s] if e is not None and e.valid else None
         snap["exposure"] = self.exposure
         snap["arm_blocked"] = self.arm_blocked
+        if self.game is not None:
+            snap["race"] = self.game.view()
         return snap

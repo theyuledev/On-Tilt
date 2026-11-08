@@ -20,20 +20,25 @@ class Race:
     last_valid_t: float | None = None
     reason: str | None = None
     end_s: float | None = None
+    cal: dict | None = None
+    trimmed: bool = False
 
 
-def start(race: Race, rec: RunLogRecord, killing: bool, board_lost: bool, maze, game: dict) -> Race:
+def start(
+    race: Race, rec: RunLogRecord, killing: bool, board_lost: bool, maze, game: dict, cal=False
+) -> Race:
     if race.state not in ("idle", "finished", "dnf"):
         return race
     if not rec.armed or killing or board_lost or not rec.ball.valid:
         return race
-    if not in_ring(rec.ball, maze.start, game["checkpoint_r_mm"]):
-        return race
-    return Race("countdown", go_s=rec.t_s + game["countdown_s"], last_valid_t=rec.t_s)
+    if cal:
+        return Race("calibrating", last_valid_t=rec.t_s)
+    return _staging(Race("staging", last_valid_t=rec.t_s), rec, False, False, maze, game)
 
 
 def abort(race: Race) -> Race:
-    return Race() if race.state in ("countdown", "running") else race
+    live = ("calibrating", "staging", "countdown", "running")
+    return Race() if race.state in live else race
 
 
 def advance(
@@ -45,7 +50,12 @@ def advance(
     game: dict,
     rig: dict,
     step: Step,
+    status: dict | None = None,
 ) -> Race:
+    if race.state == "calibrating":
+        return _calibrating(race, rec, killing, board_lost, maze, game, status)
+    if race.state == "staging":
+        return _staging(race, rec, killing, board_lost, maze, game)
     if race.state == "countdown":
         return _countdown(race, rec, killing, board_lost, maze, game)
     if race.state == "running":
@@ -58,6 +68,29 @@ def _seen(race: Race, rec: RunLogRecord, game: dict) -> tuple[Race, bool]:
     if rec.ball.valid:
         return replace(race, last_valid_t=rec.t_s), False
     return race, rec.t_s - race.last_valid_t > game["lost_s"]
+
+
+def _calibrating(race, rec, killing, board_lost, maze, game, status) -> Race:
+    if killing or board_lost or not rec.armed:
+        return Race()
+    state = status.get("state") if status else None
+    if state == "failed":
+        return Race(reason=status.get("msg") or "calibration failed")
+    if state == "done":
+        return _staging(Race("staging", last_valid_t=rec.t_s), rec, False, False, maze, game)
+    if state == "waiting" and race.trimmed:
+        # the pass started over, so a kill or a stale intent reset it
+        return Race(reason="calibration interrupted")
+    trimmed = race.trimmed or state == "trimming"
+    return replace(race, cal=dict(status) if status else None, trimmed=trimmed)
+
+
+def _staging(race, rec, killing, board_lost, maze, game) -> Race:
+    if killing or board_lost or not rec.armed:
+        return Race()
+    if rec.ball.valid and in_ring(rec.ball, maze.start, game["checkpoint_r_mm"]):
+        return Race("countdown", go_s=rec.t_s + game["countdown_s"], last_valid_t=rec.t_s)
+    return race
 
 
 def _countdown(race, rec, killing, board_lost, maze, game) -> Race:
@@ -103,7 +136,7 @@ def _running(race, rec, killing, board_lost, maze, game, rig, step) -> Race:
 
 
 def elapsed(race: Race, rec: RunLogRecord) -> float | None:
-    if race.state == "idle":
+    if race.state in ("idle", "calibrating", "staging"):
         return None
     if race.state == "countdown":
         return rec.t_s - race.go_s
@@ -162,4 +195,5 @@ def view(
         "score": score,
         "reason": race.reason,
         "ghost_lap_s": trace[-1][0] if trace else None,
+        "cal": race.cal,
     }

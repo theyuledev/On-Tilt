@@ -92,7 +92,16 @@ def test_r_key_and_race_button_send_a_one_shot_start_or_abort(client):
     assert all(g in js for g in ("e.repeat", "e.metaKey", "e.ctrlKey", "e.altKey"))
     assert '"INPUT"' in js and '"TEXTAREA"' in js
     hud = static(client, "hud.js")
-    assert '"abort" : "start"' in hud and '["countdown", "running"]' in hud
+    assert '"abort" : "start"' in hud
+    assert 'PRE = ["calibrating", "staging"]' in hud and '[...PRE, "countdown", "running"]' in hud
+
+
+def test_hud_shows_no_race_text_while_calibrating_or_staging(client):
+    hud = static(client, "hud.js")
+    guard = hud.index("if (!r || PRE.includes(r.state))")
+    assert 'if (r) $("timer").textContent = $("cps").textContent = ""' in hud
+    assert guard < hud.index("countdown(r, was);") < hud.index("split(r, was, performance")
+    assert 'toggle("racing", live && !PRE.includes(r.state))' in hud
 
 
 def test_watch_tab_disables_the_race_button(client):

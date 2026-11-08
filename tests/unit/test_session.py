@@ -1,6 +1,6 @@
 import pytest
 
-from src.games import ghost, session
+from src.games import ghost, race, session
 from src.games.progress import in_ring
 from src.games.session import Game
 from src.io.settings import load
@@ -170,3 +170,93 @@ def test_view_is_empty_before_the_first_tick():
     assert g.view() == {}
     g.tick(rec(0.0), False, False)
     assert g.view()["state"] == "idle"
+
+
+def test_a_race_bug_turns_the_race_off_and_not_the_session(capsys):
+    calls = []
+
+    def flaky(p, r, maze, game, rig):
+        calls.append(r.t_s)
+        if len(calls) == 3:
+            raise ValueError("bad gate")
+        return fake_step(p, r, maze, game, rig)
+
+    g = Game(CFG, MAZE, flaky)
+    race_to_finish(g)
+    assert g.off and len(calls) == 3
+    assert capsys.readouterr().out.count("race off") == 1
+    assert g.mode() is None and g.view() == {}
+    last = g.last
+    g.tick(rec(20.0), False, False)
+    g.start()
+    assert g.last is last and len(calls) == 3
+
+
+def test_a_bad_ghost_file_still_builds_the_game(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(session, "ROOT", tmp_path)
+    (tmp_path / "bad.jsonl").write_text("{nope\n")
+    g = Game({**CFG, "game": {**CFG["game"], "ghost": "bad.jsonl"}}, MAZE, fake_step)
+    assert g.trace == [] and g.splits == []
+    assert capsys.readouterr().out.count("ghost off") == 1
+
+
+class Cal:
+    def __init__(self):
+        self.status = None
+
+    def __call__(self):
+        return self.status
+
+    def set(self, state, msg=""):
+        self.status = {"state": state, "progress": 0.0, "msg": msg}
+
+
+def cal_game(x=-100.0):
+    status = Cal()
+    g = Game(CFG, MAZE, fake_step, cal=status)
+    g.tick(rec(0.0, x), False, False)
+    g.start()
+    return g, status
+
+
+def test_start_with_cal_calibrates_then_stages_or_counts_down():
+    g, status = cal_game(x=-60.0)
+    assert g.race.state == "calibrating" and g.mode() == "selfcal"
+    g.tick(rec(0.5, -60.0), False, False)
+    assert g.race.state == "calibrating"
+    status.set("trimming")
+    g.tick(rec(1.0, -60.0), False, False)
+    assert g.view()["cal"]["state"] == "trimming"
+    status.set("done")
+    g.tick(rec(2.0, -60.0), False, False)
+    assert g.race.state == "staging" and g.mode() == "hand"
+    g, status = cal_game()
+    status.set("done")
+    g.tick(rec(1.0), False, False)
+    assert g.race.state == "countdown"
+
+
+def test_a_failed_or_killed_calibration_goes_back_to_idle():
+    g, status = cal_game()
+    status.set("failed", "no ball")
+    g.tick(rec(1.0), False, False)
+    assert (g.race.state, g.race.reason, g.mode()) == ("idle", "no ball", None)
+    g, status = cal_game()
+    status.set("trimming")
+    g.tick(rec(1.0), True, False)
+    assert g.race == race.Race()
+
+
+def test_start_outside_the_ring_stages_until_the_ball_rolls_in():
+    g = Game(CFG, MAZE, fake_step)
+    g.tick(rec(0.0, -60.0), False, False)
+    g.start()
+    assert g.race.state == "staging" and g.mode() == "hand"
+    g.tick(rec(1.0), False, False)
+    assert (g.race.state, g.race.go_s) == ("countdown", 4.0)
+    g.abort()
+    g.tick(rec(2.0, -60.0), False, False)
+    g.start()
+    assert g.race.state == "staging"
+    g.abort()
+    assert g.race == race.Race() and g.mode() is None

@@ -95,7 +95,7 @@ def test_start_needs_armed_not_killing_valid_ball_in_ring():
     assert race.start(race.Race(), rec(0.0), True, False, MAZE, GAME).state == "idle"
     assert race.start(race.Race(), rec(0.0), False, True, MAZE, GAME).state == "idle"
     assert race.start(race.Race(), rec(0.0, valid=False), False, False, MAZE, GAME).state == "idle"
-    assert race.start(race.Race(), rec(0.0, x=-60.0), False, False, MAZE, GAME).state == "idle"
+    assert race.start(race.Race(), rec(0.0, x=-60.0), False, False, MAZE, GAME).state == "staging"
 
 
 def test_start_only_from_idle_finished_dnf():
@@ -207,6 +207,7 @@ def test_abort_only_from_countdown_and_running():
 def test_view_shape_and_negative_countdown_elapsed():
     v = race.view(countdown(), rec(1.0), GAME, [], [])
     keys = "state elapsed_s reached penalty_s off_path delta_s ghost_mm score reason ghost_lap_s"
+    keys += " cal"
     assert set(v) == set(keys.split())
     assert v["elapsed_s"] == -2.0
     assert v["score"] is None
@@ -246,3 +247,78 @@ def test_delta_is_my_split_minus_the_ghost_split():
 
 def test_progress_defaults():
     assert Progress() == Progress(0, 0.0, None, False, (), None)
+
+
+def staging(t=0.0):
+    return race.start(race.Race(), rec(t, x=-60.0), False, False, MAZE, GAME)
+
+
+def calibrating(t=0.0, x=-100.0):
+    return race.start(race.Race(), rec(t, x), False, False, MAZE, GAME, cal=True)
+
+
+def cal(r, record, state, msg="", killing=False):
+    status = {"state": state, "progress": 0.5, "msg": msg}
+    return race.advance(r, record, killing, False, MAZE, GAME, RIG, fake_step, status)
+
+
+def test_in_ring_start_without_cal_still_counts_down_at_once():
+    r = countdown(1.0)
+    assert (r.state, r.go_s) == ("countdown", 4.0)
+
+
+def test_staging_waits_for_the_ball_to_roll_into_the_ring():
+    r = staging()
+    assert r.state == "staging"
+    r = adv(r, rec(100.0, x=-60.0))
+    assert r.state == "staging"
+    assert adv(r, rec(101.0, valid=False)).state == "staging"
+    r = adv(r, rec(101.0))
+    assert (r.state, r.go_s, r.last_valid_t) == ("countdown", 104.0, 101.0)
+
+
+@pytest.mark.parametrize(
+    "kw", [{"killing": True}, {"board_lost": True}, {"record": rec(1.0, x=-60.0, armed=False)}]
+)
+def test_kill_disarm_or_board_lost_drops_staging_and_calibrating_to_idle(kw):
+    record = kw.pop("record", rec(1.0, x=-60.0))
+    for r in (staging(), calibrating()):
+        assert adv(r, record, **kw) == race.Race()
+
+
+def test_calibrating_holds_until_the_pass_is_done():
+    r = calibrating()
+    assert r.state == "calibrating"
+    r = race.advance(r, rec(1.0), False, False, MAZE, GAME, RIG, fake_step)
+    assert r.state == "calibrating" and r.cal is None
+    r = cal(r, rec(2.0), "waiting")
+    assert r.state == "calibrating" and not r.trimmed
+    r = cal(r, rec(3.0), "trimming")
+    assert r.state == "calibrating" and r.trimmed
+    assert r.cal == {"state": "trimming", "progress": 0.5, "msg": ""}
+    assert cal(r, rec(4.0, x=-60.0), "done").state == "staging"
+    r = cal(r, rec(4.0), "done")
+    assert (r.state, r.go_s) == ("countdown", 7.0)
+
+
+def test_a_failed_or_restarted_pass_ends_the_race_with_why():
+    r = cal(calibrating(), rec(1.0), "trimming")
+    assert cal(r, rec(2.0), "failed", "plate stuck") == race.Race(reason="plate stuck")
+    assert cal(r, rec(2.0), "failed").reason == "calibration failed"
+    assert cal(r, rec(2.0), "waiting") == race.Race(reason="calibration interrupted")
+    assert cal(calibrating(), rec(2.0), "trimming", killing=True) == race.Race()
+
+
+def test_abort_from_calibrating_and_staging():
+    assert race.abort(calibrating()) == race.Race()
+    assert race.abort(staging()) == race.Race()
+
+
+def test_view_while_calibrating_and_staging():
+    tr = [[0.0, -60.0, 0.0], [2.0, 40.0, 0.0]]
+    r = cal(calibrating(), rec(1.0), "trimming")
+    v = race.view(r, rec(1.0), GAME, tr, [])
+    assert (v["state"], v["elapsed_s"], v["ghost_mm"]) == ("calibrating", None, None)
+    assert v["cal"]["state"] == "trimming"
+    v = race.view(staging(), rec(1.0), GAME, tr, [])
+    assert (v["state"], v["elapsed_s"], v["ghost_mm"], v["cal"]) == ("staging", None, None, None)
