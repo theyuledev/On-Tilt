@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
+from src.inputs.keyboard import KeyboardInput
 from src.io.ports import Frame
 from src.io.settings import ROOT, load
 from src.web.server import JPEG_PERIOD_S, make_app
@@ -172,3 +173,16 @@ def test_camera_jpeg_full_is_full_res_and_skips_the_cache(monkeypatch):
 def test_camera_jpeg_404s_without_a_frame():
     loop = SimpleNamespace(cfg=load(), camera_lost=False, frame=None)
     assert TestClient(make_app(loop)).get("/camera.jpg").status_code == 404
+
+
+def test_ws_ignores_keys_that_are_not_finite():
+    keys = KeyboardInput()
+    loop = SimpleNamespace(cfg=load(), keys=keys, snapshot=lambda: {})
+    with TestClient(make_app(loop)).websocket_connect("/ws") as ws:
+        for msg in ({"x": "nan", "y": 0}, {"x": 0.5, "y": "inf"}):
+            ws.send_json(msg)
+            ws.receive_json()
+        assert not keys.latest().valid
+        ws.send_json({"x": 0.5, "y": -0.5})
+        ws.receive_json()
+    assert keys.latest().valid and (keys.latest().x, keys.latest().y) == (0.5, -0.5)

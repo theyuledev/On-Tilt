@@ -1,3 +1,4 @@
+import math
 import time
 import tomllib
 from pathlib import Path
@@ -64,7 +65,7 @@ def make_app(loop) -> FastAPI:
         try:
             while True:
                 msg = await sock.receive_json()
-                if "x" in msg and "y" in msg:
+                if "x" in msg and "y" in msg and math.isfinite(float(msg["x"]) + float(msg["y"])):
                     loop.keys.set(float(msg["x"]), float(msg["y"]))
                 if msg.get("arm"):
                     loop.arm()

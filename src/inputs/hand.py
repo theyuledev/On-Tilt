@@ -1,4 +1,5 @@
 import json
+import math
 import socket
 from dataclasses import asdict
 
@@ -95,6 +96,8 @@ class HandInput:
             except BlockingIOError:
                 return self._intent
             msg = json.loads(data)
+            if not (math.isfinite(msg["x"]) and math.isfinite(msg["y"])):
+                continue
             # an intent at all means a palm was there, older senders only send the intent
             self.seen = msg.pop("seen", True)
             self.calibrating = msg.pop("calibrating", False)
