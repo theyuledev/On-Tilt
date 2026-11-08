@@ -59,11 +59,15 @@ def note_centre(gray: np.ndarray, p: Point, h: int, thr: float) -> Point | None:
     for _ in range(2):
         x0, y0 = max(0, int(round(p[0])) - h), max(0, int(round(p[1])) - h)
         crop = gray[y0 : y0 + 2 * h, x0 : x0 + 2 * h]
-        note = (crop > thr).astype(np.uint8)
-        m = cv2.moments(note, binaryImage=True)
-        if m["m00"] < 30:
+        # the biggest bright patch in the window, the other note may poke into it
+        n, labels, stats, cents = cv2.connectedComponentsWithStats((crop > thr).astype(np.uint8))
+        if n < 2:
             return None
-        p = (x0 + m["m10"] / m["m00"], y0 + m["m01"] / m["m00"])
+        k = 1 + stats[1:, cv2.CC_STAT_AREA].argmax()
+        if stats[k, cv2.CC_STAT_AREA] < 30:
+            return None
+        note = (labels == k).astype(np.uint8)
+        p = (x0 + cents[k, 0], y0 + cents[k, 1])
     dot = dark_dot(crop, note)
     return p if dot is None else (x0 + dot[0], y0 + dot[1])
 
