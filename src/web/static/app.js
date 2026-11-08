@@ -14,15 +14,18 @@ if (watch) {
   // a projector tab must never overwrite the player's keys
   $("arm").disabled = $("kill").disabled = true;
 } else {
+  // a focused button clicks on enter or space keyup, so space after a kill could re-arm
+  const clickKeys = new Set(["Space", "Enter", "NumpadEnter"]);
   addEventListener("keydown", e => {
-    if (e.code === "Space") { pending.kill = true; e.preventDefault(); return; }
+    if (clickKeys.has(e.code)) e.preventDefault();
+    if (e.code === "Space") { pending.kill = true; return; }
     if (e.code === "KeyC" && !e.metaKey && !e.ctrlKey) { pending.recentre = true; return; }
     if (keymap[e.code]) { held.add(e.code); e.preventDefault(); }
   });
-  addEventListener("keyup", e => held.delete(e.code));
+  addEventListener("keyup", e => { if (clickKeys.has(e.code)) e.preventDefault(); held.delete(e.code); });
   addEventListener("blur", () => held.clear());
-  $("arm").onclick = () => { pending.arm = true; };
-  $("kill").onclick = () => { pending.kill = true; };
+  $("arm").onclick = e => { pending.arm = true; e.currentTarget.blur(); };
+  $("kill").onclick = e => { pending.kill = true; e.currentTarget.blur(); };
 }
 cam.onload = () => { cam.hidden = false; nocam.hidden = true; nextCam(); };
 cam.onerror = () => {
