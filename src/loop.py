@@ -187,4 +187,5 @@ class Loop:
         snap["est"] = [e.x_mm, e.y_mm, e.vx_mm_s, e.vy_mm_s] if e is not None and e.valid else None
         snap["exposure"] = self.exposure
         snap["arm_blocked"] = self.arm_blocked
+        snap["guard"] = self.step.guard_view() if hasattr(self.step, "guard_view") else None
         return snap

@@ -28,7 +28,9 @@ def ticks(loop, clock, n, key=None, dt=0.01):
 
 
 def test_key_tilts_sim_plate_through_safety_then_kill_levels_and_disarms(clock):
-    loop = Loop(load())
+    cfg = load()
+    cfg["control"]["guard_on"] = False  # full key tilt reaches the safety clamp
+    loop = Loop(cfg)
     rig = loop.cfg["rig"]
     loop.arm()
 
