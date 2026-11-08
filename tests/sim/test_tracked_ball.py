@@ -67,6 +67,13 @@ def test_no_new_result_keeps_the_ball_and_an_old_ball_goes_invalid(rig):
     assert loop.tick(1.0 + stale + 0.02, 0.01).ball.valid
 
 
+def test_a_ball_stamped_in_the_future_is_invalid(rig):
+    loop, frames = rig
+    see(frames, 50.0, 100.0)
+    rec = loop.tick(1.0, 0.01)
+    assert not rec.ball.valid and rec.plate_cmd == PlateCommand(0.0, 0.0)
+
+
 def test_lost_lock_is_an_invalid_ball_with_no_overlay(rig):
     loop, frames = rig
     see(frames, 50.0, 1.0)

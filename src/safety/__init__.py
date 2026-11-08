@@ -35,8 +35,8 @@ def _clamp(v: float, lo: float, hi: float) -> float:
 
 
 def aged(ball: BallState, now: float, rig: dict) -> BallState:
-    # an old frame says nothing about where the ball is now
-    return replace(ball, valid=False) if now - ball.t_s > rig["stale_intent_s"] else ball
+    # an old, future or nan stamp says nothing about where the ball is now
+    return ball if abs(now - ball.t_s) <= rig["stale_intent_s"] else replace(ball, valid=False)
 
 
 def page_quiet(armed: bool, page_t: float | None, now: float, quiet_s: float) -> bool:

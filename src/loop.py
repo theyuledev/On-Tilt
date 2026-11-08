@@ -115,14 +115,14 @@ class Loop:
         intent = self.keys.latest()
         if self.hand is not None:
             hand = self.hand.latest()
-            fresh = now - hand.t_s <= rig["stale_intent_s"]
+            fresh = abs(now - hand.t_s) <= rig["stale_intent_s"]
             if hand.valid and fresh:
                 intent = hand
             # a dead hand process must not leave the page saying the hand is live
             self.hand_seen = fresh and self.hand.seen
             self.hand_calibrating = fresh and self.hand.calibrating
         self.page_stale = safety.page_quiet(self.safety.armed, self.page_t, now, quiet_s)
-        self.stale = now - intent.t_s > rig["stale_intent_s"] or self.page_stale
+        self.stale = not abs(now - intent.t_s) <= rig["stale_intent_s"] or self.page_stale
         return intent, self.stale
 
     def _see(self) -> None:
