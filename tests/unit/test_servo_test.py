@@ -13,7 +13,7 @@ from tests.contract.fake_board import FakeBoard
 from tests.unit.test_plate_pose import SIZE, STANDARD, pose, render
 from tests.unit.test_pointer import frame
 from tools.bench import Bench
-from tools.servo_test import guarded, load_csv, run, save
+from tools.servo_test import annotate_pair, guarded, load_csv, run, save
 
 pytestmark = pytest.mark.unit
 TICK = 0.02
@@ -60,6 +60,16 @@ def test_run_picks_the_horn_pair_and_logs_both_command_times(bench):
     assert len(commands) == 8 and all(c[0] < c[1] for c in commands)
     assert commands[0][2:] == (1650, 1500, "find") and commands[-1][4] == "hold"
     assert len(rows) >= 3 and all(a == pytest.approx(4, abs=0.5) for _, a in rows)
+
+
+def test_annotate_pair_writes_the_picked_frame_and_says_where(tmp_path, capsys):
+    tracker = PairTracker(1650)
+    tracker.update(frame(0), 0.0, 1500)
+    tracker.update(frame(4), 0.1, 1650)
+    annotate_pair(tracker, tmp_path / "s.jpg")
+    assert (tmp_path / "s.jpg").stat().st_size > 0
+    out = capsys.readouterr().out
+    assert out.startswith("pair at (") and "px apart" in out
 
 
 def test_run_on_the_y_axis_tracks_the_plate(bench):
