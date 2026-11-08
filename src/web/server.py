@@ -45,7 +45,11 @@ def make_app(loop) -> FastAPI:
 
     @app.get("/race/maze")
     def race_maze():
-        m = maze.load(loop.cfg["game"]["maze"])
+        try:
+            m = maze.load(loop.cfg["game"]["maze"])
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            print(f"no maze: {e!r}")
+            return Response(status_code=404)
         return {
             "points": [list(p) for p in m.points],
             "checkpoints": list(m.checkpoints),

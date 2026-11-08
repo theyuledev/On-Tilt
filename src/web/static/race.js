@@ -140,9 +140,11 @@ function draw(ctx, cfg, maze, s) {
   if (g) keep(ghostTrail, g, s.t_s, TRAIL_S); else ghostTrail.length = 0;
   ctx.setTransform(px / mm, 0, 0, -px / mm, px / 2, px / 2);
   plate(ctx, mm);
-  if (maze.walls) walls(ctx, maze);
-  ribbon(ctx, maze, cfg.ball_d_mm);
-  gates(ctx, maze, r, s.race);
+  if (maze) {
+    if (maze.walls) walls(ctx, maze);
+    ribbon(ctx, maze, cfg.ball_d_mm);
+    gates(ctx, maze, r, s.race);
+  }
   tail(ctx, trail, s.t_s, TRAIL_S, r / 2, PLAYER, 1);
   if (g) ghost(ctx, s.race, r, k, s.t_s);
   // the player's ball goes on last so nothing drawn later can cover it

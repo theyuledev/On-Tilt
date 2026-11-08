@@ -405,7 +405,7 @@ def test_board_draws_cmd_real_ball_bars_and_the_ghost_hand(client):
 def race_maze(name):
     cfg = load()
     cfg["game"]["maze"] = name
-    return TestClient(make_app(SimpleNamespace(cfg=cfg))).get("/race/maze").json()
+    return TestClient(make_app(SimpleNamespace(cfg=cfg))).get("/race/maze")
 
 
 def test_race_maze_is_the_configured_maze_as_lists(client):
@@ -419,13 +419,40 @@ def test_race_maze_is_the_configured_maze_as_lists(client):
 
 
 def test_race_maze_sends_the_walls_and_none_for_the_square(monkeypatch, tmp_path):
-    assert race_maze("square")["walls"] == []
+    assert race_maze("square").json()["walls"] == []
     (tmp_path / "w.toml").write_text(
         "points = [[0, 0], [10, 0]]\ncheckpoints = [1]\nstart = [0, 0]\n"
         "walls = [[[-20, 5], [20, 5]], [[-20, -5], [0, -5], [20, -5]]]\n"
     )
     monkeypatch.setattr(maze, "load", partial(maze.load, root=tmp_path))
-    assert race_maze("w")["walls"] == [[[-20, 5], [20, 5]], [[-20, -5], [0, -5], [20, -5]]]
+    assert race_maze("w").json()["walls"] == [[[-20, 5], [20, 5]], [[-20, -5], [0, -5], [20, -5]]]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        None,
+        "not toml [",
+        "checkpoints = [0]\nstart = [0, 0]\n",
+        "points = [[0, 0]]\ncheckpoints = [3]\nstart = [0, 0]\n",
+        "points = 5\ncheckpoints = [0]\nstart = [0, 0]\n",
+    ],
+)
+def test_race_maze_is_404_for_a_missing_or_bad_maze(monkeypatch, tmp_path, body):
+    if body is not None:
+        (tmp_path / "bad.toml").write_text(body)
+    monkeypatch.setattr(maze, "load", partial(maze.load, root=tmp_path))
+    assert race_maze("bad").status_code == 404
+
+
+def test_page_still_connects_and_draws_the_plate_without_a_maze(client):
+    app = static(client, "app.js")
+    assert 'json("/race/maze").catch(() => null)]).then(' in app
+    assert 'if (maze) $("cps").textContent = `0/' in app
+    assert 'if (maze) $("cps").textContent = `CP ' in static(client, "hud.js")
+    js = static(client, "race.js")
+    assert "if (maze) {\n    if (maze.walls) walls(ctx, maze);" in js
+    assert js.index("if (maze) {") < js.index("gates(ctx, maze, r, s.race)")
 
 
 def test_race_js_draws_walls_under_the_race_line_only_when_the_maze_has_them(client):
