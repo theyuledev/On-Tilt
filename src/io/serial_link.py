@@ -66,6 +66,7 @@ class SerialActuator:
         self.link = link
         self.rig = rig
         self.armed = False
+        self.acked = True  # the last P got its OK back
         self.state = PlateState(sent_x_deg=0.0, sent_y_deg=0.0, est_x_deg=0.0, est_y_deg=0.0)
 
     def _arm(self) -> None:
@@ -81,7 +82,10 @@ class SerialActuator:
     def send(self, cmd: ServoCommand | None, now: float) -> PlateState:
         if cmd is None:
             if self.armed:
-                self.link.ask("D")
+                # after an unacknowledged P the board may be mid ramp, a D there detaches
+                # off level; its own timeout levels it and stops pulses instead
+                if self.acked:
+                    self.link.ask("D")
                 self.armed = False
             return self.state
 
@@ -94,7 +98,9 @@ class SerialActuator:
             # self ramp it still says armed=1 so asking S there would keep us going
             if isinstance(e, BoardRefused) or not self.still_armed():
                 raise
+            self.acked = False
             return self.state
+        self.acked = True
         tilt = pulse_to_tilt(ServoCommand(x_us=x, y_us=y), self.rig)
         self.state = PlateState(
             sent_x_deg=tilt.tilt_x_deg,

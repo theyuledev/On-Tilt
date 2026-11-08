@@ -182,6 +182,20 @@ def test_err_during_the_board_ramp_disarms_without_asking_or_sending_d(loop, boa
     assert "D" not in board.sent and board.sent[-1].startswith("P")
 
 
+def test_no_d_when_the_last_level_pulse_timed_out_during_the_board_ramp(loop, board, clock):
+    loop.arm()
+    ticks(loop, clock, 3)
+    loop.kill()
+    ticks(loop, clock, 3)  # level hold, one tick to go
+    board.ramping = board.late = True  # the ERR P lands after the timeout, S still says armed
+    ticks(loop, clock, 1)
+    assert board.sent[-1] == "S" and loop.last.armed
+    ticks(loop, clock, 1)
+    assert not loop.last.armed and "D" not in board.sent and board.sent[-1] == "S"
+    snap = loop.snapshot()
+    assert not snap["armed"] and not snap["board_lost"]
+
+
 def test_arm_during_the_board_ramp_fails_quietly_then_works(loop, board, clock):
     board.armed = board.ramping = True  # stalled earlier, firmware is levelling on its own
     loop.arm()
