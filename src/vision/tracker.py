@@ -42,12 +42,16 @@ class Background:
     def level(self) -> np.ndarray | None:
         return self.median if len(self.samples) >= BG_MIN_SAMPLES else None
 
+    @property
+    def ready(self) -> bool:
+        return self.level is not None
+
     def update(self, gray: np.ndarray, t_s: float, keep: Box | None, dark: bool) -> None:
-        """Takes a sample when one is due. Inside keep (the ball, full-res px) the old background
-        stands, so a resting ball never becomes part of it."""
+        """Takes a sample when one is due: fast until the first median exists, then every
+        bg_period_s. Inside keep (the ball, full-res px) the old background stands, so a
+        resting ball never becomes part of it."""
         if t_s < self.t_next:
             return
-        self.t_next = t_s + self.cfg["bg_period_s"]
         small = downsample(gray, self.cfg)
         if keep is not None:
             old = self.median if self.median is not None else plate_level(small, self.cfg, dark)
@@ -55,6 +59,8 @@ class Background:
             small[y0:y1, x0:x1] = old[y0:y1, x0:x1]
         self.samples = [*self.samples[1 - self.cfg["bg_frames"] :], small]
         self.median = np.median(self.samples, axis=0).astype(np.uint8)
+        seeding = len(self.samples) < BG_MIN_SAMPLES
+        self.t_next = t_s + self.cfg["bg_seed_period_s" if seeding else "bg_period_s"]
 
 
 class BallTracker:

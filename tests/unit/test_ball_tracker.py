@@ -83,6 +83,28 @@ def test_reset_background_starts_over_and_the_ball_is_still_tracked():
     assert tr.update(ball(plate(), 640, 400, 45), t + period).valid
 
 
+def test_background_seeds_fast_so_the_edge_ball_is_found_within_two_seconds():
+    tr = BallTracker(CFG)
+    seed = CFG["bg_seed_period_s"]
+    for i in range(BG_MIN_SAMPLES - 1):
+        tr.update(plate(), i * seed)
+    assert not tr.background.ready
+    t = (BG_MIN_SAMPLES - 1) * seed
+    tr.update(plate(), t)
+    assert tr.background.ready and t < 2.0
+    # the closed level alone misses a ball touching the plate edge
+    assert tr.update(ball(plate(), 640, 40 + 45, 45), t + seed).valid
+
+
+def test_sampling_slows_to_bg_period_once_seeded():
+    tr = BallTracker(CFG)
+    seed, period = CFG["bg_seed_period_s"], CFG["bg_period_s"]
+    for i in range(BG_MIN_SAMPLES):
+        tr.update(plate(), i * seed)
+        due = seed if len(tr.background.samples) < BG_MIN_SAMPLES else period
+        assert tr.background.t_next == pytest.approx(i * seed + due)
+
+
 def test_frame_stall_does_not_fling_the_prediction():
     tr = BallTracker(CFG)
     n = lock(tr, [ball(plate(), 400 + 15 * i, 400, 45) for i in range(3)])

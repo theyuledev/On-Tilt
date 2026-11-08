@@ -59,7 +59,8 @@ predict_dt_max_s = { value = 0.017, label = "uncalibrated default (NOT TESTED, e
 px_per_mm = { value = 2.37, label = "measured (2026-11-07)" }
 plate_centre_px = { value = [640, 400], label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 bg_period_s = { value = 2.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-bg_frames = { value = 30, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+bg_seed_period_s = { value = 0.3, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+bg_frames ={ value = 30, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 board_corners = { value = [7, 8], label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 board_square_mm = { value = 25.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 calib_views = { value = 20, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
