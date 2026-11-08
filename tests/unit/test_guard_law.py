@@ -147,3 +147,13 @@ def test_a_ball_lost_while_braking_at_the_rim_fades_the_brake_out():
     xs = [g(b, PlateCommand(2.0, 0.0)).tilt_x_deg for b in lost]
     assert all(a <= b for a, b in zip([braked, *xs], xs, strict=False))
     assert xs[-1] < 2.0 - 0.8 * (2.0 - braked)
+
+
+def test_after_the_release_w_is_exactly_zero_and_the_side_clears():
+    g = Guard(cfg())
+    for k in range(10):
+        g(at(110.0, 200.0, t=0.01 * k), PlateCommand(0.0, 0.0))
+    assert g.guard_w[0] > 0.5
+    for k in range(400):
+        g(at(0.0, t=0.1 + 0.01 * k), PlateCommand(0.0, 0.0))
+    assert g.guard_view() == {"w": [0.0, 0.0], "side": [0.0, 0.0]}

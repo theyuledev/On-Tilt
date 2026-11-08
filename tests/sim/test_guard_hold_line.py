@@ -37,6 +37,12 @@ def rough(request, monkeypatch):
     return request.param
 
 
+def guarded(ball_d):
+    cfg = eg.rig_cfg(ball_d, cap=2.0)
+    cfg["control"]["guard_on"] = True
+    return cfg
+
+
 def slow_sway(pulses, k=50):
     avg = [sum(pulses[i : i + k]) / k for i in range(len(pulses) - k + 1)]
     return max(avg) - min(avg)
@@ -45,7 +51,7 @@ def slow_sway(pulses, k=50):
 @pytest.mark.parametrize("ball_d", eg.BALLS)
 def test_a_pusher_held_at_the_line_does_not_sway(clock, rough, ball_d):
     # the guard alone swayed 150 us smooth / 80 us rough and held 10-13 mm off the rim
-    cfg = eg.rig_cfg(ball_d)
+    cfg = guarded(ball_d)
     r = eg.run(cfg, clock, lambda t, b: (1.0, 0.0), seconds=12.0)
     pulses = r["pulses"][300:]
     assert slow_sway(pulses) < (40 if rough else 90)
@@ -55,7 +61,7 @@ def test_a_pusher_held_at_the_line_does_not_sway(clock, rough, ball_d):
 
 @pytest.mark.parametrize("ball_d", eg.BALLS)
 def test_the_ring_and_a_hard_player_on_rough_balls(clock, rough, ball_d):
-    cfg = eg.linear_hand(eg.rig_cfg(ball_d))
+    cfg = eg.linear_hand(guarded(ball_d))
     hold = eg.pd((100.0, 100.0))
     r = eg.run(cfg, clock, lambda t, b: hold(b), seconds=4.0, start=(100.0, 100.0))
     assert max(math.dist(p, (100, 100)) for p in r["track"][50:]) < 5

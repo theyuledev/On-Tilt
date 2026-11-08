@@ -41,7 +41,8 @@ class Pusher:
 
 def rate(guard_on: bool, stamps: list[float]) -> dict:
     cfg = load(local=Path("/dev/null"))
-    cfg["control"].update(mode="hand", guard_on=guard_on)
+    # full stick is the 2 deg cap whichever way the shaping sets its scale
+    cfg["control"].update(mode="hand", guard_on=guard_on, player_max_deg=2.0)
     hand = Pusher()
     frames = ClipSource(CLIP, START, process=Pipeline(cfg).step)
     loop = Loop(cfg, hand=hand, frames=frames)
