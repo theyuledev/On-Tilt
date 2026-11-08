@@ -47,7 +47,8 @@ def hold(rig: Rig) -> list[Result]:
     rows = ((r.t_s, r.ball.x_mm, r.ball.y_mm) for r in trace[: rig.ticks(HOLD_S)])
     t, x, y = zip(*rows, strict=True)
     verdict = hold_verdict(t, x, y).items()
-    return [(f"hold {k} {v:.2f}", None if ok else f"{v:.2f}") for k, (ok, v) in verdict]
+    shown = ((k, ok, "n/a" if v is None else f"{v:.2f}") for k, (ok, v) in verdict)
+    return [(f"hold {k} {v}", None if ok else v) for k, ok, v in shown]
 
 
 def show(results: list[Result]) -> bool:
@@ -63,6 +64,7 @@ def sim_hold(rig: Rig) -> Loop:
 
 
 def real_hold(rig: Rig) -> Loop:
+    input(f"set the ball down about {RELEASE_MM:g} mm out on +x and let go, then enter ")
     frames = CameraSource(open_camera(rig.r), process=Pipeline(rig.cfg).step)
     actuator = SerialActuator(rig.link, rig.r)
     return Loop(rig.cfg, frames=frames, actuator=actuator, exposure=check_exposure(rig.r))

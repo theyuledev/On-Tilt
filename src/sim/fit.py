@@ -154,14 +154,16 @@ OVERSHOOT_PCT = 20.0
 RMS_MM = 5.0
 
 
-def hold_verdict(t, x, y) -> dict[str, tuple[bool, float]]:
-    """t from the release on, settings gains; name -> (ok, value)."""
+def hold_verdict(t, x, y) -> dict[str, tuple[bool, float | None]]:
+    """t from the release on; name -> (ok, value), value None when not judged."""
     t, x, y = (np.asarray(a, dtype=float) for a in (t, x, y))
     s, r = settle(t, x, y), np.hypot(x, y)
-    out = {
-        "t20_s": (s.t20_s <= RELEASE_S[1.0], s.t20_s),
-        "overshoot_pct": (s.overshoot_pct < OVERSHOOT_PCT, s.overshoot_pct),
-    }
+    # a release from inside 20 mm has no settle to time and a wobble reads as huge overshoot
+    out = {"t20_s": (True, None), "overshoot_pct": (True, None)}
+    if r[0] >= 20.0:
+        # the run uses the settings gains, which the gate calls 1x
+        out["t20_s"] = (s.t20_s <= RELEASE_S[1.0], s.t20_s)
+        out["overshoot_pct"] = (s.overshoot_pct < OVERSHOOT_PCT, s.overshoot_pct)
     for after, lim in AFTER_MM.items():
         held = r[t > t[0] + after]
         worst = float(held.max()) if held.size else math.inf

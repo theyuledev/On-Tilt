@@ -150,6 +150,23 @@ def test_hold_verdict_fails_a_big_swing_past_the_centre():
     assert failing(HOLD_T, x) == ["overshoot_pct"]
 
 
+def test_hold_verdict_skips_settle_numbers_for_a_release_inside_20_mm():
+    x = 3 * np.exp(-HOLD_T) + 2 * np.sin(2 * np.pi * HOLD_T)
+    v = hold_verdict(HOLD_T, x, np.zeros_like(HOLD_T))
+    assert v["t20_s"] == (True, None) and v["overshoot_pct"] == (True, None)
+    judged = [v[k] for k in ("after_5_s_mm", "after_15_s_mm", "rms_mm")]
+    assert all(ok and value is not None for ok, value in judged)
+
+
+def test_hold_verdict_times_the_release_against_the_1x_gate():
+    # 60 mm closing at 16 mm/s crosses 20 mm at 2.5 s
+    def t20_ok(speed):
+        return hold_verdict(HOLD_T, np.maximum(60 - speed * HOLD_T, 0), 0 * HOLD_T)["t20_s"]
+
+    assert t20_ok(17.0)[0] and not t20_ok(15.0)[0]
+    assert t20_ok(15.0)[1] == pytest.approx(40 / 15, abs=0.01)
+
+
 def test_hold_verdict_fails_a_ball_parked_off_centre_and_a_short_trace():
     assert failing(HOLD_T, np.full_like(HOLD_T, 8.0)) == ["rms_mm"]
     t = np.arange(0, 10, 0.01)

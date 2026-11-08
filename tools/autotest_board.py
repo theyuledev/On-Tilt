@@ -10,8 +10,8 @@ from src.loop import Loop
 from src.safety import LEVEL_HOLD_S, limits
 
 TILT_US = 100
-# 250 ms board timeout + 100 us at 0.3 us/ms + 40 ms level hold, with margin
-QUIET_S = 0.7
+# firmware/tilt: 250 ms timeout, then a 0.3 us/ms ramp to level and a 40 ms hold; plus a margin
+FW_TIMEOUT_S, FW_RAMP_US_S, FW_HOLD_S, QUIET_MARGIN_S = 0.25, 300.0, 0.04, 0.1
 
 Result = tuple[str, str | None]
 
@@ -79,14 +79,19 @@ def to_level(rig: Rig, loop: Loop) -> bool:
     return not loop.safety.armed
 
 
-def tilt(rig: Rig, loop: Loop) -> None:
+def tilt(rig: Rig, loop: Loop) -> float:
     loop.arm()
-    cx = center(rig.r)[0]
+    cx, cy = center(rig.r)
     for _ in range(rig.ticks(1.0)):
         rec = rig.tick(loop, 1.0)
-        if rec.armed and rec.servo_cmd.x_us - cx >= TILT_US:
-            return
+        x, y = rec.servo_cmd.x_us, rec.servo_cmd.y_us
+        if rec.armed and x - cx >= TILT_US:
+            return max(abs(x - cx), abs(y - cy))
     raise LinkError(f"never got +{TILT_US} us, last {rec.servo_cmd}")
+
+
+def quiet_s(off_us: float) -> float:
+    return FW_TIMEOUT_S + off_us / FW_RAMP_US_S + FW_HOLD_S + QUIET_MARGIN_S
 
 
 def ramp_problem(rig: Rig, lines: list[str]) -> str | None:
@@ -128,13 +133,13 @@ def stale(rig: Rig, loop: Loop) -> str | None:
 
 
 def timeout(rig: Rig, loop: Loop) -> str | None:
-    tilt(rig, loop)
-    rig.sleep(QUIET_S)
+    quiet = quiet_s(tilt(rig, loop))
+    rig.sleep(quiet)
     s = rig.link.status()
     if s["armed"]:
         to_level(rig, loop)
-        return f"still armed after {QUIET_S} s quiet"
-    return f"since_ms {s['since_ms']}" if s["since_ms"] < round(QUIET_S * 1000) else None
+        return f"still armed after {quiet:.2f} s quiet"
+    return f"since_ms {s['since_ms']}" if s["since_ms"] < round(quiet * 1000) else None
 
 
 def board_checks(rig: Rig) -> list[Result]:

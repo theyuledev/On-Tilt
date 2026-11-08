@@ -74,9 +74,18 @@ def test_loop_that_disarms_on_stale_fails_only_the_stale_check(monkeypatch):
 def test_board_that_never_times_out_fails_the_timeout_and_ends_disarmed(monkeypatch):
     monkeypatch.setattr(timed_board, "TIMEOUT_S", float("inf"))
     results, board = board_run()
-    assert results["board timeout"] == f"still armed after {autotest_board.QUIET_S} s quiet"
+    assert results["board timeout"].startswith("still armed after 0.")
     assert results["kill"] is None and results["stale intent"] is None
     assert board.sent[-1] == "D" and not board.armed
+
+
+def test_a_bigger_tilt_waits_longer_and_still_passes_the_timeout(monkeypatch):
+    assert autotest_board.quiet_s(150) > autotest_board.quiet_s(105)
+    # 150 us takes 790 ms to drop out, past a flat 0.7 s wait
+    monkeypatch.setattr(autotest_board, "TILT_US", 140)
+    results, board = board_run()
+    assert results["board timeout"] is None
+    assert board.since_ms == round(autotest_board.quiet_s(150) * 1000)
 
 
 class DropsOneReply(TimedBoard):
