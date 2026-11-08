@@ -76,6 +76,8 @@ function show(s) {
   $("banner").classList.toggle("lost", lost);
   pill("armed", s.killing ? "killing" : s.armed ? "armed" : "disarmed",
        s.killing ? "warn" : s.armed ? "on" : "");
+  $("armblock").hidden = !s.arm_blocked;
+  $("armblock").textContent = s.arm_blocked || "";
   $("stale").hidden = $("level").hidden = !(s.stale && s.armed);
   $("board").hidden = !s.board_lost;
   pill("hand", "hand: " + (!s.hand_seen ? "none" : s.hand_calibrating ? "hold still" : "live"),
