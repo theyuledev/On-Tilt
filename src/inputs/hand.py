@@ -3,6 +3,8 @@ import math
 import socket
 from dataclasses import asdict
 
+import numpy as np
+
 from src.contracts import Intent
 
 PALM = (0, 5, 9, 13, 17)  # wrist + the base of each finger
@@ -13,6 +15,16 @@ def palm_center(landmarks) -> tuple[float, float]:
     xs = [landmarks[i].x for i in PALM]
     ys = [landmarks[i].y for i in PALM]
     return sum(xs) / len(xs), sum(ys) / len(ys)
+
+
+def palm_angles(world) -> tuple[float, float]:
+    """Roll and pitch in degrees of the palm normal, 0, 0 when the palm faces the camera."""
+    o, a, b = (np.array([world[i].x, world[i].y, world[i].z]) for i in (0, 5, 17))
+    n = np.cross(a - o, b - o)
+    # the two hands wind the other way, so turn the normal to face the camera
+    if n[2] > 0:
+        n = -n
+    return math.degrees(math.atan2(n[0], -n[2])), math.degrees(math.atan2(n[1], -n[2]))
 
 
 def _clamp(v: float) -> float:

@@ -10,6 +10,9 @@ const cam = $("cam"), nocam = $("nocam"), ctx = $("race").getContext("2d");
 const padCtx = $("pad").getContext("2d");
 const nextCam = () => { cam.src = "/camera.jpg?" + performance.now(); };
 let camRetry;
+const handcam = $("handcam"), handnone = $("handnone");
+const nextHand = () => { handcam.src = "/hand.jpg?" + performance.now(); };
+let handRetry;
 const typing = e => e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
 
 if (watch) {
@@ -41,6 +44,13 @@ cam.onerror = () => {
   nocam.hidden = false;
   clearTimeout(camRetry);
   camRetry = setTimeout(nextCam, 1000);
+};
+handcam.onload = () => { handcam.hidden = false; handnone.hidden = true; nextHand(); };
+handcam.onerror = () => {
+  handcam.hidden = true;
+  handnone.hidden = false;
+  clearTimeout(handRetry);
+  handRetry = setTimeout(nextHand, 1000);
 };
 
 function intent() {
@@ -88,6 +98,7 @@ function show(s) {
        !s.hand_seen ? "" : s.hand_calibrating ? "warn" : "on");
   nocam.textContent = s.camera_lost ? "camera lost" : "no camera";
   $("tilt").textContent = `tilt x ${p.sent_x_deg.toFixed(2)}°  y ${p.sent_y_deg.toFixed(2)}°`;
+  $("handtilt").textContent = `plate x ${p.sent_x_deg.toFixed(2)}° y ${p.sent_y_deg.toFixed(2)}°`;
   ring(s.ball_px);
   strip(cfg, s);
   hud(s, maze);
@@ -98,7 +109,7 @@ function show(s) {
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.onopen = () => { pill("link", "live", "on"); nextCam(); frame(); };
+  ws.onopen = () => { pill("link", "live", "on"); nextCam(); nextHand(); frame(); };
   ws.onclose = () => { pill("link", "offline", "warn"); setTimeout(connect, 1000); };
   ws.onmessage = e => { show(JSON.parse(e.data)); requestAnimationFrame(frame); };
 }

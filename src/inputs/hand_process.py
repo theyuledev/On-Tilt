@@ -7,6 +7,7 @@ import mediapipe as mp
 from mediapipe.tasks.python import BaseOptions, vision
 
 from src.inputs.hand import HandIntent, palm_center, recentre_asked, send_intent
+from src.inputs.hand_view import JPEG_PERIOD_S, frame_jpg, publish
 from src.io.camera import WARMUP_READS, CameraSource, find_camera, overhead_shape
 from src.io.settings import ROOT, load
 
@@ -14,9 +15,16 @@ MODEL = ROOT / "models" / "hand_landmarker.task"
 
 
 def run(
-    frames, detect, hand: HandIntent, send, recentre=lambda: False, clock=time.monotonic
+    frames,
+    detect,
+    hand: HandIntent,
+    send,
+    recentre=lambda: False,
+    clock=time.monotonic,
+    show=lambda img, intent: None,
 ) -> None:
     """Runs the model on the newest frame; frames that queued up while it ran are dropped."""
+    shown, view_ok = float("-inf"), True
     while frames.running:
         frame = frames.read()
         if frame is None:
@@ -31,6 +39,15 @@ def run(
             progress=hand.progress,
             lag_s=now - frame.t_s,
         )
+        if now - shown >= JPEG_PERIOD_S:
+            shown = now
+            try:
+                show(frame.image, intent)
+            except Exception as e:
+                # the view is display only, it must never stop the intents
+                if view_ok:
+                    print(f"hand view off: {e!r}")
+                view_ok = False
 
 
 def main() -> None:
@@ -41,6 +58,8 @@ def main() -> None:
     # a fresh capture can miss its first reads, and the grab thread stops on a miss
     if not any(cap.read()[0] for _ in range(WARMUP_READS)):
         raise RuntimeError("webcam sends no frames")
+    hand = HandIntent(inp)
+    last = []
     landmarker = vision.HandLandmarker.create_from_options(
         vision.HandLandmarkerOptions(
             base_options=BaseOptions(model_asset_path=str(MODEL)),
@@ -54,6 +73,7 @@ def main() -> None:
         result = landmarker.detect_for_video(
             mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), int(t * 1000)
         )
+        last[:] = [result]
         return palm_center(result.hand_landmarks[0]) if result.hand_landmarks else None
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -65,9 +85,10 @@ def main() -> None:
         run(
             frames,
             detect,
-            HandIntent(inp),
+            hand,
             partial(send_intent, sock, port=inp["hand_port"]),
             partial(recentre_asked, sock),
+            show=lambda img, intent: publish(frame_jpg(img, last[0], hand.neutral, intent)),
         )
     except KeyboardInterrupt:
         pass

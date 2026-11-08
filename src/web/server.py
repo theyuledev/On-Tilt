@@ -9,6 +9,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from src.inputs import hand_view
 from src.io.settings import ROOT
 
 STATIC = Path(__file__).parent / "static"
@@ -64,6 +65,17 @@ def make_app(loop) -> FastAPI:
             _, jpg = cv2.imencode(".jpg", small)
             jpeg["t"], jpeg["bytes"] = now, jpg.tobytes()
         return Response(jpeg["bytes"], media_type="image/jpeg")
+
+    @app.get("/hand.jpg")
+    def hand():
+        # the hand process writes this file, an old one means it stopped
+        try:
+            path = hand_view.HAND_JPG
+            if time.time() - path.stat().st_mtime > loop.cfg["game"]["heartbeat_stale_s"]:
+                return Response(status_code=404)
+            return Response(path.read_bytes(), media_type="image/jpeg")
+        except FileNotFoundError:
+            return Response(status_code=404)
 
     @app.websocket("/ws")
     async def ws(sock: WebSocket):
