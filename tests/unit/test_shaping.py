@@ -5,12 +5,25 @@ import pytest
 
 from src.contracts import BallState, Intent
 from src.inputs.keyboard import KeyboardInput
-from src.inputs.shaping import shape
+from src.inputs.shaping import floor_deg, shape, top_deg
 from src.modes import MODES
 
 pytestmark = pytest.mark.unit
 
-CFG = {"dead_zone": 0.08, "expo": 0.3, "intent_gain_deg": 6.0, "key_ramp_s": 0.3}
+INPUT = {"dead_zone": 0.08, "expo": 0.3, "intent_gain_deg": 6.0, "key_ramp_s": 0.3}
+WIDE = {"limit_x_us": 150, "limit_y_us": 150, "us_per_deg_x": 10.0, "us_per_deg_y": 10.0}
+REAL = {"limit_x_us": 150, "limit_y_us": 150, "us_per_deg_x": 100.0, "us_per_deg_y": -100.0}
+SLICK = {"sim_g_mm_s2": 9810, "rolling_friction_x_mm_s2": 0.0, "rolling_friction_y_mm_s2": 0.0}
+ROUGH = {"sim_g_mm_s2": 9810, "rolling_friction_x_mm_s2": 47, "rolling_friction_y_mm_s2": 39}
+
+
+def cfg(rig=WIDE, control=SLICK, **inp):
+    return {"input": {**INPUT, **inp}, "rig": rig, "control": control}
+
+
+CFG = cfg()
+FELT = cfg(REAL, ROUGH)
+DZ = INPUT["dead_zone"]
 
 
 @pytest.fixture
@@ -28,7 +41,7 @@ def test_dead_zone_is_radial_not_per_axis():
 
 def test_dead_zone_edge_starts_at_zero_and_keeps_the_direction():
     assert shape(0.08, 0.0, CFG) == pytest.approx((0.0, 0.0))
-    x, y = shape(0.3, 0.4, {**CFG, "expo": 0.0})
+    x, y = shape(0.3, 0.4, cfg(expo=0.0))
     assert y / x == pytest.approx(4 / 3)
 
 
@@ -39,18 +52,19 @@ def test_shape_is_monotonic_and_odd():
 
 
 def test_expo_bends_the_middle_down_but_not_the_ends():
-    linear = {**CFG, "expo": 0.0}
+    linear = cfg(expo=0.0)
     assert shape(0.5, 0.0, CFG)[0] < shape(0.5, 0.0, linear)[0]
     assert shape(1.0, 0.0, CFG)[0] == pytest.approx(shape(1.0, 0.0, linear)[0])
 
 
 def test_gain_scales_the_output():
-    assert shape(1.0, 0.0, {**CFG, "intent_gain_deg": 12.0})[0] == pytest.approx(12.0)
+    assert shape(1.0, 0.0, cfg(intent_gain_deg=12.0))[0] == pytest.approx(12.0)
 
 
 def test_inside_the_dead_zone_is_exactly_zero():
-    for r in (0.0, 0.03, 0.079):
-        assert shape(r * 0.6, r * 0.8, CFG) == (0.0, 0.0)
+    for c in (CFG, FELT):
+        for r in (0.0, 0.03, 0.079):
+            assert shape(r * 0.6, r * 0.8, c) == (0.0, 0.0)
 
 
 @pytest.mark.parametrize("edge", [0.08, 0.16])
@@ -67,12 +81,50 @@ def test_dead_zone_joins_are_smooth(edge):
 
 def test_full_intent_is_full_gain_on_any_heading():
     assert shape(1.0, 0.0, CFG)[0] == pytest.approx(6.0)
-    x, y = shape(0.6, 0.8, {**CFG, "expo": 0.0})
+    x, y = shape(0.6, 0.8, cfg(expo=0.0))
     assert math.hypot(x, y) == pytest.approx(6.0)
 
 
+def test_floor_is_the_tilt_that_just_beats_rolling_friction():
+    assert floor_deg(FELT) == pytest.approx((0.384, 0.319), abs=1e-3)
+    assert floor_deg(CFG) == (0.0, 0.0)
+
+
+def test_top_is_the_cap_or_the_servo_clamp_whichever_is_less():
+    assert top_deg(cfg(intent_gain_deg=3.0)) == (3.0, 3.0)
+    assert top_deg(FELT) == (1.5, 1.5)
+    assert top_deg(cfg(REAL, {"player_max_deg": 1.0})) == (1.0, 1.0)
+    assert top_deg(cfg(WIDE, {"player_max_deg": 4.0})) == (4.0, 4.0)
+    assert top_deg(cfg(REAL, {"player_max_deg": 4.0})) == (1.5, 1.5)
+
+
+def test_just_past_the_dead_zone_is_the_friction_floor():
+    fx, fy = floor_deg(FELT)
+    assert shape(DZ * 1.001, 0.0, FELT)[0] == pytest.approx(fx, rel=0.01)
+    assert shape(0.0, -DZ * 1.001, FELT)[1] == pytest.approx(-fy, rel=0.01)
+
+
+def test_a_diagonal_splits_the_floor_instead_of_doubling_it():
+    fx, fy = floor_deg(FELT)
+    k = DZ * 1.001 / math.hypot(0.7, 0.7)
+    x, y = shape(0.7 * k, 0.7 * k, FELT)
+    assert x == pytest.approx(fx * math.sqrt(0.5), rel=0.01)
+    assert y == pytest.approx(fy * math.sqrt(0.5), rel=0.01)
+
+
+def test_full_stick_reaches_the_top_on_each_axis():
+    assert shape(1.0, 0.0, FELT) == pytest.approx((1.5, 0.0))
+    assert shape(0.0, -1.0, FELT) == pytest.approx((0.0, -1.5))
+    assert shape(1.0, 0.0, cfg(REAL))[0] == pytest.approx(1.5)
+
+
+def test_with_friction_the_curve_still_only_climbs():
+    xs = [shape(v / 1000, 0.0, FELT)[0] for v in range(1001)]
+    assert xs == sorted(xs) and xs[0] == 0.0
+
+
 def test_held_key_ramps_up_over_key_ramp_s_and_releases_at_once(clock):
-    keys = KeyboardInput(CFG)
+    keys = KeyboardInput(INPUT)
     keys.set(1.0, 0.0)
     assert keys.latest().x == 0.0 and keys.latest().valid
     clock[0] += 0.15
@@ -89,7 +141,7 @@ def test_held_key_ramps_up_over_key_ramp_s_and_releases_at_once(clock):
 
 
 def test_each_axis_ramps_on_its_own(clock):
-    keys = KeyboardInput(CFG)
+    keys = KeyboardInput(INPUT)
     keys.set(1.0, 0.0)
     clock[0] += 0.3
     keys.set(1.0, 1.0)
@@ -100,11 +152,11 @@ def test_each_axis_ramps_on_its_own(clock):
 
 
 def test_hand_mode_shapes_key_intent_like_hand_intent(clock):
-    keys = KeyboardInput(CFG)
+    keys = KeyboardInput(INPUT)
     keys.set(0.5, -0.5)
     clock[0] += 0.3
     keys.set(0.5, -0.5)
     ball = BallState(0.0, 0.0, 0.0, 0.0, valid=False, t_s=0.0)
-    cmd = MODES["hand"](ball, keys.latest(), {"input": CFG})
-    assert (cmd.tilt_x_deg, cmd.tilt_y_deg) == pytest.approx(shape(0.5, -0.5, CFG))
-    assert 0 < cmd.tilt_x_deg < 3.0
+    cmd = MODES["hand"](ball, keys.latest(), FELT)
+    assert (cmd.tilt_x_deg, cmd.tilt_y_deg) == pytest.approx(shape(0.5, -0.5, FELT))
+    assert 0 < cmd.tilt_x_deg < 1.5

@@ -10,7 +10,7 @@ LEVEL = PlateCommand(tilt_x_deg=0.0, tilt_y_deg=0.0)
 def hand(ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
     if not intent.valid:
         return LEVEL
-    return PlateCommand(*shape(intent.x, intent.y, cfg["input"]))
+    return PlateCommand(*shape(intent.x, intent.y, cfg))
 
 
 def pd_toward(ball: BallState, goal: tuple[float, float], cfg: dict) -> PlateCommand:

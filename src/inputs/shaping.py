@@ -1,23 +1,41 @@
 import math
 
+from src.control import ROLL
+
 
 def _ease(r: float, dz: float) -> float:
     # past the dead zone: a parabola up to 2 dz then a line, smooth at both joins
     return (r - dz) ** 2 / (2 * dz) if r < 2 * dz else r - 1.5 * dz
 
 
+def top_deg(cfg: dict) -> tuple[float, float]:
+    """Full stick tilt per axis: the player cap, or the servo clamp if that comes first."""
+    rig = cfg["rig"]
+    cap = cfg["control"].get("player_max_deg", cfg["input"]["intent_gain_deg"])
+    tx, ty = (min(cap, rig[f"limit_{a}_us"] / abs(rig[f"us_per_deg_{a}"])) for a in "xy")
+    return tx, ty
+
+
+def floor_deg(cfg: dict) -> tuple[float, float]:
+    """Tilt where rolling friction just holds a resting ball."""
+    c = cfg["control"]
+    g = ROLL * c["sim_g_mm_s2"]
+    fx, fy = (math.degrees(math.asin(c[f"rolling_friction_{a}_mm_s2"] / g)) for a in "xy")
+    return fx, fy
+
+
 def shape(x: float, y: float, cfg: dict) -> tuple[float, float]:
-    """Intent -1..1 -> tilt degrees: smooth radial dead zone, cubic expo, then gain."""
+    """Intent -1..1 -> tilt degrees: smooth radial dead zone, then cubic expo from floor to top."""
     r = math.hypot(x, y)
-    dz = cfg["dead_zone"]
+    dz, e = cfg["input"]["dead_zone"], cfg["input"]["expo"]
     if r < dz:
         return 0.0, 0.0
     # full stick stays full, the direction stays
-    k = _ease(r, dz) / (1 - 1.5 * dz) / r
-    e, gain = cfg["expo"], cfg["intent_gain_deg"]
+    u = _ease(r, dz) / (1 - 1.5 * dz)
 
-    def bend(v: float) -> float:
-        v *= k
-        return gain * ((1 - e) * v + e * v**3)
+    def bend(d: float, lo: float, hi: float) -> float:
+        v = u * d
+        return lo * d + (hi - lo) * ((1 - e) * v + e * v**3)
 
-    return bend(x), bend(y)
+    (fx, fy), (tx, ty) = floor_deg(cfg), top_deg(cfg)
+    return bend(x / r, fx, tx), bend(y / r, fy, ty)
