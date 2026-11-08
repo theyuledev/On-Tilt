@@ -16,10 +16,15 @@ from src.safety import limits
 from src.vision.pipeline import Pipeline
 from tests.replay.test_maze_clip import CLIP as MAZE
 from tests.replay.test_maze_clip import EMPTY_FROM_S, REST_UNTIL_S
-from tests.replay.test_pipeline_clip import CLIP as SQUASH
-from tests.replay.test_pipeline_clip import END, START
+from tests.vision.test_clip_bench import BASELINE, CLIPS, FLOORS, WARMUP, pick
+from tools.replay_clip import parse_window
 
 pytestmark = pytest.mark.replay
+
+SMALL = BASELINE["small_ball_hand_rolled_1955"]
+# the floor windows plus the small ball's most seen one
+WINDOWS = [*FLOORS, ("small_ball_hand_rolled_1955", parse_window(max(SMALL, key=SMALL.get)))]
+STEMS = [stem for stem, _ in WINDOWS]
 
 
 def config():
@@ -79,13 +84,20 @@ def run(cfg, frames, stamps):
 
 
 @pytest.fixture(scope="module")
-def squash():
-    if not SQUASH.exists():
-        pytest.skip(f"{SQUASH.name} not on this machine")
-    cfg = config()
-    stamps = [float(t) for t in SQUASH.with_suffix(".csv").read_text().split()][START:END]
-    frames = ClipSource(SQUASH, start=START, process=Pipeline(cfg).step)
-    return cfg, run(cfg, frames, stamps)
+def clips():
+    out = {}
+    for stem, (a, b) in WINDOWS:
+        path = CLIPS / f"{stem}.avi"
+        if not path.exists():
+            continue
+        cfg = config()
+        stamps = [float(t) for t in path.with_suffix(".csv").read_text().split()][a:b]
+        frames = ClipSource(path, start=a - WARMUP, process=Pipeline(cfg).step)
+        # seeds the tracker background; the loop only ticks on the window
+        for _ in range(WARMUP):
+            frames.read()
+        out[stem] = cfg, run(cfg, frames, stamps)
+    return out
 
 
 @pytest.fixture(scope="module")
@@ -99,8 +111,9 @@ def maze():
     return cfg, [(t - t0, obs, rec, snap) for t, obs, rec, snap in ticks]
 
 
-def test_loop_ball_is_the_newest_observation_and_the_page_gets_its_pixels(squash):
-    _, ticks = squash
+@pytest.mark.parametrize("stem", STEMS)
+def test_loop_ball_is_the_newest_observation_and_the_page_gets_its_pixels(clips, stem):
+    _, ticks = pick(clips, stem, stem)
     assert any(obs.ball.valid for _, obs, _, _ in ticks)
     for t, obs, rec, snap in ticks:
         assert obs.t_read == t and rec.ball == obs.ball
@@ -108,8 +121,17 @@ def test_loop_ball_is_the_newest_observation_and_the_page_gets_its_pixels(squash
         assert snap["ball_px"] == ([px.x_px, px.y_px, px.r_px] if obs.ball.valid else None)
 
 
-def test_lost_ball_levels_and_pulses_stay_in_limits_and_slew(squash):
-    cfg, ticks = squash
+def test_some_frames_lose_the_ball_while_armed(clips):
+    if not clips:
+        pytest.skip("no ball clips on this machine")
+    lost = {s: sum(r.armed and not o.ball.valid for _, o, r, _ in t) for s, (_, t) in clips.items()}
+    print(lost)
+    assert sum(lost.values()), "lost ball -> level never ran on a real frame"
+
+
+@pytest.mark.parametrize("stem", STEMS)
+def test_lost_ball_levels_and_pulses_stay_in_limits_and_slew(clips, stem):
+    cfg, ticks = pick(clips, stem, stem)
     rig = cfg["rig"]
     assert all(rec.plate_cmd == LEVEL for _, obs, rec, _ in ticks if not obs.ball.valid)
     x_lo, x_hi, y_lo, y_hi = limits(rig)
