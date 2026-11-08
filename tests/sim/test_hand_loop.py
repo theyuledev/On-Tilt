@@ -69,6 +69,8 @@ class Rig:
 def rig():
     cfg = copy.deepcopy(load())
     cfg["control"]["mode"] = "hand"
+    # the sim ball rolls to the rim here, the guard would brake it
+    cfg["control"]["guard_on"] = False
     hand = HandInput(0)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     yield Rig(cfg, hand, sock)
