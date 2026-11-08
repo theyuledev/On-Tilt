@@ -77,6 +77,13 @@ def test_race_js_draws_the_plate_in_mm_with_a_ball_trail(client):
     assert "cfg.plate_inner_mm" in js and "TRAIL_S" in js and "s.ball.valid" in js
 
 
+def test_race_js_draws_the_ghost_under_a_white_player(client):
+    js = static(client, "race.js")
+    assert "s.race" in js and "ghost_mm" in js and "#CC79A7" in js
+    assert "ghost_lap_s" in js and "fmtLap" in js
+    assert "#fff" in js and "#ff8c1a" not in js
+
+
 def test_page_rings_the_tracked_ball_on_the_camera_image(client):
     page = client.get("/").text
     assert 'id="seen"' in page and 'class="view"' in page
