@@ -75,6 +75,7 @@ function show(s) {
   nocam.textContent = s.camera_lost ? "camera lost" : "no camera";
   $("tilt").textContent = `tilt x ${p.sent_x_deg.toFixed(2)}°  y ${p.sent_y_deg.toFixed(2)}°`;
   ring(s.ball_px);
+  strip(s);
   draw(ctx, cfg, maze, s);
   drawPad(padCtx, cfg, s);
 }

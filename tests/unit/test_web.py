@@ -119,6 +119,22 @@ def test_race_js_draws_the_ghost_under_a_white_player(client):
     assert "#fff" in js and "#ff8c1a" not in js
 
 
+def test_page_has_a_strip_loaded_after_race_and_before_app(client):
+    page = client.get("/").text
+    assert 'id="strip"' in page
+    at = [page.index(f"/static/{name}.js") for name in ("race", "strip", "app")]
+    assert at == sorted(at)
+    assert "strip(s);" in static(client, "app.js")
+
+
+def test_strip_plots_ball_error_and_sent_tilt_over_the_last_5_s(client):
+    js = static(client, "strip.js")
+    assert "s.ball" in js and "b.valid" in js and "sent_x_deg" in js and "sent_y_deg" in js
+    assert "const STRIP_S = 5;" in js and "keep(stripBuf, [err, tilt], s.t_s, STRIP_S)" in js
+    assert "now - buf[0].t > keepS" in static(client, "race.js")
+    assert "fit(c)" in js and "err --" in js
+
+
 def test_page_rings_the_tracked_ball_on_the_camera_image(client):
     page = client.get("/").text
     assert 'id="seen"' in page and 'class="view"' in page
