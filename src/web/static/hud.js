@@ -2,7 +2,8 @@
 const AHEAD = "#56B4E9";
 const BEHIND = "#E69F00";
 const SPLIT_MS = 2500;  // length of the .split animation in style.css
-const LIVE = ["calibrating", "staging", "countdown", "running"];
+const PRE = ["calibrating", "staging"];
+const LIVE = [...PRE, "countdown", "running"];
 let prev = null, splitAt = -Infinity;
 
 function restart(el, cls) {
@@ -80,9 +81,11 @@ function hud(s, maze) {
   document.body.classList.toggle("racing", live);
   document.body.classList.toggle("offpath", !!r && r.off_path === true);
   $("racebtn").textContent = live ? "abort (r)" : "race (r)";
-  if (!r) {
-    prev = null;
+  // no race text before the countdown
+  if (!r || PRE.includes(r.state)) {
+    prev = r;
     $("count").textContent = $("delta").textContent = $("pen").textContent = "";
+    if (r) $("timer").textContent = $("cps").textContent = "";
     for (const el of $("result").children) el.textContent = "";
     return;
   }

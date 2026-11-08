@@ -83,7 +83,7 @@ def test_a_game_that_drops_out_mid_race_levels_the_plate_and_the_loop_carries_on
 def real_game(step=fake_step):
     cfg = load()
     cfg["control"]["mode"] = "balance"
-    cfg["game"] = {**GAME, "countdown_s": 0.0, "attract": False}
+    cfg["game"] = {**cfg["game"], **GAME, "countdown_s": 0.0, "attract": False}
     game, hand = Game(cfg, MAZE, step), Hand()
     loop = Loop(cfg, hand, game=game)
     loop.bus.subscribe("tick", lambda rec: game.tick(rec, loop.safety.killing, loop.board_lost))
