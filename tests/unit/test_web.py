@@ -6,6 +6,8 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
+from src.contracts import BallState, Intent, PlateCommand, PlateState, RunLogRecord, ServoCommand
+from src.games import ghost
 from src.io.ports import Frame
 from src.io.settings import load
 from src.web.server import JPEG_PERIOD_S, make_app
@@ -94,3 +96,37 @@ def test_camera_jpeg_full_is_full_res_and_skips_the_cache(monkeypatch):
 def test_camera_jpeg_404s_without_a_frame():
     loop = SimpleNamespace(cfg=load(), camera_lost=False, frame=None)
     assert TestClient(make_app(loop)).get("/camera.jpg").status_code == 404
+
+
+def ghost_record(t, x, y):
+    return RunLogRecord(
+        t_s=t,
+        mode="hand",
+        armed=True,
+        ball=BallState(x_mm=x, y_mm=y, vx_mm_s=0.0, vy_mm_s=0.0, valid=True, t_s=t),
+        intent=Intent(x=0.0, y=0.0, valid=True, t_s=t),
+        plate_cmd=PlateCommand(tilt_x_deg=0.0, tilt_y_deg=0.0),
+        servo_cmd=ServoCommand(x_us=1500, y_us=1500),
+        plate_state=PlateState(sent_x_deg=0.0, sent_y_deg=0.0, est_x_deg=0.0, est_y_deg=0.0),
+    )
+
+
+def test_race_ghost_is_empty_without_a_ghost(client):
+    assert client.get("/race/ghost").json() == []
+
+
+def test_race_ghost_serves_the_trace_of_the_saved_run(tmp_path, monkeypatch):
+    monkeypatch.setattr("src.web.server.ROOT", tmp_path)
+    recs = [ghost_record(5.0, 0.0, 0.0), ghost_record(5.5, 10.0, -4.0)]
+    ghost.save(recs, tmp_path / "data" / "ghost.jsonl")
+    cfg = load()
+    cfg["game"]["ghost"] = "data/ghost.jsonl"
+    client = TestClient(make_app(SimpleNamespace(cfg=cfg)))
+    assert client.get("/race/ghost").json() == [[0.0, 0.0, 0.0], [0.5, 10.0, -4.0]]
+
+
+def test_race_ghost_404s_when_the_file_is_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr("src.web.server.ROOT", tmp_path)
+    cfg = load()
+    cfg["game"]["ghost"] = "data/nope.jsonl"
+    assert TestClient(make_app(SimpleNamespace(cfg=cfg))).get("/race/ghost").status_code == 404

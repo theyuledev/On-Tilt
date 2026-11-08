@@ -5,6 +5,9 @@ import cv2
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 
+from src.games import ghost
+from src.io.settings import ROOT
+
 STATIC = Path(__file__).parent / "static"
 JPEG_SCALE = 0.5  # 1280x800 camera -> 640x400 on the page
 JPEG_PERIOD_S = 1 / 15  # one encode per ~66 ms, the control loop shares this process
@@ -27,6 +30,16 @@ def make_app(loop) -> FastAPI:
             "camera_width": rig["camera_width"],
             "heartbeat_stale_s": game["heartbeat_stale_s"],
         }
+
+    @app.get("/race/ghost")
+    def race_ghost():
+        rel = loop.cfg["game"]["ghost"]
+        if not rel:
+            return []
+        path = ROOT / rel
+        if not path.exists():
+            return Response(status_code=404)
+        return ghost.trace(ghost.load(path))
 
     jpeg = {"t": float("-inf"), "bytes": b""}
 
