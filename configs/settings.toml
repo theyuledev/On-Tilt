@@ -64,7 +64,6 @@ vel_ema_s = { value = 0.0, label = "uncalibrated default (NOT TESTED, expected p
 autocal_a1_us = { value = 60, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 autocal_a2_max_us = { value = 100, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 autocal_pulse_s = { value = 0.6, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-autocal_settle_s = { value = 0.6, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 autocal_travel_mm = { value = 60, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 autocal_rim_margin_mm = { value = 25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 autocal_lost_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
@@ -73,6 +72,29 @@ autocal_still_s = { value = 1.0, label = "uncalibrated default (NOT TESTED, expe
 autocal_warm_obs = { value = 30, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 autocal_r_short_px = { value = 0.5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 autocal_mirror_tol_deg = { value = 20, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_probe_us = { value = 100, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_probe_slot_s = { value = 0.2, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_tail_s = { value = 0.1, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_ff_gain = { value = 0.7, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_fit_end = { value = 1.8, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_probe_rms_mm = { value = 2.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_gain_band = { value = [0.1, 5], label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_parallel_sin = { value = 0.2, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_agree_deg = { value = 20, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_agree_gain = { value = [0.5, 1.5], label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_level_max_us = { value = 90, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+hold_w_rad_s = { value = 2.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+hold_zeta = { value = 0.9, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+hold_lead_s = { value = 0.10, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+hold_ki = { value = 4, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+hold_i_max_mm_s = { value = 10, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+hold_max_us = { value = 120, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+hold_r_mm = { value = 25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+hold_v_mm_s = { value = 15, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+hold_still_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+hold_timeout_s = { value = 5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+hold_diverge_mm = { value = 30, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+hold_diverge_s = { value = 0.5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 
 [game]
 heartbeat_stale_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }

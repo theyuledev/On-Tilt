@@ -89,9 +89,7 @@ def report(cal, centre, s_ball: float, cfg: dict) -> str:
         f"plate_centre_px = {{ value = [{centre[0]:.1f}, {centre[1]:.1f}], {tag}",
         "",
         f"mirror: {'yes, us_per_deg_y flipped' if r.mirror else 'no'}",
-        f"pulses {cal.amps[0]:.0f} and {cal.amps[1]:.0f} us, fit residual {r.resid:.1f} mm/s^2",
-        f"friction intercept x {r.friction_x:.1f} y {r.friction_y:.1f} mm/s^2",
-        f"one amplitude k x {r.k_one_x:.3f} y {r.k_one_y:.3f} mm/s^2 per us",
+        f"pulses {cal.amps[0]:.0f} and {cal.amps[1]:.0f} us, fit residual {r.resid:.1f} mm",
         f"camera height check (coarse) {h}",
     ]
     return "\n".join(lines)
@@ -122,8 +120,7 @@ def main() -> None:
     if args.sim:
         from src.sim.rig import TRUTH, SimLink, SimRig
 
-        # open loop pulses only survive a near level start, so the fake starts at the stored trims
-        world = SimRig(cfg, {**TRUTH, **{k: cfg["rig"][k] for k in ("trim_x_us", "trim_y_us")}})
+        world = SimRig(cfg, TRUTH)
         bench, cam = Bench(SimLink(world), cfg["rig"]), world
         timing = (world.clock, world.advance, lambda _: "")
     else:

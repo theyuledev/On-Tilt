@@ -26,13 +26,12 @@ def value(out: str, key: str) -> str:
     return re.search(rf"^{key} = {{ value = (\S+?),", out, re.M).group(1)
 
 
-def stops_at_level(link: SimLink, amps=(60,), level=(1515, 1475)) -> None:
-    # every pulse is level or a schedule pulse, the first one after the stop is level, then D
-    x, y = level
-    ok = {level} | {p for a in amps for s in (a, -a) for p in ((x + s, y), (x, y + s))}
+def stops_at_level(link: SimLink, level=(1515, 1475)) -> None:
+    # every pulse stays inside the startup range around level, the last ones are level, then D
+    span = CFG["rig"]["startup_range_us"]
     sent = [tuple(int(v) for v in line.split()[1:]) for line in link.sent if line[0] == "P"]
+    assert max(abs(p[k] - level[k]) for p in sent for k in (0, 1)) <= span
     last = max(i for i, p in enumerate(sent) if p != level)
-    assert all(p in ok for p in sent[: last + 1])
     assert sent[last + 1 :] and all(p == level for p in sent[last + 1 :])
     assert link.sent[-1] == "D"
 
@@ -51,8 +50,7 @@ def test_recovers_yaw_mirror_scale_and_gain(d_mm):
     assert (float(cx), float(cy)) == pytest.approx((700, 380), abs=1)
     assert "mirror: yes" in out
     assert link.sent.index("A") < min(i for i, s in enumerate(link.sent) if s.startswith("P"))
-    a1, a2 = (int(a) for a in re.search(r"pulses (\d+) and (\d+) us", out).groups())
-    stops_at_level(link, (a1, a2))
+    stops_at_level(link)
 
 
 def test_second_amplitude_shrinks_on_a_soft_plate():
@@ -72,10 +70,11 @@ def test_first_pulse_clears_heavy_rolling_friction():
     assert float(value(out, "us_per_deg_x")) == pytest.approx(100, rel=0.1)
 
 
-def test_a_wrong_stored_trim_rolls_the_ball_off_and_stops_safely():
+def test_a_wrong_stored_trim_is_held_and_found():
     cfg, world, link, bench = setup(trims=(0, 0))
-    with pytest.raises(autocal.Abort, match="rim"):
-        autocal.run(bench, world, cfg, world.clock, world.advance, lambda _: "")
+    out = autocal.run(bench, world, cfg, world.clock, world.advance, lambda _: "")
+    assert float(value(out, "trim_x_us")) == pytest.approx(15, abs=12)
+    assert float(value(out, "trim_y_us")) == pytest.approx(-25, abs=12)
     stops_at_level(link, level=(1500, 1500))
 
 
