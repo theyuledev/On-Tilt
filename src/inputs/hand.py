@@ -53,6 +53,7 @@ class HandIntent:
         self._samples: list[tuple[float, float, float]] = []
         self._last_seen: float | None = None
         self._euro = (None, None)
+        self._appear = 0.0
 
     @property
     def calibrating(self) -> bool:
@@ -71,7 +72,7 @@ class HandIntent:
         self, reading: tuple[float, float] | None, t: float, recentre: bool = False
     ) -> Intent:
         cfg = self.cfg
-        self.seen = reading is not None
+        was_seen, self.seen = self.seen, reading is not None
         if reading is None:
             self._euro = (None, None)
             gone = t - self._last_seen if self._last_seen is not None else 0.0
@@ -83,17 +84,21 @@ class HandIntent:
             return Intent(x=0.0, y=0.0, valid=False, t_s=t)
 
         self._last_seen = t
+        if not was_seen:
+            self._appear = t
         at = self._smooth(reading, t)
         if recentre:
-            self._set_neutral(at)
+            self._set_neutral(at, t)
         if self.neutral is None:
             self._samples.append((t, *at))
             if not self._lock_neutral(t):
                 return Intent(x=0.0, y=0.0, valid=False, t_s=t)
 
         sx, sy = _signs(cfg)
-        x = _clamp(sx * (at[0] - self.neutral[0]) / self.span)
-        y = _clamp(sy * (at[1] - self.neutral[1]) / self.span)
+        # ease in after the hand shows up or the neutral moves, so the plate never jumps
+        ramp = min(1.0, (t - self._appear) / cfg["key_ramp_s"])
+        x = _clamp(sx * (at[0] - self.neutral[0]) / self.span) * ramp
+        y = _clamp(sy * (at[1] - self.neutral[1]) / self.span) * ramp
         return Intent(x=x, y=y, valid=True, t_s=t)
 
     def _smooth(self, reading: tuple[float, float], t: float) -> tuple[float, float]:
@@ -115,12 +120,13 @@ class HandIntent:
         still = self.span / 4
         if max(xs) - min(xs) >= still or max(ys) - min(ys) >= still:
             return False
-        self._set_neutral((sum(xs) / len(xs), sum(ys) / len(ys)))
+        self._set_neutral((sum(xs) / len(xs), sum(ys) / len(ys)), t)
         return True
 
-    def _set_neutral(self, at: tuple[float, float]) -> None:
+    def _set_neutral(self, at: tuple[float, float], t: float) -> None:
         self.neutral = at
         self._samples = []
+        self._appear = t
 
 
 def recentre_asked(sock: socket.socket) -> bool:

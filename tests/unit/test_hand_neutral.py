@@ -20,8 +20,9 @@ def test_neutral_survives_a_short_dropout():
     assert not hand.update(None, t + 0.5).valid
     assert hand.update(None, t + 3.0).valid is False and hand.neutral is not None
     assert hand.progress == 1.0
-    # the palm comes back and steers straight away, no hold still
-    assert hand.update((0.5 + 0.125, 0.5), t + 3.1).x == pytest.approx(0.5)
+    # the palm comes back and steers without a hold still, eased in from zero
+    assert hand.update((0.5 + 0.125, 0.5), t + 3.1) == Intent(0.0, 0.0, True, t + 3.1)
+    assert hand.update((0.5 + 0.125, 0.5), t + 3.2).x == pytest.approx(0.5)
 
 
 def test_neutral_drops_after_a_long_dropout():

@@ -102,3 +102,35 @@ def test_recentre_on_a_shaky_hand_keeps_the_plate_level():
     assert cmds[0] == (0.0, 0.0)
     # jitter can poke past the dead zone edge now and then, the smooth edge keeps that tiny
     assert max(np.hypot(*c) for c in cmds) < 0.05 * INPUT["intent_gain_deg"]
+
+
+RAW_TILT = {**TILT, "hand_min_cutoff_hz": 1e9, "hand_beta": 0.0}  # filter passes through
+RAMP_S = INPUT["key_ramp_s"]
+
+
+def eases_in(hand, reading, t0, full):
+    # frames after t0, the moment the hand showed up or the neutral moved
+    for i in range(1, round(2 * RAMP_S / DT)):
+        x = hand.update(reading, t0 + i * DT).x
+        part = min(1.0, i * DT / RAMP_S)
+        assert abs(x) <= full * part + 1e-6
+        if part == 1.0:
+            assert x == pytest.approx(full)
+
+
+def test_no_jump_when_the_hand_comes_back_tilted():
+    hand = HandIntent(RAW_TILT)
+    hand.update((0.0, 0.0), 0.0, recentre=True)
+    hand.update((0.0, 0.0), 0.5)
+    assert not hand.update(None, 0.6).valid
+    i = hand.update((20.0, 0.0), 1.0)
+    assert i.valid and i.x == 0.0
+    eases_in(hand, (20.0, 0.0), 1.0, 20 / SPAN)
+
+
+def test_the_ease_in_starts_over_on_recentre():
+    hand = HandIntent(RAW_TILT)
+    hand.update((0.0, 0.0), 0.0, recentre=True)
+    assert hand.update((20.0, 0.0), 0.5).x == pytest.approx(20 / SPAN)
+    assert hand.update((-20.0, 0.0), 1.0, recentre=True).x == 0.0
+    eases_in(hand, (0.0, 0.0), 1.0, 20 / SPAN)

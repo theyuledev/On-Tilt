@@ -25,7 +25,8 @@ CFG = {
     "hand_mode": "palm",
     "hand_flip_x": False,
     "hand_flip_y": False,
-    # a filter that passes straight through
+    # a ramp that is over at once and a filter that passes straight through
+    "key_ramp_s": 1e-9,
     "hand_min_cutoff_hz": 1e9,
     "hand_beta": 0.0,
     "hand_d_cutoff_hz": 1.0,

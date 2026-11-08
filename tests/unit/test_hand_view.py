@@ -22,18 +22,21 @@ LANDMARKS = [SimpleNamespace(x=0.3 + 0.01 * i, y=0.6 - 0.015 * i, z=0.0) for i i
 INTENT = Intent(0.4, -0.1, True, 1.0)
 
 
-def test_draw_shrinks_to_a_mirrored_view_with_the_skeleton():
+@pytest.mark.parametrize("mirror", [False, True])
+def test_draw_shrinks_the_view_and_mirrors_only_a_facing_webcam(mirror):
     img = np.zeros((720, 1280, 3), np.uint8)
-    out = draw(img, LANDMARKS, (0.5, 0.5), (12.0, -3.0), INTENT)
+    out = draw(img, LANDMARKS, (0.5, 0.5), (12.0, -3.0), INTENT, mirror)
     assert out.shape == (360, JPEG_WIDTH, 3) and out.any()
     assert not img.any()
-    # the hand sits left of centre in the camera image, so right of centre on the page
+    # the hand sits left of centre in the camera image, a mirror puts it right of centre
     skeleton = out[100:, :] > 0
-    assert skeleton[:, JPEG_WIDTH // 2 :].sum() > skeleton[:, : JPEG_WIDTH // 2].sum()
+    right = skeleton[:, JPEG_WIDTH // 2 :].sum()
+    left = skeleton[:, : JPEG_WIDTH // 2].sum()
+    assert (right > left) == mirror
 
 
 def test_draw_without_a_hand_says_so():
-    out = draw(np.zeros((480, 640, 3), np.uint8), None, None, None, INTENT)
+    out = draw(np.zeros((480, 640, 3), np.uint8), None, None, None, INTENT, False)
     assert out.shape == (480, 640, 3) and out.any()
 
 
@@ -41,7 +44,7 @@ def test_frame_jpg_reads_the_model_result_with_or_without_a_hand():
     img = np.zeros((480, 640, 3), np.uint8)
     for lms in ([], [LANDMARKS]):
         result = SimpleNamespace(hand_landmarks=lms, hand_world_landmarks=lms)
-        jpg = frame_jpg(img, result, None, INTENT)
+        jpg = frame_jpg(img, result, None, INTENT, False)
         assert cv2.imdecode(np.frombuffer(jpg, np.uint8), cv2.IMREAD_COLOR).shape == img.shape
 
 
