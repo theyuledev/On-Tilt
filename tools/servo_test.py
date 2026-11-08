@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 
 import cv2
+import numpy as np
 
 from src.control.pulse_map import center
 from src.io.camera import CameraSource, open_camera
@@ -12,12 +13,14 @@ from src.io.serial_link import open_board
 from src.io.settings import ROOT, load
 from src.safety import limits
 from src.vision.calib import load_calib
-from src.vision.plate_pose import QuadTracker, tilt_report
+from src.vision.markers import TiltTracker, load_board
+from src.vision.plate_pose import tilt_report
 from src.vision.pointer import PairTracker, report
 from tools.bench import Bench, kill_and_wait
 
 REVERSALS = (3, 5, 8, 12, 20, 30)
 OUT = ROOT / "data" / "servo"
+BOARD = ROOT / "configs" / "board.local.json"
 
 
 def plan(rig: dict, axis: int, tick: float) -> list[tuple[int, str]]:
@@ -120,16 +123,17 @@ def load_csv(path: Path):
 
 def show(commands, rows, kind: str, rig: dict) -> None:
     axis = 0 if len({c[2] for c in commands}) > 1 else 1
-    out = tilt_report(commands, rows, axis) if kind == "quad" else report(commands, rows, rig, axis)
+    out = tilt_report(commands, rows, axis) if kind == "tilt" else report(commands, rows, rig, axis)
     for k, v in out.items():
         print(f"{k:>18}: {v if not isinstance(v, float) else round(v, 3)}")
 
 
-def annotate(tracker: QuadTracker, path: Path) -> None:
-    img = cv2.cvtColor(tracker.image, cv2.COLOR_GRAY2BGR)
-    for i, (x, y) in enumerate(tracker.quad.astype(int)):
-        cv2.circle(img, (x, y), 8, (0, 0, 255), 2)
-        cv2.putText(img, str(i), (x + 10, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+def annotate(tracker: TiltTracker, path: Path) -> None:
+    """The last frame the plate was solved on, markers outlined with their ids."""
+    img = tracker.image
+    img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR) if img.ndim == 2 else img.copy()
+    ids = np.array(list(tracker.found), np.int32).reshape(-1, 1)
+    cv2.aruco.drawDetectedMarkers(img, [c.reshape(1, 4, 2) for c in tracker.found.values()], ids)
     cv2.imwrite(str(path), img)
 
 
@@ -157,8 +161,9 @@ def main() -> None:
     steps = plan(rig, axis, tick)
     other = round(center(rig)[1 - axis])
     if "plate" in args:
-        tracker = QuadTracker(load_calib(), rig["plate_inner_mm"])
-        name, kind = f"{name}_plate", "quad"
+        board = next((Path(a) for a in args if a.endswith(".json")), BOARD)
+        tracker = TiltTracker(cfg["vision"], load_calib(), *load_board(board))
+        name, kind = f"{name}_plate", "tilt"
     else:
         tracker, kind = PairTracker(max(us for us, _ in steps)), "ang"
     print(f"{len(steps) * tick:.0f}s planned, ctrl-c kills", flush=True)
@@ -186,11 +191,12 @@ def finish(name, commands, rows, tracker, kind: str, rig: dict, cut: bool) -> No
     print(f"wrote {save(name, commands, rows, kind)} ({len(rows)} frames)", flush=True)
     if kind == "ang" and tracker.seed:
         annotate_pair(tracker, OUT / f"{name}.jpg")
-    if len(rows) < 10 and not cut:
+    seen = sum(not math.isnan(r[1]) for r in rows)
+    if seen < 10 and not cut:
         print("too few frames, target not found")
-    if cut or len(rows) < 10:
+    if cut or seen < 10:
         return
-    if kind == "quad":
+    if kind == "tilt":
         annotate(tracker, OUT / f"{name}.jpg")
     show(commands, rows, kind, rig)
 

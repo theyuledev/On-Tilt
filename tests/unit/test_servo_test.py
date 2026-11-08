@@ -7,11 +7,12 @@ import pytest
 from src.io.ports import Frame
 from src.io.serial_link import BoardLink
 from src.io.settings import load
-from src.vision.plate_pose import QuadTracker
+from src.vision.markers import TiltTracker
 from src.vision.pointer import PairTracker
 from tests.contract.fake_board import FakeBoard
-from tests.unit.test_plate_pose import SIZE, STANDARD, pose, render
+from tests.unit.test_plate_pose import STANDARD, T, pose
 from tests.unit.test_pointer import frame
+from tests.vision.test_markers import BASE, CFG, PLATE, R_BASE, T_BASE, render
 from tools.bench import Bench
 from tools.servo_test import annotate_pair, guarded, load_csv, run, save
 
@@ -78,16 +79,16 @@ def test_run_on_the_y_axis_tracks_the_plate(bench):
     clock = Clock()
     commands, rows = run(
         b,
-        FakeCam([render(r)], clock),
+        FakeCam([render([(PLATE, r, T), (BASE, R_BASE, T_BASE)])], clock),
         [(1560, "hold")] * 3,
         1500,
         1,
         TICK,
-        QuadTracker(STANDARD, SIZE),
+        TiltTracker({**CFG, "marker_min_count": 2}, STANDARD, PLATE, BASE),
         clock,
     )
     assert all(c[2:4] == (1500, 1560) for c in commands)
-    assert len(rows) >= 2 and len(rows[0]) == 11
+    assert len(rows) >= 2 and rows[0][3] == 4
     assert rows[0][1] == pytest.approx(tx, abs=0.5) and rows[0][2] == pytest.approx(ty, abs=0.5)
 
 
@@ -168,7 +169,7 @@ def test_csv_round_trip_and_old_single_time_rows(tmp_path, monkeypatch):
     monkeypatch.setattr(st, "OUT", tmp_path)
     commands = [(1.0, 1.002, 1600, 1500, "find"), (1.01, 1.012, 1500, 1500, "hold")]
     rows = [(1.005, 2.5, -1.0, *np.arange(8.0))]
-    assert load_csv(save("t", commands, rows, "quad")) == (commands, rows, "quad")
+    assert load_csv(save("t", commands, rows, "tilt")) == (commands, rows, "tilt")
     old = tmp_path / "old.csv"
     old.write_text("cmd,1.0,1600,1500,find\nang,1.005,12.5\n")
     assert load_csv(old) == ([(1.0, 1.0, 1600, 1500, "find")], [(1.005, 12.5)], "ang")

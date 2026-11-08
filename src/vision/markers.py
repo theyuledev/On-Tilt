@@ -6,6 +6,7 @@ the pattern's own TL/TR/BR/BL when the print lies with its top edge toward +y.
 """
 
 import json
+import math
 from pathlib import Path
 
 import cv2
@@ -95,3 +96,27 @@ def _board(raw: dict) -> dict[int, np.ndarray]:
 def load_board(path) -> tuple[dict[int, np.ndarray], dict[int, np.ndarray]]:
     data = json.loads(Path(path).read_text())
     return _board(data["plate"]), _board(data["base"])
+
+
+class TiltTracker:
+    """Plate tilt from the markers frame to frame; rows are (t, tilt_x, tilt_y, n_plate),
+    tilt nan while fewer than marker_min_count plate markers show."""
+
+    def __init__(self, cfg: dict, lens: dict, plate: dict, base: dict):
+        self.det, self.lens, self.plate, self.base = detector(cfg), lens, plate, base
+        self.min_count = cfg["marker_min_count"]
+        self.plate_pose = self.base_pose = self.image = self.found = None
+
+    def update(self, image: np.ndarray, t: float, us: int | None = None):
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
+        found = find(self.det, gray)
+        n = len(set(found) & set(self.plate))
+        self.plate_pose = board_pose(found, self.plate, self.lens, self.plate_pose, self.min_count)
+        base = board_pose(found, self.base, self.lens, self.base_pose, self.min_count)
+        # the table does not move, so the last base pose stands in while it is covered
+        self.base_pose = self.base_pose if base is None else base
+        if self.plate_pose is None:
+            return (t, math.nan, math.nan, n)
+        self.image, self.found = image, found
+        r_base = None if self.base_pose is None else cv2.Rodrigues(self.base_pose[0])[0]
+        return (t, *relative_tilt(cv2.Rodrigues(self.plate_pose[0])[0], r_base), n)
