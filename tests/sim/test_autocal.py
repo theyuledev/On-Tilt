@@ -57,6 +57,15 @@ def test_second_amplitude_shrinks_on_a_soft_plate():
     assert float(value(out, "us_per_deg_x")) == pytest.approx(28.75, rel=0.1)
 
 
+def test_first_pulse_clears_heavy_rolling_friction():
+    slow = dict(us_per_deg_x=100.0, us_per_deg_y=100.0, servo_dead_time_s=0.06)
+    cfg, world, link, bench = setup(friction_mm_s2=47.0, **slow)
+    out = autocal.run(bench, world, cfg, world.clock, world.advance, lambda _: "")
+    assert float(value(out, "trim_x_us")) == pytest.approx(15, abs=12)
+    assert float(value(out, "trim_y_us")) == pytest.approx(-25, abs=12)
+    assert float(value(out, "us_per_deg_x")) == pytest.approx(100, rel=0.1)
+
+
 def test_a_wrong_stored_trim_rolls_the_ball_off_and_stops_safely():
     cfg, world, link, bench = setup(trims=(0, 0))
     with pytest.raises(autocal.Abort, match="rim"):
@@ -99,5 +108,7 @@ def test_lost_ball_levels_then_disarms():
 def test_sim_entry_runs_end_to_end(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["autocal", "--sim"])
     monkeypatch.setattr(autocal, "load", lambda: copy.deepcopy(CFG))
-    with pytest.raises(SystemExit, match="rim"):
-        autocal.main()
+    autocal.main()
+    out = capsys.readouterr().out
+    assert float(value(out, "plate_yaw_deg")) == pytest.approx(37, abs=2)
+    assert "mirror: no" in out

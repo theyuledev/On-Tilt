@@ -70,7 +70,11 @@ class Autocal:
         t0 = self.t_start + c["servo_dead_time_s"] + amp / c["servo_top_speed_us_s"]
         t0 += 3 * c["servo_tau_s"]
         t1 = self.t_start + c["autocal_pulse_s"] + c["servo_dead_time_s"]
-        t, u, v = zip(*[r for r in self.rows if t0 <= r[0] <= t1], strict=True)
+        win = [r for r in self.rows if t0 <= r[0] <= t1]
+        if len(win) < 3:  # a quadratic needs three
+            self.aborted = f"only {len(win)} frames in a pulse"
+            return
+        t, u, v = zip(*win, strict=True)
         a = accel_vec(t, u, v, t0, t1)
         self.acc[(ax, s, i)] = a
         if (ax, s, i) == ("x", 1, 0):

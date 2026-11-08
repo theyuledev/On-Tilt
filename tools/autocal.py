@@ -120,9 +120,10 @@ def main() -> None:
     args = ap.parse_args()
     cfg = load()
     if args.sim:
-        from src.sim.rig import SimLink, SimRig
+        from src.sim.rig import TRUTH, SimLink, SimRig
 
-        world = SimRig(cfg)
+        # open loop pulses only survive a near level start, so the fake starts at the stored trims
+        world = SimRig(cfg, {**TRUTH, **{k: cfg["rig"][k] for k in ("trim_x_us", "trim_y_us")}})
         bench, cam = Bench(SimLink(world), cfg["rig"]), world
         timing = (world.clock, world.advance, lambda _: "")
     else:
