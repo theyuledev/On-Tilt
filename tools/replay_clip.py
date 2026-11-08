@@ -33,14 +33,14 @@ def parse_window(arg: str) -> Window:
     return int(a), int(b)
 
 
-def run(path: str, windows: list[Window], cfg: dict) -> Replay:
-    src = ClipSource(path)
+def run(path: str, windows: list[Window], cfg: dict, start: int = 0) -> Replay:
+    src = ClipSource(path, start)
     tracker = BallTracker(cfg)
     radii: dict[Window, list[float]] = {w: [] for w in windows}
     missed: dict[Window, list[int]] = {w: [] for w in windows}
     ms: dict[bool, list[float]] = {True: [], False: []}
     last = max(end for _, end in windows)
-    i = 0
+    i = start
     while i < last and (frame := src.read()) is not None:
         locked = tracker.r is not None
         t0 = perf_counter()

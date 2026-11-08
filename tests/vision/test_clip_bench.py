@@ -1,4 +1,9 @@
+"""Ball tracker on the recorded clips. By default only the floors and the update cost, each window
+run on its own after a short warm-up (about 15 s for the three clips). VISION_BENCH=full also runs
+the nine ratchet windows from frame 0 against bench_baseline.json (about 3 min)."""
+
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -22,6 +27,8 @@ FLOORS: dict[tuple[str, Window], float] = {
     ("lacrosse_ball_hand_rolled_1948", (13310, 13430)): 0.85,
     ("squash_ball_hand_rolled_1944", (5130, 5370)): 0.98,
 }
+# frames before a floor window: 10 s at 120 fps, enough for the background's 5 samples
+WARMUP = 1200
 
 if not any((CLIPS / f"{stem}.avi").exists() for stem in BASELINE):
     pytest.skip(f"no clips in {CLIPS}", allow_module_level=True)
@@ -32,46 +39,58 @@ def hit_rate(window: tuple[list[float], list[int]]) -> float:
     return len(radii) / (len(radii) + len(missed))
 
 
+def pick(results: dict, key, stem: str):
+    if key not in results:
+        pytest.skip(f"{stem}.avi not on this machine")
+    return results[key]
+
+
+@pytest.fixture(scope="module")
+def floors():
+    out = {}
+    for stem, window in FLOORS:
+        path = CLIPS / f"{stem}.avi"
+        if path.exists():
+            out[stem, window] = run(str(path), [window], CFG, window[0] - WARMUP)
+    return out
+
+
 @pytest.fixture(scope="module")
 def runs():
+    if os.environ.get("VISION_BENCH") != "full":
+        pytest.skip("set VISION_BENCH=full")
     out = {}
     for stem, windows in BASELINE.items():
         path = CLIPS / f"{stem}.avi"
         if path.exists():
-            wins = {parse_window(k) for k in windows} | {w for s, w in FLOORS if s == stem}
-            out[stem] = run(str(path), sorted(wins), CFG)
+            out[stem] = run(str(path), [parse_window(k) for k in windows], CFG)
     return out
 
 
-def replay(runs, stem):
-    if stem not in runs:
-        pytest.skip(f"{stem}.avi not on this machine")
-    return runs[stem]
-
-
-@pytest.mark.parametrize(("stem", "key"), [(s, k) for s in BASELINE for k in BASELINE[s]])
-def test_hit_rate_holds_the_baseline(runs, stem, key):
-    rate = hit_rate(replay(runs, stem).windows[parse_window(key)])
-    base = BASELINE[stem][key]
-    print(f"{stem} {key} hit {rate:.3f} baseline {base:.3f}")
-    assert rate >= base - 0.005, f"{stem} {key}: hit {rate:.3f} dropped under baseline {base:.3f}"
-
-
 @pytest.mark.parametrize(("stem", "window", "floor"), [(s, w, f) for (s, w), f in FLOORS.items()])
-def test_visible_ball_is_held(runs, stem, window, floor):
-    rate = hit_rate(replay(runs, stem).windows[window])
+def test_visible_ball_is_held(floors, stem, window, floor):
+    rate = hit_rate(pick(floors, (stem, window), stem).windows[window])
+    print(f"{stem} {window} hit {rate:.3f} floor {floor}")
     assert rate >= floor, f"{stem} {window}: hit {rate:.3f} < {floor}"
 
 
-def test_update_cost(runs):
-    locked = [ms for r in runs.values() for ms in r.locked_ms]
-    search = [ms for r in runs.values() for ms in r.search_ms]
+def test_update_cost(floors):
+    locked = [ms for r in floors.values() for ms in r.locked_ms]
+    search = [ms for r in floors.values() for ms in r.search_ms]
     print(f"locked p50 {pct(locked, 50):.2f} p99 {pct(locked, 99):.2f} ms", end=" ")
     print(f"search p50 {pct(search, 50):.2f} p99 {pct(search, 99):.2f} ms")
     assert pct(locked, 50) <= 2.0, "locked update usually fits a 120 fps budget with room to spare"
     assert pct(locked, 99) <= 5.0, "a background sample is the only thing allowed to cost more"
     # 1.5x the 12.8 ms p99 measured on a busy mac, the aim is 12
     assert pct(search, 99) <= 19.0, "a full frame search while lost returns within two frames"
+
+
+@pytest.mark.parametrize(("stem", "key"), [(s, k) for s in BASELINE for k in BASELINE[s]])
+def test_hit_rate_holds_the_baseline(runs, stem, key):
+    rate = hit_rate(pick(runs, stem, stem).windows[parse_window(key)])
+    base = BASELINE[stem][key]
+    print(f"{stem} {key} hit {rate:.3f} baseline {base:.3f}")
+    assert rate >= base - 0.005, f"{stem} {key}: hit {rate:.3f} dropped under baseline {base:.3f}"
 
 
 def test_empty_plate_gives_no_detections():
