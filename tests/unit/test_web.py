@@ -82,6 +82,17 @@ def test_c_key_sends_a_one_shot_recentre_like_arm_and_kill(client):
     assert 'e.code === "KeyC" && !e.metaKey && !e.ctrlKey' in js and "pending.recentre = true" in js
 
 
+def test_space_or_enter_never_clicks_a_focused_arm_button(client):
+    js = static(client, "app.js")
+    assert 'clickKeys = new Set(["Space", "Enter", "NumpadEnter"])' in js
+    # space clicks a focused button on keyup, so both key events swallow it
+    assert js.count("if (clickKeys.has(e.code)) e.preventDefault();") == 2
+    assert 'addEventListener("keyup", e => { if (clickKeys.has(e.code)) e.preventDefault();' in js
+    assert 'if (e.code === "Space") { pending.kill = true; return; }' in js
+    for b in ("arm", "kill"):
+        assert f'$("{b}").onclick = e => {{ pending.{b} = true; e.currentTarget.blur(); }}' in js
+
+
 def test_watch_tab_sends_nothing_and_takes_no_input(client):
     js = static(client, "app.js")
     assert 'has("watch")' in js and "watch ? {} :" in js
