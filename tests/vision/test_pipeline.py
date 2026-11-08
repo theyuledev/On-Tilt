@@ -3,6 +3,7 @@ import math
 import pytest
 
 from src.io.settings import load
+from src.vision import pipeline
 from src.vision.pipeline import Pipeline
 from tests.unit.test_balls import ball, plate
 
@@ -12,6 +13,13 @@ CFG = load()
 VIS = CFG["vision"]
 DT = 1 / 120
 SPAN = VIS["velocity_span_frames"]
+
+
+@pytest.fixture(autouse=True)
+def no_local_files(monkeypatch, tmp_path):
+    # no lens or board file: the ball only path, whatever this mac has in configs
+    monkeypatch.setattr(pipeline, "CALIB_PATH", tmp_path / "calib.json")
+    monkeypatch.setattr(pipeline, "BOARD_PATH", tmp_path / "board.json")
 
 
 def rolling(n, start=0):
