@@ -74,7 +74,7 @@ def pulses(bench: Bench, cam, cal: Autocal, clock, sleep, period) -> None:
 def report(cal, centre, s_ball: float, cfg: dict) -> str:
     r, rig = cal.result, cfg["rig"]
     tag = f'label = "measured ({datetime.date.today().isoformat()})" }}'
-    old = cfg["vision"]["px_per_mm"]
+    old, dead = cfg["vision"]["px_per_mm"], cfg["control"]["servo_dead_time_s"]
     half = rig["ball_d_mm"] / 2
     h = f"{half * s_ball / (s_ball - old):.0f} mm" if s_ball > old else "n/a"
     lines = [
@@ -90,6 +90,7 @@ def report(cal, centre, s_ball: float, cfg: dict) -> str:
         "",
         f"mirror: {'yes, us_per_deg_y flipped' if r.mirror else 'no'}",
         f"pulses {cal.amps[0]:.0f} and {cal.amps[1]:.0f} us, fit residual {r.resid:.1f} mm",
+        f"probe best dead time {r.dead_time_s:.2f} s vs stored {dead} s",
         f"camera height check (coarse) {h}",
     ]
     return "\n".join(lines)

@@ -15,6 +15,7 @@ class Calibration:
     plate_yaw_deg: float
     mirror: bool
     resid: float  # rms misfit of the doublet fits, mm
+    dead_time_s: float  # the probe's best fitting servo dead time
 
 
 def wrap(deg: float) -> float:

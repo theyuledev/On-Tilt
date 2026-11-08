@@ -93,8 +93,12 @@ hold_r_mm = { value = 25, label = "uncalibrated default (NOT TESTED, expected pr
 hold_v_mm_s = { value = 15, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 hold_still_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 hold_timeout_s = { value = 5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-hold_diverge_mm = { value = 30, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-hold_diverge_s = { value = 0.5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+hold_div_accel_mm_s2 = { value = 80, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+hold_div_wait_s = { value = 0.15, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+hold_div_fit_s = { value = 0.2, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+hold_div_v_mm_s = { value = 20, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+hold_div_frames = { value = 2, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_dead_sweep_s = { value = [0.02, 0.16, 0.01], label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 
 [game]
 heartbeat_stale_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }

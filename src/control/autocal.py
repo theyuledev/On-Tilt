@@ -15,7 +15,8 @@ from src.control.autocal_fit import (
     stored_m,
     trim_step,
 )
-from src.control.autocal_hold import Hold
+from src.control.autocal_hold import Hold, since
+from src.control.autocal_sweep import DeadSweep
 from src.control.pulse_map import center
 from src.sim.plate import SimActuator
 
@@ -37,6 +38,7 @@ class Autocal:
         self.wall = (self.rig["plate_inner_mm"] - self.rig["ball_d_mm"]) / 2
         self.wall -= self.c["autocal_rim_margin_mm"]
         self.model = SimActuator(self.rig, self.c)  # the stored servo chain, fed what we send
+        self.sweep, self.dead = DeadSweep(self.rig, self.c), math.nan
         self.rows: list[tuple[float, float, float]] = []
         self.mod: list[tuple[float, float, float]] = []
         self.m: dict = {}
@@ -73,6 +75,8 @@ class Autocal:
         cmd = ServoCommand(round(float(x)), round(float(y)))
         self.model.send(cmd, now)
         self.mod.append((now, *(np.array(self.model.pos) - self.level)))
+        if self.M is None:
+            self.sweep.send(cmd, now, self.level)
         return cmd
 
     def _watch(self, now: float, obs) -> None:
@@ -152,15 +156,13 @@ class Autocal:
         if flat or rms > c["autocal_probe_rms_mm"] or not all(lo <= g <= hi for g in gain):
             self.aborted = "plate did not answer the probe"
             return
-        self.M = m
+        self.M, self.dead = m, self.sweep.best(since(self.rows, self.t0), self.t0)
         ref = stored_m(self.rig, self.vision["plate_yaw_deg"], c["sim_g_mm_s2"])
         if self.quick and not agree(m, ref, c["autocal_agree_deg"], c["autocal_agree_gain"]):
             self.queue = [(ax, s, i) for i in (0, 1) for ax, s in ORDER]
             self.note = "recalibrating"
-        a1 = self.amps[0]
-        self.amps[1] = second_amp(
-            a1, np.hypot(*m[:, 0]) * a1, c["autocal_pulse_s"], c["autocal_travel_mm"], self.amps[1]
-        )
+        k, T, travel = np.hypot(*m[:, 0]), c["autocal_pulse_s"], c["autocal_travel_mm"]
+        self.amps = [second_amp(a, k * a, T, travel, a) for a in self.amps]
         lim = c["autocal_level_max_us"]
         self.level = self.c0 + np.clip(-c["autocal_ff_gain"] * np.linalg.solve(m, b), -lim, lim)
 
@@ -193,4 +195,4 @@ class Autocal:
             mirror = uy < 0
         tx, ty = self.level - (rig["center_x_us"], rig["center_y_us"])
         resid = float(np.sqrt(np.mean(np.square(self.rms))))
-        self.result = Calibration(float(tx), float(ty), ux, uy, yaw, mirror, resid)
+        self.result = Calibration(float(tx), float(ty), ux, uy, yaw, mirror, resid, self.dead)

@@ -7,6 +7,7 @@ import pytest
 
 from src.control import autocal as ac
 from src.control.autocal_fit import wrap
+from src.control.autocal_hold import DIVERGED
 from src.io.settings import BASE, load
 from src.sim.rig import TRUTH, SimRig
 
@@ -20,7 +21,7 @@ def run(
     d_mm=61.8,
     quick=False,
     stored=(28.75, 28.75, 0.0),
-    hidden_s=0.0,
+    hidden=(0.0, 0.0),
     control=None,
     **truth,
 ):
@@ -37,7 +38,7 @@ def run(
     world.send(*(round(v) for v in cal.c0))
     sent = []
     while world.t < 60:
-        world.visible = world.t >= hidden_s
+        world.visible = not hidden[0] <= world.t < hidden[1]
         cmd = cal.step(world.t, world.latest())
         if cmd is None:
             break
@@ -89,19 +90,25 @@ def bad_probe(monkeypatch, f):
     monkeypatch.setattr(ac, "probe_fit", lambda *a: (lambda m, b, r: (f(m), b, r))(*fit(*a)))
 
 
-@pytest.mark.parametrize("f", [lambda m: -m, lambda m: m[:, ::-1]], ids=["negated", "swapped"])
+TURN = np.array([[0.0, -1.0], [1.0, 0.0]])
+FLIPS = [lambda m: -m, lambda m: m[:, ::-1], lambda m: TURN @ m]
+
+
+@pytest.mark.parametrize("f", FLIPS, ids=["negated", "swapped", "rotated"])
 @pytest.mark.parametrize("trims", [(15, -25), (60, -60)])
-def test_a_wrong_mapping_trips_before_the_rim(monkeypatch, f, trims):
+def test_a_wrong_mapping_stops_inside_the_clamp(monkeypatch, f, trims):
     bad_probe(monkeypatch, f)
-    cal, _ = run(trims, 37)
-    assert cal.aborted and "rim" not in cal.aborted
-    assert max_r(cal) < cal.wall
+    cal, sent = run(trims, 37)
+    assert cal.aborted
+    assert np.abs(sent - cal.c0).max() <= CFG["rig"]["startup_range_us"]
 
 
-def test_a_negated_mapping_reads_as_divergence(monkeypatch):
-    bad_probe(monkeypatch, lambda m: -m)
-    cal, _ = run((15, -25))
-    assert "mapping looks wrong" in cal.aborted
+@pytest.mark.parametrize("upd", [100.0, 57.0])
+@pytest.mark.parametrize("fric", [47.0, 15.0])
+@pytest.mark.parametrize("trims,yaw,mirror", [((60, -60), 37, True), ((-60, 60), 90, False)])
+def test_the_right_mapping_never_reads_as_diverging(upd, fric, trims, yaw, mirror):
+    cal, _ = run(trims, yaw, mirror, us_per_deg_x=upd, us_per_deg_y=upd, friction_mm_s2=fric)
+    assert cal.aborted is None or cal.aborted != DIVERGED
 
 
 def test_a_stuck_ball_stops_before_the_rim():
@@ -110,13 +117,19 @@ def test_a_stuck_ball_stops_before_the_rim():
     assert max_r(cal) < cal.wall
 
 
+def test_the_probe_finds_a_slow_chain():
+    cal, _ = run((15, -25), 37, servo_dead_time_s=0.10)
+    assert cal.dead == pytest.approx(0.10, abs=0.03)
+
+
 def test_a_ball_that_never_settles_times_out():
     cal, _ = run(control={"hold_v_mm_s": 0.0})
     assert cal.aborted == "could not hold the ball"
 
 
-def test_no_frames_at_the_start_is_a_lost_ball():
-    cal, _ = run(hidden_s=0.95)
+@pytest.mark.parametrize("hidden", [(0.0, 0.95), (0.3, 0.7)], ids=["start", "mid-probe"])
+def test_dropped_frames_are_a_lost_ball(hidden):
+    cal, _ = run(hidden=hidden)
     assert cal.aborted == "lost the ball"
 
 
