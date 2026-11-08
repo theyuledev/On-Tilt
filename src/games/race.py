@@ -19,6 +19,7 @@ class Race:
     progress: Progress | None = None
     last_valid_t: float | None = None
     reason: str | None = None
+    end_s: float | None = None
 
 
 def start(race: Race, rec: RunLogRecord, killing: bool, board_lost: bool, maze, game: dict) -> Race:
@@ -46,7 +47,7 @@ def advance(
     step: Step,
 ) -> Race:
     if race.state == "countdown":
-        return _countdown(race, rec, killing, board_lost, game)
+        return _countdown(race, rec, killing, board_lost, maze, game)
     if race.state == "running":
         return _running(race, rec, killing, board_lost, maze, game, rig, step)
     return race
@@ -59,12 +60,14 @@ def _seen(race: Race, rec: RunLogRecord, game: dict) -> tuple[Race, bool]:
     return race, rec.t_s - race.last_valid_t > game["lost_s"]
 
 
-def _countdown(race, rec, killing, board_lost, game) -> Race:
+def _countdown(race, rec, killing, board_lost, maze, game) -> Race:
     if killing or board_lost or not rec.armed:
         return Race()
     race, lost = _seen(race, rec, game)
     if lost:
         return Race(reason="ball lost")
+    if rec.ball.valid and not in_ring(rec.ball, maze.start, game["checkpoint_r_mm"]):
+        return Race(reason="left the start")
     if rec.t_s >= race.go_s:
         return replace(race, state="running")
     return race
@@ -72,7 +75,7 @@ def _countdown(race, rec, killing, board_lost, game) -> Race:
 
 def _running(race, rec, killing, board_lost, maze, game, rig, step) -> Race:
     def dnf(why):
-        return replace(race, state="dnf", reason=why)
+        return replace(race, state="dnf", reason=why, end_s=rec.t_s)
 
     if killing:
         return dnf("killed")
@@ -108,6 +111,8 @@ def elapsed(race: Race, rec: RunLogRecord) -> float | None:
         return 0.0
     if race.state == "finished":
         return race.progress.done_t - race.t0_s
+    if race.state == "dnf":
+        return race.end_s - race.t0_s
     return rec.t_s - race.t0_s
 
 

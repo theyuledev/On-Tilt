@@ -113,6 +113,16 @@ def test_countdown_goes_running_exactly_at_go():
     assert r.t0_s is None
 
 
+def test_leaving_the_ring_before_go_is_a_false_start():
+    r = adv(countdown(), rec(1.0, x=-60.0))
+    assert (r.state, r.reason) == ("idle", "left the start")
+    r = adv(countdown(), rec(1.0, x=-60.0, valid=False))
+    assert r.state == "countdown"
+    r = adv(r, rec(2.0, x=-80.0))
+    assert r.state == "countdown"
+    assert adv(r, rec(3.0, x=-80.0)).state == "running"
+
+
 def test_clock_starts_when_the_ball_leaves_the_ring():
     r = adv(countdown(), rec(3.0))
     r = adv(r, rec(3.5, x=-80.0))
@@ -147,6 +157,14 @@ def test_finish_scores_time_plus_penalty():
 def test_dnf_on_kill_and_board_lost(kw, why):
     r = adv(running(), rec(5.0), **kw)
     assert (r.state, r.reason) == ("dnf", why)
+
+
+def test_clock_stops_at_the_dnf_record():
+    r = adv(running(), rec(5.0, x=-60.0), killing=True)
+    assert race.elapsed(r, rec(5.0)) == 1.0
+    assert race.view(r, rec(10.0), GAME, [], [])["elapsed_s"] == 1.0
+    r = adv(adv(countdown(), rec(3.0)), rec(3.5), killing=True)
+    assert race.elapsed(r, rec(9.0)) == 0.0
 
 
 def test_dnf_on_disarm_off_plate_and_time():
