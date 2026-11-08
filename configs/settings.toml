@@ -50,6 +50,11 @@ path_capture_mm = { value = 15, label = "uncalibrated default (NOT TESTED, expec
 heartbeat_stale_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 ghost = ""
 maze = "square"
+countdown_s = { value = 3.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+lost_s = { value = 1.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+checkpoint_r_mm = { value = 30, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+max_race_s = { value = 60, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+attract = { value = false, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 
 [vision]
 min_ball_r_px = { value = 10, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
