@@ -5,14 +5,33 @@ import time
 
 from src import safety
 from src.contracts import ServoCommand
-from src.io.serial_link import BoardLink, LinkError, limits_line, open_board
+from src.control.pulse_map import center
+from src.io.serial_link import ENVELOPE_US, BoardLink, LinkError, limits_line, open_board
 from src.io.settings import load
+
+NUDGE_US = 5
+LIMIT_KEYS = ("limit_x_us", "limit_y_us", "startup_flag")
+
+
+def headroom(rig: dict) -> str:
+    lo, hi = ENVELOPE_US
+    x_lo, x_hi, y_lo, y_hi = (round(v) for v in safety.limits(rig))
+    return (
+        f"headroom x: {x_lo - lo} below, {hi - x_hi} above"
+        f" | y: {y_lo - lo} below, {hi - y_hi} above"
+    )
+
+
+def offset(pulses: tuple[int, int], rig: dict) -> str:
+    cx, cy = center(rig)
+    return f"off ({round(pulses[0] - cx):+d}, {round(pulses[1] - cy):+d}) us"
 
 
 class Bench:
     def __init__(self, link: BoardLink, rig: dict):
         self.link = link
         self.rig = rig
+        self.settings_limits = {k: rig[k] for k in LIMIT_KEYS}
         self.log: list[str] = []
         self.last_p: tuple[int, int] | None = None
         self.quiet = False
@@ -34,16 +53,43 @@ class Bench:
             self.quiet = True
             self.log.append("quiet: no more heartbeat")
             return ""
-        if line == "l":
-            line = limits_line(self.rig)
+        words = line.split()
+        if words[:1] == ["l"] and len(words) <= 2:
+            return self._load(words)
         reply = self._send(line) or ""
         parts = reply.split()
         if parts[:2] == ["OK", "P"]:
             self.last_p = (int(parts[2]), int(parts[3]))
             self.quiet = False
+        elif parts[:2] == ["OK", "A"]:
+            # pulses start at level, the heartbeat has to keep them alive from here
+            cx, cy = center(self.rig)
+            self.last_p, self.quiet = (round(cx), round(cy)), False
         elif parts[:2] == ["OK", "D"] or "disarmed" in parts:
             self.last_p = None
         return reply
+
+    def _load(self, words: list[str]) -> str:
+        if len(words) == 1:
+            rig = {**self.rig, **self.settings_limits}
+        elif words[1].isdigit():
+            # bench-only limits, the settings file is untouched
+            rng = int(words[1])
+            rig = {**self.rig, "limit_x_us": rng, "limit_y_us": rng, "startup_flag": False}
+        else:
+            self.log.append(f"{' '.join(words)} needs a whole number")
+            return ""
+        reply = self._send(limits_line(rig)) or ""
+        if reply == "OK L":
+            # the board took them, so they are the bench's limits now
+            self.rig.update(rig)
+            self.log.append(headroom(self.rig))
+        return reply
+
+    def nudge(self, dx: int, dy: int) -> None:
+        if self.last_p is None or self.killing:
+            return
+        self.submit(f"P {self.last_p[0] + dx} {self.last_p[1] + dy}")
 
     def kill(self) -> None:
         if self.killing:
@@ -83,11 +129,13 @@ def kill_and_wait(bench: Bench, period: float) -> None:
 def draw(scr, bench: Bench, line: str) -> None:
     h, w = scr.getmaxyx()
     scr.erase()
-    state = f"pulses {bench.last_p}" if bench.last_p else "no pulses"
+    state = "no pulses"
+    if bench.last_p:
+        state = f"pulses {bench.last_p} {offset(bench.last_p, bench.rig)}"
     if bench.killing:
         state = "KILLING"
     hb = "quiet" if bench.quiet else "heartbeat on"
-    keys = "space kill | l limits | quiet | ctrl-c"
+    keys = f"space kill | l [range] | arrows nudge {NUDGE_US} us (lr x, ud y) | quiet | ctrl-c"
     scr.addnstr(0, 0, f"{state} | {hb} | {keys}", w - 1)
     for i, entry in enumerate(bench.log[-(h - 3) :]):
         scr.addnstr(i + 1, 0, entry, w - 1)
@@ -96,6 +144,12 @@ def draw(scr, bench: Bench, line: str) -> None:
 
 
 def run(scr, bench: Bench, period: float) -> None:
+    arrows = {
+        curses.KEY_LEFT: (-NUDGE_US, 0),
+        curses.KEY_RIGHT: (NUDGE_US, 0),
+        curses.KEY_UP: (0, NUDGE_US),
+        curses.KEY_DOWN: (0, -NUDGE_US),
+    }
     scr.nodelay(True)
     line = ""
     last = time.monotonic()
@@ -104,6 +158,8 @@ def run(scr, bench: Bench, period: float) -> None:
             ch = scr.getch()
             if ch == ord(" ") and not line:
                 bench.kill()
+            elif ch in arrows:
+                bench.nudge(*arrows[ch])
             elif ch in (curses.KEY_ENTER, 10, 13):
                 if line:
                     bench.submit(line)
