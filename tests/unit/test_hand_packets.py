@@ -18,6 +18,10 @@ BAD = [
     json.dumps({**GOOD, "x": "0.5", "t_s": 2.0}).encode(),
     json.dumps({**GOOD, "t_s": "2.0"}).encode(),
     json.dumps({**GOOD, "t_s": 2.0, "seen": False, "calibrating": True, "boost": 1}).encode(),
+    json.dumps({**GOOD, "x": 10**400, "t_s": 2.0}).encode(),
+    json.dumps({**GOOD, "valid": "false", "t_s": 2.0}).encode(),
+    json.dumps({**GOOD, "t_s": 2.0, "seen": "false"}).encode(),
+    json.dumps({**GOOD, "t_s": 2.0, "calibrating": "true"}).encode(),
 ]
 
 
