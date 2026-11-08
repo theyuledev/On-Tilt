@@ -100,7 +100,7 @@ def test_ws_race_key_without_a_game_keeps_the_socket_open():
     calls = []
     loop = SimpleNamespace(
         cfg=load(),
-        keys=KeyboardInput(),
+        keys=KeyboardInput({"key_ramp_s": 0.0}),
         arm=lambda: calls.append("arm"),
         kill=lambda: calls.append("kill"),
         snapshot=lambda: {},
@@ -432,7 +432,7 @@ def test_camera_jpeg_404s_without_a_frame():
 
 
 def test_ws_ignores_keys_that_are_not_finite():
-    keys = KeyboardInput()
+    keys = KeyboardInput({"key_ramp_s": 0.0})
     loop = SimpleNamespace(cfg=load(), keys=keys, snapshot=lambda: {})
     with TestClient(make_app(loop)).websocket_connect("/ws") as ws:
         for msg in ({"x": "nan", "y": 0}, {"x": 0.5, "y": "inf"}):

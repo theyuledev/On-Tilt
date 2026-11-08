@@ -63,7 +63,7 @@ def test_browser_page_and_socket():
         sock.send_json({"x": 0.5, "y": 0.0, "arm": True})
         sock.receive_json()
     assert loop.safety.armed
-    assert loop.keys.latest().x == 0.5
+    assert loop.keys.latest().valid and loop.keys._target == (0.5, 0.0)
 
 
 def test_sim_ball_starts_centred_and_rolls_downhill(clock):

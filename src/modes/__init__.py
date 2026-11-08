@@ -1,5 +1,6 @@
 from src.contracts import BallState, Intent, PlateCommand
 from src.control.pid import Integral, integrate, pid, smooth
+from src.inputs.shaping import shape
 from src.modes.assist import goal_mm
 from src.modes.path import clip, target
 
@@ -9,13 +10,7 @@ LEVEL = PlateCommand(tilt_x_deg=0.0, tilt_y_deg=0.0)
 def hand(ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
     if not intent.valid:
         return LEVEL
-    inp = cfg["input"]
-
-    def shape(v: float) -> float:
-        return 0.0 if abs(v) < inp["dead_zone"] else v
-
-    gain = inp["intent_gain_deg"]
-    return PlateCommand(tilt_x_deg=gain * shape(intent.x), tilt_y_deg=gain * shape(intent.y))
+    return PlateCommand(*shape(intent.x, intent.y, cfg["input"]))
 
 
 def pd_toward(ball: BallState, goal: tuple[float, float], cfg: dict) -> PlateCommand:

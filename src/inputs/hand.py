@@ -72,9 +72,17 @@ class HandIntent:
 
 
 def send_intent(
-    sock: socket.socket, intent: Intent, port: int, *, seen: bool, calibrating: bool
+    sock: socket.socket,
+    intent: Intent,
+    port: int,
+    *,
+    seen: bool,
+    calibrating: bool,
+    lag_s: float | None = None,
 ) -> None:
     msg = {**asdict(intent), "seen": seen, "calibrating": calibrating}
+    if lag_s is not None:
+        msg["lag_s"] = lag_s
     sock.sendto(json.dumps(msg).encode(), ("127.0.0.1", port))
 
 
@@ -88,6 +96,7 @@ class HandInput:
         self.port = self.sock.getsockname()[1]
         self._intent = Intent(x=0.0, y=0.0, valid=False, t_s=0.0)
         self.seen = self.calibrating = False
+        self.lag_s: float | None = None
 
     def latest(self) -> Intent:
         while True:
@@ -101,6 +110,7 @@ class HandInput:
             # an intent at all means a palm was there, older senders only send the intent
             self.seen = msg.pop("seen", True)
             self.calibrating = msg.pop("calibrating", False)
+            self.lag_s = msg.pop("lag_s", None)
             self._intent = Intent(**msg)
 
     def close(self) -> None:
