@@ -43,7 +43,7 @@ def race(state, **kw):
 def test_each_branch_says_one_next_step():
     cases = {
         ("connecting...", "warn"): ({**ARMED, "board_lost": True}, {"live": False}),
-        ("plate markers lost", "stop"): ({"board_lost": True}, {}),
+        ("board lost, check the usb cable", "stop"): ({"board_lost": True}, {}),
         ("camera lost", "stop"): ({"camera_lost": True}, {}),
         ("stopped", "stop"): ({"killing": True}, {}),
         ("", ""): ({}, {"watch": True}),
@@ -82,7 +82,7 @@ def test_stop_states_win_in_order_and_watch_still_sees_them():
         ({**ARMED, "hand_calibrating": True, "stale": True}, {}),
     ) == [
         ("stopped", "stop"),
-        ("plate markers lost", "stop"),
+        ("board lost, check the usb cable", "stop"),
         ("camera lost", "stop"),
         ("", ""),
         ("put the ball on the plate", ""),

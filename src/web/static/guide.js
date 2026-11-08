@@ -4,7 +4,7 @@ function guide(s, ctx) {
   const r = s.race && s.race.state ? s.race : {};
   const say = (text, tone = "") => ({ text, tone });
   if (!ctx.live) return say("connecting...", "warn");
-  if (s.board_lost) return say("plate markers lost", "stop");
+  if (s.board_lost) return say("board lost, check the usb cable", "stop");
   if (s.camera_lost) return say("camera lost", "stop");
   if (s.killing) return say("stopped", "stop");
   if (ctx.watch) return say("");
