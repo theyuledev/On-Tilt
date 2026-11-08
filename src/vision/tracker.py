@@ -4,7 +4,16 @@ from typing import NamedTuple
 import cv2
 import numpy as np
 
-from src.vision.balls import Box, Candidate, downsample, find_balls, plate_level, round_blobs, step
+from src.vision.balls import (
+    Box,
+    Candidate,
+    ball_limits,
+    downsample,
+    find_balls,
+    plate_level,
+    round_blobs,
+    step,
+)
 
 BG_MIN_SAMPLES = 5
 
@@ -60,7 +69,9 @@ class Background:
 class BallTracker:
     """Locks onto one ball, learns its radius and whether it's dark, coasts through short misses."""
 
-    def __init__(self, cfg: dict):
+    def __init__(self, cfg: dict, ball_d_mm: float | None = None):
+        if ball_d_mm is not None:
+            cfg = {**cfg, "max_ball_r_px": ball_limits(ball_d_mm, cfg["px_per_mm"], cfg)[1]}
         self.cfg = cfg
         self.background = Background(cfg)
         self.reset()

@@ -31,6 +31,13 @@ def test_loop_keeps_the_newest_frame():
     assert loop.frame is frame
 
 
+def test_live_tracker_is_sized_to_the_ball_in_use():
+    cfg = load()
+    cfg["rig"]["ball_d_mm"] = 38
+    loop = Loop(cfg, frames=FakeFrames())
+    assert loop.tracker.cfg["max_ball_r_px"] < cfg["vision"]["max_ball_r_px"]
+
+
 def test_camera_jpg_serves_the_frame_or_404():
     loop = Loop(load(), frames=FakeFrames(Frame(np.zeros((8, 8, 3), np.uint8), 1.0)))
     client = TestClient(make_app(loop))

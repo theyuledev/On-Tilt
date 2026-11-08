@@ -21,6 +21,13 @@ def _square(side: float) -> np.ndarray:
     return np.ones((int(side) | 1,) * 2, np.uint8)
 
 
+def ball_limits(ball_d_mm: float, px_per_mm: float, cfg: dict) -> tuple[float, float]:
+    """r_max from the ball in use, never looser than max_ball_r_px. r_min stays fixed: it also
+    sets step() and the background grid, and a bigger one stops the background erasing lines."""
+    r = ball_d_mm / 2 * px_per_mm
+    return cfg["min_ball_r_px"], min(cfg["max_ball_r_factor"] * r, cfg["max_ball_r_px"])
+
+
 def step(cfg: dict) -> int:
     return max(1, int(cfg["min_ball_r_px"]) // 2)
 

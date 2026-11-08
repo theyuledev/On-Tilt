@@ -115,6 +115,14 @@ def test_blob_cut_by_the_search_box_is_skipped_and_the_ball_inside_taken():
     assert out.r_px == pytest.approx(45, abs=2)
 
 
+def test_known_ball_size_turns_away_a_blob_too_big_for_it():
+    big = ball(plate(), 640, 400, 75)
+    assert BallTracker(CFG).update(big, 0.0).valid
+    # 38 mm: r_max 58 px
+    assert not BallTracker(CFG, 38).update(big, 0.0).valid
+    assert BallTracker(CFG, 38).update(ball(plate(), 640, 400, 45), 0.0).valid
+
+
 def test_ball_at_the_frame_edge_is_found_with_the_box_clamped():
     tr = BallTracker(CFG)
     n = lock(tr, [ball(plate(), 60 - 5 * i, 400, 45) for i in range(3)])

@@ -47,7 +47,9 @@ class Loop:
         self.hand_seen = self.hand_calibrating = False
         self.mode = cfg["control"]["mode"]
         self.ball: BallState | None = None
-        self.tracker = tracker or (BallTracker(cfg["vision"]) if frames is not None else None)
+        if tracker is None and frames is not None:
+            tracker = BallTracker(cfg["vision"], cfg["rig"]["ball_d_mm"])
+        self.tracker = tracker
         self.ball_px: BallPx | None = None
         self.track: list[BallState] = []
         self.last: RunLogRecord | None = None

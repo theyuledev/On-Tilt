@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 from src.io.settings import load
-from src.vision.balls import downsample, find_balls
+from src.vision.balls import ball_limits, downsample, find_balls
 
 pytestmark = pytest.mark.unit
 
@@ -98,3 +98,11 @@ def test_ball_at_the_plate_edge_is_only_found_against_the_background():
     img = ball(plate(), 640, 40 + r, r)
     assert find_balls(img, CFG) == []
     only(find_balls(img, CFG, downsample(plate(), CFG)), 640, 40 + r, r)
+
+
+def test_ball_limits_keep_r_min_and_never_loosen_r_max():
+    cfg = {"min_ball_r_px": 10, "max_ball_r_px": 90, "max_ball_r_factor": 1.3}
+    # lacrosse: 1.3 r is 95 px, over the cap
+    assert ball_limits(61.8, 2.37, cfg) == (10, 90)
+    assert ball_limits(38, 2.37, cfg) == (10, pytest.approx(1.3 * 19 * 2.37))
+    assert ball_limits(13, 2.37, cfg)[0] == 10
