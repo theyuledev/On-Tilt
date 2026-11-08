@@ -15,6 +15,18 @@ class PacedCapture(FakeCapture):
         return super().read()
 
 
+class GatedCapture(PacedCapture):
+    def __init__(self, n):
+        super().__init__(n)
+        self.hook_busy = threading.Event()
+
+    def read(self):
+        # hold frame 2 back until the hook has picked up frame 1
+        if self.i == 1:
+            self.hook_busy.wait(2)
+        return super().read()
+
+
 def run_out(cap, process):
     src = CameraSource(cap, process=process)
     assert cap.done.wait(2)
@@ -45,18 +57,23 @@ def test_camera_runs_the_hook_off_the_grab_thread_and_keeps_the_newest_result():
 
 
 def test_a_slow_hook_skips_frames_instead_of_holding_up_the_grab():
+    cap = GatedCapture(20)
     seen = []
 
     def slow(image, t):
+        cap.hook_busy.set()
+        # stay busy on the first frame until the capture has run dry
+        cap.done.wait(2)
         time.sleep(0.02)
-        seen.append(int(image[0, 0]))
+        seen.append((int(image[0, 0]), cap.i))
         return int(image[0, 0])
 
-    src = run_out(PacedCapture(20), slow)
-    assert 1 <= len(seen) < 20
-    assert src.latest() == seen[-1]
-    assert src.latest() == seen[-1]
-    assert 0 < src.gap_s < 0.1
+    src = run_out(cap, slow)
+    # all 20 frames were read while the hook sat on frame 1, then it jumped to the newest
+    assert seen == [(1, 20), (20, 20)]
+    assert src.latest() == 20
+    assert src.latest() == 20
+    assert src.gap_s > 0
     assert src.hook_s >= 0.02
 
 
