@@ -145,45 +145,44 @@ def parse(vision: dict) -> argparse.Namespace:
     base = p.add_mutually_exclusive_group(required=True)
     base.add_argument("--sheet", type=Path, help="base marker sheet png, spacing read off it")
     base.add_argument("--base-spacing-mm", type=float)
-    plate_ids = vision.get("plate_marker_ids", [0, 1, 2, 3])
-    p.add_argument("--plate-ids", type=int, nargs=4, default=plate_ids)
-    p.add_argument("--base-ids", type=int, nargs=2, default=vision.get("base_marker_ids", [4, 5]))
     p.add_argument("--out", type=Path, default=OUT)
     return p.parse_args()
 
 
-def spacing(args, det) -> float:
+def spacing(args, det, base_ids) -> float:
     if args.sheet is None:
         return args.base_spacing_mm
     sheet = cv2.imread(str(args.sheet), cv2.IMREAD_GRAYSCALE)
     if sheet is None:
         raise SystemExit(f"cannot read {args.sheet}")
-    return sheet_spacing_mm(sheet, det, args.base_ids, args.size)
+    return sheet_spacing_mm(sheet, det, base_ids, args.size)
 
 
 def main() -> None:
     cfg = load()
-    args = parse(cfg["vision"])
+    vision = cfg["vision"]
+    plate_ids, base_ids = vision["plate_marker_ids"], vision["base_marker_ids"]
+    args = parse(vision)
     if not CALIB_PATH.exists():
         raise SystemExit(f"no lens in {CALIB_PATH}, run python -m tools.calibrate first")
-    det = detector(cfg["vision"])
+    det = detector(vision)
     found = find(det, still(args))
     for i, c in sorted(found.items()):
         print(f"id {i}: " + " ".join(f"({x:.1f},{y:.1f})" for x, y in c))
-    plate_mm, gap = cfg["rig"]["plate_inner_mm"], spacing(args, det)
+    plate_mm, gap = cfg["rig"]["plate_inner_mm"], spacing(args, det, base_ids)
     try:
         out = fit_plate(
-            found, load_calib(), args.plate_ids, dict(args.inset), args.size, plate_mm, args.yaw_deg
+            found, load_calib(), plate_ids, dict(args.inset), args.size, plate_mm, args.yaw_deg
         )
     except ValueError as e:
         raise SystemExit(str(e)) from e
     print(f"square side {out['square_side_px']:.1f} px, {out['px_per_mm_at_plate']:.3f} px/mm")
-    for i in args.plate_ids:
+    for i in plate_ids:
         k = str(i)
         rot, seen = out["marker_rot_deg"][k], out["marker_seen_mm"][k]
         print(f"id {i}: {out['plate_corner'][k]}, turned {rot:+.2f} deg, seen as {seen:.1f} mm")
     print(f"base spacing {gap:.2f} mm")
-    out |= {"base": base_board(args.base_ids, args.size, gap), "marker_size_mm": args.size}
+    out |= {"base": base_board(base_ids, args.size, gap), "marker_size_mm": args.size}
     out["measured"] = date.today().isoformat()
     args.out.write_text(json.dumps(out, indent=2) + "\n")
     print(f"-> {args.out}")
