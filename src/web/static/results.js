@@ -38,4 +38,5 @@ function results(s) {
   // typing in the field skips the space = kill key, so it only takes keys while disarmed
   resName.disabled = !!s.armed || resSaved || panel.hidden;
   if (resName.disabled) resName.blur();
+  resEl("resarm").hidden = panel.hidden || !s.armed || resSaved;
 }

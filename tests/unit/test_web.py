@@ -156,6 +156,9 @@ def test_results_panel_shows_the_finished_race_and_saves_a_judge_name(client):
 def test_name_field_only_takes_keys_while_disarmed(client):
     js = static(client, "results.js")
     assert "resName.disabled = !!s.armed ||" in js and "if (resName.disabled) resName.blur();" in js
+    page = client.get("/").text
+    assert '<span id="resarm" class="hint" hidden>disarm to type a name</span>' in page
+    assert 'resEl("resarm").hidden = panel.hidden || !s.armed || resSaved;' in js
 
 
 def test_typing_in_a_field_skips_the_window_keys_but_still_lets_go_of_tilt(client):
