@@ -78,7 +78,8 @@ def test_r_key_and_race_button_send_a_one_shot_start_or_abort(client):
     assert all(g in js for g in ("e.repeat", "e.metaKey", "e.ctrlKey", "e.altKey"))
     assert '"INPUT"' in js and '"TEXTAREA"' in js
     hud = static(client, "hud.js")
-    assert '"abort" : "start"' in hud and '["countdown", "running"]' in hud
+    assert '"abort" : "start"' in hud
+    assert '["calibrating", "staging", "countdown", "running"]' in hud
 
 
 def test_watch_tab_disables_the_race_button(client):

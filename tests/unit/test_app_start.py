@@ -72,3 +72,9 @@ def test_an_os_error_reading_the_exposure_keeps_the_camera_and_never_blocks(monk
 def test_a_confirmed_mismatch_reaches_the_loop(monkeypatch):
     loop = start(monkeypatch, lambda rig: object(), lambda rig: MISMATCH)
     assert loop.exposure == MISMATCH and loop.arm_blocked == MISMATCH
+
+
+def test_each_loop_tick_reaches_the_game(monkeypatch):
+    loop = start(monkeypatch, boom, lambda rig: None)
+    rec = loop.tick(1.0, 0.01)
+    assert loop.game.last is rec and loop.snapshot()["race"]["state"] == "idle"

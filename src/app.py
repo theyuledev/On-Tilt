@@ -3,6 +3,8 @@ import time
 
 import uvicorn
 
+from src.games import maze, scoring
+from src.games.session import Game
 from src.inputs.hand import HandInput
 from src.io.camera import CameraSource, open_camera
 from src.io.camera_exposure import exposure_problem
@@ -59,7 +61,10 @@ def main() -> None:
     actuator = None
     if cfg["rig"]["actuator"] == "real":
         actuator = SerialActuator(open_board(cfg["rig"]), cfg["rig"])
-    loop = Loop(cfg, hand, frames, actuator, exposure)
+    cal = (lambda: getattr(loop.step, "status", None)) if "selfcal" in MODES else None
+    game = Game(cfg, maze.load(cfg["game"]["maze"]), scoring.step, cal=cal)
+    loop = Loop(cfg, hand, frames, actuator, exposure, game)
+    loop.bus.subscribe("tick", lambda rec: game.tick(rec, loop.safety.killing, loop.board_lost))
     start_run_log(loop.bus)
     port = int(env("PORT", "8000"))
     server = uvicorn.Server(
