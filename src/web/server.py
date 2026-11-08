@@ -87,6 +87,8 @@ def make_app(loop) -> FastAPI:
                         game.abort()
                     if "save" in msg and game is not None and (name := clean_name(msg["save"])):
                         game.save(name)
+                    if msg.get("recentre") and loop.hand is not None:
+                        loop.hand.recentre()
                 except Exception as e:
                     print(f"ws message dropped: {e!r}")
                 await sock.send_json(loop.snapshot())

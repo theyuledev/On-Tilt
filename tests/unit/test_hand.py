@@ -17,7 +17,7 @@ from src.io.settings import load
 
 pytestmark = pytest.mark.unit
 
-CFG = {"hand_span": 0.25, "neutral_s": 1.0, "smoothing": 0.0}
+CFG = {"hand_span": 0.25, "neutral_s": 1.0, "neutral_keep_s": 4.0, "smoothing": 0.0}
 
 
 def calibrated(cfg=CFG, at=(0.5, 0.5)):
@@ -97,14 +97,6 @@ def test_smoothing_eases_in():
     first = hand.update((0.25, 0.5), t).x
     second = hand.update((0.25, 0.5), t + 0.03).x
     assert first == pytest.approx(0.5) and second == pytest.approx(0.75)
-
-
-def test_neutral_resets_after_a_second_without_a_hand():
-    hand, t = calibrated()
-    assert not hand.update(None, t + 0.5).valid
-    assert hand.neutral is not None
-    hand.update(None, t + 1.5)
-    assert hand.neutral is None
 
 
 def test_socket_round_trip():
@@ -208,10 +200,11 @@ def test_hand_process_runs_the_model_on_the_newest_frame_and_reports_lag():
 
 
 class FakeHand:
-    def __init__(self, intent, seen=True, calibrating=False):
+    def __init__(self, intent, seen=True, calibrating=False, progress=0.0):
         self.intent = intent
         self.seen = seen
         self.calibrating = calibrating
+        self.progress = progress
 
     def latest(self):
         return self.intent

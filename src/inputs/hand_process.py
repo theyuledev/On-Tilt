@@ -6,14 +6,16 @@ import cv2
 import mediapipe as mp
 from mediapipe.tasks.python import BaseOptions, vision
 
-from src.inputs.hand import HandIntent, palm_center, send_intent
+from src.inputs.hand import HandIntent, palm_center, recentre_asked, send_intent
 from src.io.camera import WARMUP_READS, CameraSource, find_camera, overhead_shape
 from src.io.settings import ROOT, load
 
 MODEL = ROOT / "models" / "hand_landmarker.task"
 
 
-def run(frames, detect, hand: HandIntent, send, clock=time.monotonic) -> None:
+def run(
+    frames, detect, hand: HandIntent, send, recentre=lambda: False, clock=time.monotonic
+) -> None:
     """Runs the model on the newest frame; frames that queued up while it ran are dropped."""
     while frames.running:
         frame = frames.read()
@@ -21,8 +23,14 @@ def run(frames, detect, hand: HandIntent, send, clock=time.monotonic) -> None:
             time.sleep(0.001)
             continue
         now = clock()
-        intent = hand.update(detect(frame.image, now), now)
-        send(intent, seen=hand.seen, calibrating=hand.calibrating, lag_s=now - frame.t_s)
+        intent = hand.update(detect(frame.image, now), now, recentre())
+        send(
+            intent,
+            seen=hand.seen,
+            calibrating=hand.calibrating,
+            progress=hand.progress,
+            lag_s=now - frame.t_s,
+        )
 
 
 def main() -> None:
@@ -49,10 +57,18 @@ def main() -> None:
         return palm_center(result.hand_landmarks[0]) if result.hand_landmarks else None
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(("127.0.0.1", 0))
+    sock.setblocking(False)
     frames = CameraSource(cap)
-    print(f"hand -> 127.0.0.1:{inp['hand_port']}, hold your palm still to set neutral")
+    print(f"hand -> 127.0.0.1:{inp['hand_port']}, hold still to set neutral, c re centres")
     try:
-        run(frames, detect, HandIntent(inp), partial(send_intent, sock, port=inp["hand_port"]))
+        run(
+            frames,
+            detect,
+            HandIntent(inp),
+            partial(send_intent, sock, port=inp["hand_port"]),
+            partial(recentre_asked, sock),
+        )
     except KeyboardInterrupt:
         pass
     finally:

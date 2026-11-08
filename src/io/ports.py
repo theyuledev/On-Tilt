@@ -21,8 +21,11 @@ class FrameSource(Protocol):
 class InputSource(Protocol):
     seen: bool
     calibrating: bool
+    progress: float
 
     def latest(self) -> Intent: ...
+
+    def recentre(self) -> None: ...
 
 
 class TiltActuator(Protocol):

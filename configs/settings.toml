@@ -30,6 +30,7 @@ expo = { value = 0.3, label = "uncalibrated default (NOT TESTED, expected predic
 key_ramp_s = { value = 0.3, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 hand_span = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 neutral_s = { value = 1.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+neutral_keep_s = { value = 4.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 smoothing = { value = 0.3, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 hand_port = { value = 9001, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 
