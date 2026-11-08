@@ -26,6 +26,12 @@ def test_page_has_ball_heartbeat_and_board_lost(client):
     assert 'id="stale"' in page and "no input" in page
 
 
+def test_page_has_a_hand_pill_keyed_on_the_snapshot_flags(client):
+    page = client.get("/").text
+    assert 'id="hand"' in page and "hold still" in page
+    assert "s.hand_seen" in page and "s.hand_calibrating" in page
+
+
 def test_page_tracks_held_keys_by_code_so_shift_cannot_stick_one(client):
     page = client.get("/").text
     assert "e.code" in page and "e.key" not in page

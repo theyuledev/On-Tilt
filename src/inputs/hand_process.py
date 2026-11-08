@@ -38,7 +38,10 @@ def main() -> None:
                 mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), int(t * 1000)
             )
             palm = palm_center(result.hand_landmarks[0]) if result.hand_landmarks else None
-            send_intent(sock, hand.update(palm, t), inp["hand_port"])
+            intent = hand.update(palm, t)
+            send_intent(
+                sock, intent, inp["hand_port"], seen=hand.seen, calibrating=hand.calibrating
+            )
     except KeyboardInterrupt:
         pass
     finally:

@@ -29,6 +29,7 @@
     <span id="beat" class="pill warn">no data</span>
     <span id="stale" class="pill warn" hidden>no input</span>
     <span id="board" class="pill warn" hidden>board lost</span>
+    <span id="hand" class="pill">hand: none</span>
   </div>
   <div class="row">
     <div class="stage"><div id="plate" class="plate"><div id="ball" class="ball" hidden></div></div></div>
@@ -84,6 +85,9 @@ function show(s) {
   armed.className = "pill " + (s.killing ? "warn" : s.armed ? "on" : "");
   document.getElementById("stale").hidden = !(s.stale && s.armed);
   document.getElementById("board").hidden = !s.board_lost;
+  const hand = document.getElementById("hand");
+  hand.textContent = "hand: " + (!s.hand_seen ? "none" : s.hand_calibrating ? "hold still" : "live");
+  hand.className = "pill " + (!s.hand_seen ? "" : s.hand_calibrating ? "warn" : "on");
   nocam.textContent = s.camera_lost ? "camera lost" : "no camera";
   document.getElementById("nums").textContent =
     `tilt x ${p.sent_x_deg.toFixed(2)}°  y ${p.sent_y_deg.toFixed(2)}°\n` +

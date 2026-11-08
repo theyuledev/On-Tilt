@@ -17,6 +17,9 @@ class FrameSource(Protocol):
 
 
 class InputSource(Protocol):
+    seen: bool
+    calibrating: bool
+
     def latest(self) -> Intent: ...
 
 
