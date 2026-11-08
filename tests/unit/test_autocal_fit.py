@@ -3,63 +3,90 @@ import math
 import numpy as np
 import pytest
 
-from src.control.autocal_fit import mirror_verdict, second_amp, solve, trim_offsets
-from src.sim.fit import accel_vec
+from src.control.autocal_fit import (
+    agree,
+    double_integral,
+    doublet_fit,
+    hold_accel,
+    mapping,
+    mirror_verdict,
+    per_deg,
+    probe_fit,
+    second_amp,
+    stored_m,
+    trim_step,
+)
 from src.vision.px_to_mm import ball_state
 from src.vision.tracker import BallPx
 
-
-def flat(yaw_deg: float, plate_vec, mirror: bool = False) -> np.ndarray:
-    x, y = plate_vec
-    y = -y if mirror else y
-    a = math.radians(-yaw_deg)
-    return np.array([x * math.cos(a) - y * math.sin(a), x * math.sin(a) + y * math.cos(a)])
+M = np.array([[0.9, -0.4], [0.3, 1.1]])
+B = np.array([12.0, -7.0])
 
 
-def test_accel_vec_recovers_a_quadratic_inside_the_window():
-    t = np.linspace(0, 2, 201)
-    x = 3 + 20 * (t - 0.5) + 0.5 * 40 * (t - 0.5) ** 2
-    y = -1 - 5 * (t - 0.5) + 0.5 * -25 * (t - 0.5) ** 2
-    junk = (t < 0.5) | (t > 1.2)
-    x[junk], y[junk] = 999.0, -999.0
-    assert accel_vec(t, x, y, 0.5, 1.2) == pytest.approx([40, -25])
+def synthetic(m, b, offs):
+    t = np.linspace(0, 1.2, 241)
+    e = np.column_stack([double_integral(t, o) for o in offs.T])
+    pos = np.array([3.0, -2.0]) + np.outer(t, [20.0, -5.0]) + np.outer(t * t / 2, b) + e @ m.T
+    return t, pos
 
 
-def test_trim_solve_round_trip():
-    ex, ey = flat(37, (1, 0)), flat(37, (0, 1), mirror=True)
-    u = np.array([15.0, -25.0])
-    a_res = -2.1 * u[0] * ex - 4.3 * u[1] * ey
-    assert trim_offsets(a_res, 2.1, ex, 4.3, ey) == pytest.approx(u)
+def test_probe_fit_recovers_the_map_and_the_drift():
+    t = np.linspace(0, 1.2, 241)
+    offs = np.c_[100 * np.sign(np.sin(8 * t)), 100 * np.sign(np.cos(5 * t))]
+    _, pos = synthetic(M, B, offs)
+    m, b, rms = probe_fit(t + 4.0, pos, t + 4.0, offs, 4.0)
+    assert m == pytest.approx(M)
+    assert b == pytest.approx(B)
+    assert rms == pytest.approx(0, abs=1e-6)
 
 
-def accels(yaw: float, mirror: bool, k: float, amps, trim_u, fric: float = 0.0) -> dict:
-    e = {"x": flat(yaw, (1, 0)), "y": flat(yaw, (0, 1), mirror)}
-    a_res = -k * trim_u[0] * e["x"] - k * trim_u[1] * e["y"]
-    return {
-        (ax, s, i): a_res + s * (k * amps[i] - fric) * e[ax]
-        for ax in "xy"
-        for s in (1, -1)
-        for i in (0, 1)
-    }
+def test_doublet_fit_reads_one_column():
+    t = np.linspace(0, 1.2, 241)
+    offs = np.c_[np.zeros_like(t), np.where(t < 0.6, 60.0, -60.0)]
+    _, pos = synthetic(M, B, offs)
+    col, b, _ = doublet_fit(t, pos, t, offs, 0.0, 1)
+    assert col == pytest.approx(M[:, 1])
+    assert b == pytest.approx(B)
+
+
+def test_trim_step_undoes_a_level_error():
+    du = np.array([15.0, -25.0])
+    assert trim_step(M, -M @ du, 0) == pytest.approx(15)
+    assert trim_step(M, -M @ du, 1) == pytest.approx(-25)
+
+
+def test_hold_pulls_the_ball_back():
+    c = dict(hold_w_rad_s=2.0, hold_zeta=0.9, hold_lead_s=0.1, hold_ki=4.0)
+    a = hold_accel(np.array([10.0, 0.0]), np.array([5.0, 0.0]), np.array([1.0, 0.0]), c)
+    assert a == pytest.approx([-4 * (10 + 0.5) - 3.6 * 5 - 4, 0])
 
 
 @pytest.mark.parametrize("mirror", [False, True])
-def test_yaw_and_mirror_round_trip_through_px_to_mm(mirror):
-    k = 122.3 / 57
-    cal = solve(accels(37, mirror, k, (30, 80), (6, -9), fric=15), (30, 80), (0, 0), 20, 9810, 20)
-    assert cal.mirror is mirror
-    assert cal.plate_yaw_deg == pytest.approx(37)
-    assert cal.us_per_deg_x == pytest.approx(57, rel=1e-3)
-    assert cal.us_per_deg_y == pytest.approx(-57 if mirror else 57, rel=1e-3)
-    assert (cal.trim_x_us, cal.trim_y_us) == pytest.approx((6, -9))
-    assert cal.friction_x == pytest.approx(-15)
-    # a ball off along the found +x axis reads as plate +x
-    ux, uy = flat(37, (1, 0))
-    cfg = {"plate_centre_px": (700, 380), "px_per_mm": 2.6, "plate_yaw_deg": cal.plate_yaw_deg}
+def test_mapping_round_trip_through_px_to_mm(mirror):
+    rig = {"us_per_deg_x": 57.0, "us_per_deg_y": -57.0 if mirror else 57.0}
+    m = stored_m(rig, 37.0, 9810)
+    yaw, mir, ux, uy = mapping(m, 9810, 20)
+    assert (yaw, mir, ux, uy) == pytest.approx(
+        (37, mirror, rig["us_per_deg_x"], rig["us_per_deg_y"])
+    )
+    assert np.hypot(*m[:, 0]) == pytest.approx(per_deg(9810) / 57)
+    # a +x pulse pushes the ball along the found plate +x
+    ux, uy = m[:, 0] / np.hypot(*m[:, 0])
+    cfg = {"plate_centre_px": (700, 380), "px_per_mm": 2.6, "plate_yaw_deg": yaw}
     cfg["velocity_span_frames"] = 4
     px = BallPx(700 + 2.6 * 50 * ux, 380 - 2.6 * 50 * uy, 10, True, 0.0)
     b = ball_state(px, [], cfg)
     assert (b.x_mm, b.y_mm) == pytest.approx((50, 0), abs=1e-6)
+
+
+def test_agree_checks_angle_and_gain_per_column():
+    ref = stored_m({"us_per_deg_x": 100.0, "us_per_deg_y": 100.0}, 0.0, 9810)
+    assert agree(ref * 1.2, ref, 20, (0.5, 1.5))
+    assert not agree(ref * 2.0, ref, 20, (0.5, 1.5))
+    assert not agree(-ref, ref, 20, (0.5, 1.5))
+    a = math.radians(30)
+    turn = np.array([[math.cos(a), -math.sin(a)], [math.sin(a), math.cos(a)]])
+    assert not agree(turn @ ref, ref, 20, (0.5, 1.5))
 
 
 def test_axes_not_square_stop_the_fit():

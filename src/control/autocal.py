@@ -8,7 +8,6 @@ from src.control.autocal_fit import (
     Calibration,
     agree,
     doublet_fit,
-    hold_accel,
     mapping,
     per_deg,
     probe_fit,
@@ -16,19 +15,12 @@ from src.control.autocal_fit import (
     stored_m,
     trim_step,
 )
+from src.control.autocal_hold import Hold
 from src.control.pulse_map import center
 from src.sim.plate import SimActuator
 
 ORDER = (("x", 1), ("x", -1), ("y", 1), ("y", -1))
 PROBE = ((1, 1), (-1, -1), (-1, 1), (1, -1))  # x, y sign per slot
-
-
-def line(rows) -> tuple[np.ndarray, np.ndarray]:
-    t, u, v = (np.array(a) for a in zip(*rows, strict=True))
-    if len(t) < 3:
-        return np.array([u[-1], v[-1]]), np.zeros(2)
-    k, p = np.polyfit(t - t[-1], np.c_[u, v], 1)
-    return p, k
 
 
 class Autocal:
@@ -56,8 +48,8 @@ class Autocal:
         self.queue = [("p", 0, 0)] + [(ax, s, i) for i in sets for ax, s in ORDER]
         self.M = None
         self.hold = False
-        self.integ = np.zeros(2)
-        self.t0 = self.t_seen = self.t_i = self.still = None
+        self.holder = Hold(self.c, self.vision["velocity_span_frames"])
+        self.t0 = self.t_seen = None
         self.note = ""
         self.aborted: str | None = None
         self.result = None
@@ -118,45 +110,21 @@ class Autocal:
             self._probe(now)
         else:
             self._doublet(job, now)
-        self.t0, self.hold, self.still, self.t_i = now, True, None, None
+        self.t0, self.hold = now, True
+        self.holder.start(now)
         return self._hold(now) if self.running else None
 
     def _hold(self, now: float):
-        c = self.c
         if not self.queue:
             self._finish()
             return None
-        if now - self.t0 > c["hold_timeout_s"]:
-            self.aborted = "could not hold the ball"
-            return None
-        p, v = line(self.rows[-self.vision["velocity_span_frames"] - 1 :])
-        if self.t_i is not None:
-            i_max = c["hold_i_max_mm_s"]
-            self.integ = np.clip(self.integ + p * (self.rows[-1][0] - self.t_i), -i_max, i_max)
-        self.t_i = self.rows[-1][0]
-        u = np.linalg.solve(self.M, hold_accel(p, v, self.integ, c))
-        ps, vs = line(self._since(self.rows[-1][0] - c["hold_still_s"]))
-        if np.hypot(*ps) < c["hold_r_mm"] and np.hypot(*vs) < c["hold_v_mm_s"]:
-            self.still = now if self.still is None else self.still
-            if now - self.still >= c["hold_still_s"]:
-                self.hold, self.t0 = False, now
-                return self._pulse(now)
-        else:
-            self.still = None
-        self._diverge(now, p, v)
-        return np.clip(u, -c["hold_max_us"], c["hold_max_us"])
-
-    def _diverge(self, now: float, p, v) -> None:
-        # the hold pushes the ball out instead of in: the mapping is wrong
-        c, r = self.c, float(np.hypot(*p))
-        if now - self.t0 < c["hold_diverge_s"] or r < c["hold_r_mm"] or np.dot(p, v) <= 0:
-            return
-        _, u0, v0 = self._since(now - c["hold_diverge_s"])[0]
-        if r - math.hypot(u0, v0) > c["hold_diverge_mm"]:
-            self.aborted = "plate mapping looks wrong, the hold pushed the ball out"
-
-    def _since(self, t0: float) -> list:
-        return self.rows[bisect_left(self.rows, t0, key=lambda r: r[0]) :]
+        u, why = self.holder.step(now, self.rows, self.M)
+        if why == "still":
+            self.hold, self.t0 = False, now
+            return self._pulse(now)
+        if why:
+            self.aborted = why
+        return u
 
     def _window(self, t0: float, t1: float, axis: int | None):
         key = lambda r: r[0]  # noqa: E731

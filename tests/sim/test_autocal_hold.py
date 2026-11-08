@@ -74,6 +74,16 @@ def test_finds_trims_and_mapping_from_a_wrong_start(trims, yaw, mirror, d_mm):
     assert np.abs(cal.level - cal.c0).max() <= CFG["control"]["autocal_level_max_us"]
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="a 0.10 s chain vs the stored 0.046 s model reads the gain ~24 % off (trims still fine)",
+)
+@pytest.mark.parametrize("trims,mirror", [((60, -60), False), ((-60, -60), True)])
+def test_a_slow_chain_still_finishes(trims, mirror):
+    cal, _ = run(trims, 37, mirror, servo_dead_time_s=0.10)
+    assert_found(cal, trims, 37, mirror)
+
+
 def bad_probe(monkeypatch, f):
     fit = ac.probe_fit
     monkeypatch.setattr(ac, "probe_fit", lambda *a: (lambda m, b, r: (f(m), b, r))(*fit(*a)))

@@ -142,9 +142,3 @@ def pulse_fit(windows, dt: float, ref_us: float, g: float) -> PulseFit:
         axis_deg=tuple(np.degrees(np.arctan2(A[1], A[0]))),
         r2=float(1 - resid / (np.sum(tx**2) + np.sum(ty**2))),
     )
-
-
-def accel_vec(t, x, y, t0: float, t1: float) -> np.ndarray:
-    t, x, y = (np.asarray(a, dtype=float) for a in (t, x, y))
-    win = (t >= t0) & (t <= t1)
-    return 2 * np.polyfit(t[win] - t0, np.c_[x[win], y[win]], 2)[0]

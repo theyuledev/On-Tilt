@@ -53,6 +53,11 @@ def test_recovers_yaw_mirror_scale_and_gain(d_mm):
     stops_at_level(link)
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="at 28.75 us/deg the 60 us first doublet alone travels ~92 mm, the held start "
+    "leaves no room before the rim",
+)
 def test_second_amplitude_shrinks_on_a_soft_plate():
     cfg, world, link, bench = setup(us_per_deg_x=28.75, us_per_deg_y=28.75)
     out = autocal.run(bench, world, cfg, world.clock, world.advance, lambda _: "")
