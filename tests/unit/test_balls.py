@@ -8,6 +8,7 @@ from src.vision.balls import downsample, find_balls
 pytestmark = pytest.mark.unit
 
 CFG = load()["vision"]
+ANY_SHADE = {**CFG, "ball_dark": False}
 H, W = 800, 1280
 
 
@@ -77,7 +78,13 @@ def test_specular_spot(r, spot):
 
 def test_light_ball_on_dark_plate():
     img = ball(plate(level=70, table=25), 640, 400, 40, shade=170)
-    only(find_balls(img, CFG), 640, 400, 40, dark=False)
+    only(find_balls(img, ANY_SHADE), 640, 400, 40, dark=False)
+
+
+def test_glare_blob_on_whiteboard_is_no_ball_when_balls_are_dark():
+    img = ball(plate(level=118), 640, 400, 40, shade=247)
+    assert find_balls(img, {**CFG, "ball_dark": True}) == []
+    only(find_balls(img, ANY_SHADE), 640, 400, 40, dark=False)
 
 
 def test_small_glare_spot_is_not_a_ball():
@@ -88,7 +95,7 @@ def test_small_glare_spot_is_not_a_ball():
 
 def test_dark_ball_wins_over_bright_one():
     img = ball(ball(plate(level=120), 400, 400, 40, shade=240), 800, 400, 40)
-    only(find_balls(img, CFG), 800, 400, 40)
+    only(find_balls(img, ANY_SHADE), 800, 400, 40)
 
 
 def test_ball_at_the_plate_edge_is_only_found_against_the_background():

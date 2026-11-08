@@ -90,6 +90,8 @@ def round_blobs(
 
 
 def find_balls(gray: np.ndarray, cfg: dict, background=None) -> list[Candidate]:
-    """Dark balls, best first. Bright ones only when there's no dark one, and never against the
-    background: whatever dark sat in it for long leaves a hole the bare plate shines through."""
-    return round_blobs(gray, cfg, True, None, background) or round_blobs(gray, cfg, False)
+    """Dark balls, best first. Bright ones only when ball_dark is off and there's no dark one, and
+    never against the background: whatever dark sat in it for long leaves a hole the bare plate
+    shines through. The tracker only goes bright through here, so this gates it too."""
+    dark = round_blobs(gray, cfg, True, None, background)
+    return dark if dark or cfg["ball_dark"] else round_blobs(gray, cfg, False)

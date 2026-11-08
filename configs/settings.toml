@@ -77,6 +77,7 @@ camera_latency_s = { value = 0.015, label = "uncalibrated default (NOT TESTED, e
 min_ball_r_px = { value = 10, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 max_ball_r_px = { value = 90, label = "sim-tuned (PR #138)" }
 min_contrast = { value = 0.4, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+ball_dark = { value = true, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 min_fill = { value = 0.75, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 radius_tol = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 lost_after_misses = { value = 5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
