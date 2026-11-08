@@ -61,6 +61,18 @@ db_comp_us = { value = 14, label = "uncalibrated default (NOT TESTED, expected p
 db_flip_us = { value = 2, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 inverter_on = { value = false, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 vel_ema_s = { value = 0.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_a1_us = { value = 30, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_a2_max_us = { value = 100, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_pulse_s = { value = 0.6, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_settle_s = { value = 0.6, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_travel_mm = { value = 60, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_rim_margin_mm = { value = 25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_lost_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_centre_spread_px = { value = 1.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_still_s = { value = 1.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_warm_obs = { value = 30, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_r_short_px = { value = 0.5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+autocal_mirror_tol_deg = { value = 20, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 
 [game]
 heartbeat_stale_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
