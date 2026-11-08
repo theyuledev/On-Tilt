@@ -52,10 +52,12 @@ def plan(rig: dict, axis: int, tick: float) -> list[tuple[int, str]]:
     return out
 
 
-def run(bench: Bench, cam, steps, other: int, axis: int, tick: float, tracker, clock=None):
-    """Commands are (t_send, t_ack, x, y, phase); rows are whatever the tracker returns."""
+def run(bench, cam, steps, other, axis, tick, tracker, clock=None, commands=None, rows=None):
+    """Commands are (t_send, t_ack, x, y, phase), rows what the tracker returns.
+    Pass the lists in to keep what was logged if the run is cut short."""
     clock = clock or time.monotonic
-    commands, rows = [], []
+    commands = [] if commands is None else commands
+    rows = [] if rows is None else rows
     last_phase = None
     t0 = clock()
     for i, (us, phase) in enumerate(steps):
@@ -166,13 +168,19 @@ def main() -> None:
     bench = Bench(open_board(rig), rig)
     bench.submit("l")
     bench.submit("A")
+    commands, rows = [], []
     try:
-        out = guarded(bench, tick, lambda: run(bench, cam, steps, other, axis, tick, tracker))
+        done = guarded(
+            bench,
+            tick,
+            lambda: run(bench, cam, steps, other, axis, tick, tracker, None, commands, rows),
+        )
     finally:
         cam.close()
-    if out is None:
-        return
-    commands, rows = out
+    if done is None:
+        print("partial run, ctrl-c")
+        if not (commands or rows):
+            return
     print(f"wrote {save(name, commands, rows, kind)} ({len(rows)} frames)", flush=True)
     if kind == "ang" and tracker.seed:
         annotate_pair(tracker, OUT / f"{name}.jpg")
