@@ -451,6 +451,15 @@ def test_page_says_when_config_fails_and_retries_a_lost_camera(client):
     assert "[hidden] { display: none !important; }" in static(client, "style.css")
 
 
+def test_both_cams_wait_a_frame_after_each_load_before_the_next_fetch(client):
+    js = static(client, "app.js")
+    assert "const FRAME_MS = 66;" in js
+    for img, timer, fetch in (("cam", "camRetry", "nextCam"), ("handcam", "handRetry", "nextHand")):
+        onload = js[js.index(f"{img}.onload = ") :].split("};", 1)[0]
+        assert f"clearTimeout({timer});\n  {timer} = setTimeout({fetch}, FRAME_MS);" in onload
+        assert f"{fetch}()" not in onload
+
+
 def test_camera_jpeg_is_half_res_and_cached_for_a_frame_period(monkeypatch):
     now = [1000.0]
     monkeypatch.setattr(time, "monotonic", lambda: now[0])

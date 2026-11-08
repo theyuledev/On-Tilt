@@ -7,7 +7,7 @@ import mediapipe as mp
 from mediapipe.tasks.python import BaseOptions, vision
 
 from src.inputs.hand import HandIntent, palm_center, recentre_asked, send_intent
-from src.inputs.hand_view import JPEG_PERIOD_S, frame_jpg, publish
+from src.inputs.hand_view import JPEG_PERIOD_S, frame_jpg, hand_jpg, publish
 from src.io.camera import WARMUP_READS, CameraSource, find_camera, overhead_shape
 from src.io.settings import ROOT, load
 
@@ -88,7 +88,9 @@ def main() -> None:
             hand,
             partial(send_intent, sock, port=inp["hand_port"]),
             partial(recentre_asked, sock),
-            show=lambda img, intent: publish(frame_jpg(img, last[0], hand.neutral, intent)),
+            show=lambda img, intent: publish(
+                frame_jpg(img, last[0], hand.neutral, intent), hand_jpg(inp["hand_port"])
+            ),
         )
     except KeyboardInterrupt:
         pass

@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from src.contracts import Intent
 from src.inputs import hand_process, hand_view
 from src.inputs.hand import HandIntent
-from src.inputs.hand_view import JPEG_PERIOD_S, JPEG_WIDTH, draw, frame_jpg, publish
+from src.inputs.hand_view import JPEG_PERIOD_S, JPEG_WIDTH, draw, frame_jpg, hand_jpg, publish
 from src.io.ports import Frame
 from src.io.settings import load
 from src.web.server import make_app
@@ -52,15 +52,28 @@ def test_publish_replaces_the_file_whole(tmp_path):
     assert path.read_bytes() == b"two" and os.listdir(tmp_path) == ["hand.jpg"]
 
 
+def test_each_hand_port_gets_its_own_jpg():
+    assert hand_jpg(9001) != hand_jpg(9002)
+    assert hand_jpg(9001).parent == hand_view.HAND_DIR
+
+
 @pytest.fixture
 def served(tmp_path, monkeypatch):
-    path = tmp_path / "hand.jpg"
-    monkeypatch.setattr(hand_view, "HAND_JPG", path)
+    monkeypatch.setattr(hand_view, "HAND_DIR", tmp_path)
+    path = hand_jpg(load()["input"]["hand_port"])
     return path, TestClient(make_app(SimpleNamespace(cfg=load())))
 
 
 def test_hand_jpg_404s_when_missing(served):
     assert served[1].get("/hand.jpg").status_code == 404
+
+
+def test_hand_jpg_skips_another_hand_ports_file(served):
+    path, client = served
+    hand_jpg(load()["input"]["hand_port"] + 1).write_bytes(b"jpg")
+    assert client.get("/hand.jpg").status_code == 404
+    path.write_bytes(b"ours")
+    assert client.get("/hand.jpg").content == b"ours"
 
 
 def test_hand_jpg_404s_when_the_hand_process_stopped_writing(served):
