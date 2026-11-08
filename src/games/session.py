@@ -68,13 +68,13 @@ class Game:
         elif now.state in ("countdown", "running") and rec.ball.valid:
             self.ring = rec
 
-    def mode(self) -> str:
+    def mode(self) -> str | None:
         if self.race.state in ("countdown", "running"):
             # countdown should hold the ball in the ring once a hold mode exists
             return "hand"
         if self.attract and self.last is not None and self.last.armed:
             return "path"
-        return "hand"
+        return None
 
     def view(self) -> dict:
         if self.last is None:

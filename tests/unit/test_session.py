@@ -85,13 +85,13 @@ def test_save_writes_the_run_only_when_finished(tmp_path, monkeypatch):
 
 def test_mode_switches_with_the_race_and_attract():
     g = Game(CFG, MAZE, fake_step)
-    assert g.mode() == "hand"
-    g.attract = True
-    assert g.mode() == "hand"
+    assert g.mode() is None
     g.tick(rec(0.0), False, False)
+    assert g.mode() is None
+    g.attract = True
     assert g.mode() == "path"
     g.tick(rec(0.1, armed=False), False, False)
-    assert g.mode() == "hand"
+    assert g.mode() is None
     g.tick(rec(0.2), False, False)
     g.start()
     assert g.mode() == "hand"
@@ -99,6 +99,20 @@ def test_mode_switches_with_the_race_and_attract():
     assert g.mode() == "hand"
     g.abort()
     assert g.mode() == "path"
+
+
+def test_mode_is_none_after_a_finish_or_dnf():
+    g = Game(CFG, MAZE, fake_step)
+    race_to_finish(g)
+    assert g.race.state == "finished"
+    assert g.mode() is None
+    g = Game(CFG, MAZE, fake_step)
+    g.tick(rec(0.0), False, False)
+    g.start()
+    g.tick(rec(3.0), False, False)
+    g.tick(rec(3.5), True, False)
+    assert g.race.state == "dnf"
+    assert g.mode() is None
 
 
 def test_ghost_from_records_and_from_the_settings_path(tmp_path, monkeypatch):
