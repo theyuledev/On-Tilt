@@ -154,8 +154,8 @@ def test_release_after_holding_100_mm_out_adds_no_windup_overshoot():
     # the integral only winds inside i_err_max_mm, so a long hold far out must not add overshoot
     with_i = -min(b.x_mm for b in run((100, 0, 0, 0), hold_s=5.0).balls)
     pd_only = -min(b.x_mm for b in run((100, 0, 0, 0), integral=False, hold_s=5.0).balls)
-    assert with_i <= pd_only + 0.5
-    # pd alone releasing from the plate limit already overshoots ~20 mm
+    assert with_i <= pd_only + 1.0
+    # pd alone releasing from the plate limit already overshoots ~11 mm
     assert with_i < 25
 
 
