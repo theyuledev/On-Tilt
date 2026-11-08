@@ -59,7 +59,7 @@ def test_each_branch_says_one_next_step():
         ("put the ball on the plate", ""): ({"ball": {"valid": False}}, {}),
         ("click arm to start", ""): (BALL, {}),
         ("arrows / wasd to tilt, r to race", ""): (ARMED, {"hand": False}),
-        ("hold your hand still", ""): ({**ARMED, "hand_calibrating": True}, {}),
+        ("hold still... locking neutral", "warn"): ({**ARMED, "hand_calibrating": True}, {}),
         ("hand flat under the webcam, palm down", ""): ({**ARMED, "hand_seen": False}, {}),
         ("tilt your hand to roll the ball, r to race", ""): (ARMED, {}),
     }
@@ -79,10 +79,12 @@ def test_stop_states_win_in_order_and_watch_still_sees_them():
         ({"camera_lost": True}, {"watch": True}),
         (lost, {"watch": True, "lost": True}),
         (None, {}),
+        ({**ARMED, "hand_calibrating": True, "stale": True}, {}),
     ) == [
         ("stopped", "stop"),
         ("plate markers lost", "stop"),
         ("camera lost", "stop"),
         ("", ""),
         ("put the ball on the plate", ""),
+        ("hold still... locking neutral", "warn"),
     ]

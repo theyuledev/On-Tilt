@@ -290,7 +290,7 @@ def test_hand_lost_banner_needs_a_hand_seen_since_arming(client):
     js = static(client, "app.js")
     assert '"HAND LOST"' in static(client, "guide.js") and "if (!s.armed) handWasSeen = false" in js
     assert "s.armed && handWasSeen && !s.hand_seen" in js
-    assert '$("level").hidden = !(s.stale && s.armed)' in js
+    assert '$("level").hidden = !(s.stale && s.armed && !s.hand_calibrating)' in js
 
 
 def test_page_tracks_held_keys_by_code_so_shift_cannot_stick_one(client):

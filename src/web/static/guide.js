@@ -9,6 +9,7 @@ function guide(s, ctx) {
   if (s.killing) return say("stopped", "stop");
   if (ctx.watch) return say("");
   if (!s.armed && s.arm_blocked) return say(s.arm_blocked, "warn");
+  if (s.armed && s.hand_calibrating) return say("hold still... locking neutral", "warn");
   if (s.armed && s.stale) return say("no input, plate levelled", "warn");
   if (ctx.lost) return say("HAND LOST", "stop");
   // the hud has these
@@ -20,7 +21,6 @@ function guide(s, ctx) {
   if (!s.armed && !(s.ball && s.ball.valid)) return say("put the ball on the plate");
   if (!s.armed) return say("click arm to start");
   if (!ctx.hand) return say("arrows / wasd to tilt, r to race");
-  if (s.hand_calibrating) return say("hold your hand still");
   if (!s.hand_seen) return say("hand flat under the webcam, palm down");
   return say("tilt your hand to roll the ball, r to race");
 }

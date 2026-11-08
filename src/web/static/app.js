@@ -96,7 +96,7 @@ function show(s) {
        s.killing ? "warn" : s.armed ? "on" : "");
   $("armblock").hidden = !s.arm_blocked;
   $("armblock").textContent = s.arm_blocked || "";
-  $("stale").hidden = $("level").hidden = !(s.stale && s.armed);
+  $("stale").hidden = $("level").hidden = !(s.stale && s.armed && !s.hand_calibrating);
   $("board").hidden = !s.board_lost;
   pill("hand", "hand: " + (!s.hand_seen ? "none" : s.hand_calibrating ? "hold still" : "live"),
        !s.hand_seen ? "" : s.hand_calibrating ? "warn" : "on");
