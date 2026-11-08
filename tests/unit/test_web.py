@@ -87,6 +87,7 @@ def test_hud_shows_no_race_text_while_calibrating_or_staging(client):
     guard = hud.index("if (!r || PRE.includes(r.state))")
     assert 'if (r) $("timer").textContent = $("cps").textContent = ""' in hud
     assert guard < hud.index("countdown(r, was);") < hud.index("split(r, was, performance")
+    assert 'toggle("racing", live && !PRE.includes(r.state))' in hud
 
 
 def test_watch_tab_disables_the_race_button(client):

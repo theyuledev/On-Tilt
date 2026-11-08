@@ -78,7 +78,8 @@ function result(r, was) {
 
 function hud(s, maze) {
   const r = s.race && s.race.state ? s.race : null, live = !!r && LIVE.includes(r.state);
-  document.body.classList.toggle("racing", live);
+  // the cam view stays up while the ball is placed
+  document.body.classList.toggle("racing", live && !PRE.includes(r.state));
   document.body.classList.toggle("offpath", !!r && r.off_path === true);
   $("racebtn").textContent = live ? "abort (r)" : "race (r)";
   // no race text before the countdown
