@@ -36,6 +36,14 @@ def test_page_has_the_race_hud_pills_and_kill(client):
     assert "/static/pad.js" in page
 
 
+def test_race_hud_hides_without_a_race_and_tilt_reads_big(client):
+    page = client.get("/").text
+    assert 'id="tilt"' in page and "arrows / wasd to tilt" in page
+    assert '$("timer").hidden = $("cps").hidden = s.race === undefined' in static(client, "app.js")
+    css = static(client, "style.css")
+    assert "#tilt { font: 24px" in css and "color: #fff; white-space: pre" in css
+
+
 def test_page_has_a_hand_pill_keyed_on_the_snapshot_flags(client):
     assert 'id="hand"' in client.get("/").text
     js = static(client, "app.js")
@@ -65,6 +73,11 @@ def test_page_tracks_held_keys_by_code_so_shift_cannot_stick_one(client):
     assert "e.code" in js and "e.key" not in js
     assert all(k in js for k in ("KeyA", "KeyD", "KeyW", "KeyS"))
     assert 'addEventListener("blur", () => held.clear())' in js
+
+
+def test_c_key_sends_a_one_shot_recentre_like_arm_and_kill(client):
+    assert "c re-centres the hand neutral" in client.get("/").text
+    assert 'if (e.code === "KeyC") { pending.recentre = true; return; }' in static(client, "app.js")
 
 
 def test_watch_tab_sends_nothing_and_takes_no_input(client):

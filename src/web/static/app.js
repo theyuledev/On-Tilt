@@ -16,6 +16,7 @@ if (watch) {
 } else {
   addEventListener("keydown", e => {
     if (e.code === "Space") { pending.kill = true; e.preventDefault(); return; }
+    if (e.code === "KeyC") { pending.recentre = true; return; }
     if (keymap[e.code]) { held.add(e.code); e.preventDefault(); }
   });
   addEventListener("keyup", e => held.delete(e.code));
@@ -59,6 +60,7 @@ function show(s) {
   const b = s.ball, p = s.plate_state;
   pill("ballpill", "ball: " + (b.valid ? "tracked" : "lost"), b.valid ? "on" : "warn");
   $("speed").textContent = b.valid ? Math.round(Math.hypot(b.vx_mm_s, b.vy_mm_s)) : 0;
+  $("timer").hidden = $("cps").hidden = s.race === undefined;
   // the banner only shouts when a hand that was steering this arm drops out
   if (!s.armed) handWasSeen = false; else if (s.hand_seen) handWasSeen = true;
   const lost = s.armed && handWasSeen && !s.hand_seen;
