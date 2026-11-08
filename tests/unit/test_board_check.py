@@ -23,8 +23,13 @@ class LaxBoard(TimedBoard):
         return super()._handle(parts)
 
 
+def level_rig(**kw):
+    # the exact lines below take level as 1500
+    return {**load()["rig"], "trim_x_us": 0, "trim_y_us": 0, **kw}
+
+
 def run(board, answer="y"):
-    rig = load()["rig"]
+    rig = level_rig()
     return check(BoardLink(board), rig, ask=lambda _: answer, sleep=board.wait), rig
 
 
@@ -133,7 +138,7 @@ def test_silent_board_mid_run_gets_a_d():
 
 def test_p_past_startup_range_is_never_sent():
     board = TimedBoard()
-    rig = {**load()["rig"], "startup_range_us": 150}
+    rig = level_rig(startup_range_us=150)
     with pytest.raises(ValueError):
         send(BoardLink(board), rig, "P 1651 1500")
     assert board.sent == []

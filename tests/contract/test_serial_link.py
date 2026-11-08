@@ -10,7 +10,8 @@ pytestmark = pytest.mark.contract
 
 @pytest.fixture
 def rig():
-    return load()["rig"]
+    # the exact lines below take level as 1500
+    return {**load()["rig"], "trim_x_us": 0, "trim_y_us": 0}
 
 
 @pytest.fixture
