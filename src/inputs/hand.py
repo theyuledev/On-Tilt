@@ -6,6 +6,7 @@ from dataclasses import asdict
 from src.contracts import Intent
 
 PALM = (0, 5, 9, 13, 17)  # wrist + the base of each finger
+RECENTRE = b"c"
 
 
 def palm_center(landmarks) -> tuple[float, float]:
@@ -33,16 +34,30 @@ class HandIntent:
     def calibrating(self) -> bool:
         return self.seen and self.neutral is None
 
-    def update(self, palm: tuple[float, float] | None, t: float) -> Intent:
+    @property
+    def progress(self) -> float:
+        # how far through the hold still window, full once the neutral is set
+        if self.neutral is not None:
+            return 1.0
+        if not self._samples:
+            return 0.0
+        return min(1.0, (self._samples[-1][0] - self._samples[0][0]) / self.cfg["neutral_s"])
+
+    def update(self, palm: tuple[float, float] | None, t: float, recentre: bool = False) -> Intent:
         cfg = self.cfg
         self.seen = palm is not None
         if palm is None:
-            if self._last_seen is not None and t - self._last_seen > cfg["neutral_s"]:
-                self.neutral = None
+            gone = t - self._last_seen if self._last_seen is not None else 0.0
+            if gone > cfg["neutral_s"]:
                 self._samples = []
+            # a short dropout keeps the neutral so the player does not hold still again
+            if gone > cfg["neutral_keep_s"]:
+                self.neutral = None
             return Intent(x=0.0, y=0.0, valid=False, t_s=t)
 
         self._last_seen = t
+        if recentre:
+            self._set_neutral(palm)
         if self.neutral is None:
             self._samples.append((t, *palm))
             if not self._lock_neutral(t):
@@ -66,9 +81,24 @@ class HandIntent:
         still = self.cfg["hand_span"] / 4
         if max(xs) - min(xs) >= still or max(ys) - min(ys) >= still:
             return False
-        self.neutral = (sum(xs) / len(xs), sum(ys) / len(ys))
-        self._x = self._y = 0.0
+        self._set_neutral((sum(xs) / len(xs), sum(ys) / len(ys)))
         return True
+
+    def _set_neutral(self, at: tuple[float, float]) -> None:
+        self.neutral = at
+        self._samples = []
+        self._x = self._y = 0.0
+
+
+def recentre_asked(sock: socket.socket) -> bool:
+    # the app answers on the sending socket when the player hits the re centre key
+    asked = False
+    while True:
+        try:
+            sock.recv(16)
+        except BlockingIOError:
+            return asked
+        asked = True
 
 
 def send_intent(
@@ -78,9 +108,10 @@ def send_intent(
     *,
     seen: bool,
     calibrating: bool,
+    progress: float = 0.0,
     lag_s: float | None = None,
 ) -> None:
-    msg = {**asdict(intent), "seen": seen, "calibrating": calibrating}
+    msg = {**asdict(intent), "seen": seen, "calibrating": calibrating, "progress": progress}
     if lag_s is not None:
         msg["lag_s"] = lag_s
     sock.sendto(json.dumps(msg).encode(), ("127.0.0.1", port))
@@ -95,13 +126,15 @@ class HandInput:
         self.sock.setblocking(False)
         self.port = self.sock.getsockname()[1]
         self._intent = Intent(x=0.0, y=0.0, valid=False, t_s=0.0)
+        self._peer = None
         self.seen = self.calibrating = False
+        self.progress = 0.0
         self.lag_s: float | None = None
 
     def latest(self) -> Intent:
         while True:
             try:
-                data = self.sock.recv(1024)
+                data, self._peer = self.sock.recvfrom(1024)
             except BlockingIOError:
                 return self._intent
             msg = json.loads(data)
@@ -110,8 +143,13 @@ class HandInput:
             # an intent at all means a palm was there, older senders only send the intent
             self.seen = msg.pop("seen", True)
             self.calibrating = msg.pop("calibrating", False)
+            self.progress = msg.pop("progress", 0.0)
             self.lag_s = msg.pop("lag_s", None)
             self._intent = Intent(**msg)
+
+    def recentre(self) -> None:
+        if self._peer is not None:
+            self.sock.sendto(RECENTRE, self._peer)
 
     def close(self) -> None:
         self.sock.close()

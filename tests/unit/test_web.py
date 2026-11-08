@@ -320,6 +320,34 @@ def test_watch_tab_sends_nothing_and_takes_no_input(client):
     assert 'has("watch")' in js and "watch ? {} :" in js
 
 
+def test_page_sends_recentre_on_c_like_the_other_one_shot_keys(client):
+    page = client.get("/").text
+    assert 'e.code === "KeyC"' in page and "pending.recentre = true" in page
+
+
+class Recentres:
+    def __init__(self):
+        self.n = 0
+
+    def recentre(self):
+        self.n += 1
+
+
+def test_ws_recentre_reaches_the_hand_and_is_harmless_without_one():
+    hand = Recentres()
+    loop = SimpleNamespace(cfg=load(), hand=hand, snapshot=lambda: {"ok": 1})
+    with TestClient(make_app(loop)).websocket_connect("/ws") as ws:
+        ws.send_json({"recentre": True})
+        assert ws.receive_json() == {"ok": 1}
+        ws.send_json({})
+        ws.receive_json()
+    assert hand.n == 1
+    loop.hand = None
+    with TestClient(make_app(loop)).websocket_connect("/ws") as ws:
+        ws.send_json({"recentre": True})
+        assert ws.receive_json() == {"ok": 1}
+
+
 def test_config_gives_plate_ball_and_stale_limit_from_settings(client):
     cfg = load()
     assert client.get("/config").json() == {

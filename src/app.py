@@ -167,6 +167,7 @@ class Loop:
         snap["ball_px"] = [px.x_px, px.y_px, px.r_px] if px is not None and px.valid else None
         snap["hand_seen"] = self.hand_seen
         snap["hand_calibrating"] = self.hand_calibrating
+        snap["hand_progress"] = self.hand.progress if self.hand is not None else 0.0
         return snap
 
 
