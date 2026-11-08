@@ -41,7 +41,8 @@ def step_response(t, sent, seen) -> StepFit:
     k = int(steps[0])
     pre = float(np.median(seen[:k]))
     floor = max(3 * float(np.std(seen[:k])), 0.05)
-    top = float(np.max(np.abs(np.gradient(seen, t))))
+    slope = (seen[2:] - seen[:-2]) / (t[2:] - t[:-2])  # 3 sample central slope
+    top = float(np.max(np.abs(slope)))
     move = _first_past(seen - pre, floor, k)
     if move is None:
         return StepFit(math.inf, math.inf, top)
@@ -79,14 +80,18 @@ def _stays_under(t, r, lim: float) -> float:
 def settle(t, x, y) -> Settle:
     t, x, y = (np.asarray(a, dtype=float) for a in (t, x, y))
     r = np.hypot(x, y)
-    along = (x * x[0] + y * y[0]) / r[0]  # signed distance along the start direction
-    crossings = t[np.flatnonzero(np.diff(along > 0)) + 1]
-    period = 2 * float(np.mean(np.diff(crossings))) if crossings.size >= 2 else math.inf
+    overshoot, period = 0.0, math.inf
+    if r[0] > 0:
+        along = (x * x[0] + y * y[0]) / r[0]  # signed distance along the start direction
+        crossings = t[np.flatnonzero(np.diff(along > 0)) + 1]
+        if crossings.size >= 2:
+            period = 2 * float(np.mean(np.diff(crossings)))
+        overshoot = 100 * max(float(-along.min()), 0.0) / float(r[0])
     last = t >= t[-1] - 5.0
     return Settle(
         t20_s=_stays_under(t, r, 20.0),
         t5_s=_stays_under(t, r, 5.0),
-        overshoot_pct=100 * max(float(-along.min()), 0.0) / float(r[0]),
+        overshoot_pct=overshoot,
         rms_mm=float(np.sqrt(np.mean(r[last] ** 2))),
         period_s=period,
     )

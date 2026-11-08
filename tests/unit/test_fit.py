@@ -86,3 +86,18 @@ def test_settle_that_never_gets_inside_gives_inf():
     assert s.t20_s == math.inf and s.t5_s == math.inf and s.period_s == math.inf
     assert s.overshoot_pct == 0
     assert s.rms_mm == pytest.approx(30.0)
+
+
+def test_settle_from_the_centre_has_no_swing_numbers():
+    t = np.arange(0, 4, 0.01)
+    s = settle(t, 10 * t, np.zeros_like(t))
+    assert s.overshoot_pct == 0 and s.period_s == math.inf
+    assert s.t20_s == math.inf and s.t5_s == math.inf
+    assert s.rms_mm == pytest.approx(math.sqrt(np.mean((10 * t) ** 2)))
+
+
+def test_settle_already_inside_the_band_is_zero_seconds():
+    t = np.arange(0, 6, 0.01)
+    s = settle(t, np.full_like(t, 3.0), np.zeros_like(t))
+    assert s.t20_s == 0 and s.t5_s == 0
+    assert s.rms_mm == pytest.approx(3.0)
