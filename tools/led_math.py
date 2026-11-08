@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 
 MIN_CONTRAST = 30  # gray levels, led on minus off
+SATURATED = 240  # lit window level where the half threshold trips early
 
 
 def level(image, window) -> float:
@@ -15,6 +16,15 @@ def contrast_map(off, on):
     if off.ndim == 3:
         off, on = off.mean(axis=2), on.mean(axis=2)
     return cv2.GaussianBlur((on - off).astype(np.float32), (5, 5), 0)
+
+
+def saturation_warning(lit_level: float) -> str | None:
+    if lit_level < SATURATED:
+        return None
+    return (
+        f"led window near saturation ({lit_level:.0f}), dim the led or tape it: "
+        "l_mid and l_min will read low"
+    )
 
 
 def pick_window(off, on, half=4) -> tuple[int, int, int, int] | None:

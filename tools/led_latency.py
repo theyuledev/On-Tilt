@@ -10,6 +10,7 @@ import numpy as np
 from src.io.camera import CameraSource, open_camera
 from src.io.serial_link import open_board
 from src.io.settings import ROOT, load
+from tools import led_math
 from tools.led_math import MIN_CONTRAST, contrast_map, level, pick_window, summarize
 
 OUT = ROOT / "data" / "latency"
@@ -66,6 +67,8 @@ def find_led(link, cam, clock, sleep, roi=None):
         print(f"led not in view, contrast {contrast_map(off, on).max():.0f} < {MIN_CONTRAST}")
         return None
     lo, hi = level(off, window), level(on, window)
+    if warning := led_math.saturation_warning(hi):
+        print(warning)
     return window, lo + (hi - lo) / 4, (lo + hi) / 2
 
 

@@ -10,7 +10,7 @@ from src.io.serial_link import BoardLink, LinkError
 from tests.contract.fake_board import FakeBoard
 from tests.unit.test_servo_test import Clock
 from tools.led_latency import POLL_S, parse, run
-from tools.led_math import level, pick_window, summarize
+from tools.led_math import level, pick_window, saturation_warning, summarize
 
 pytestmark = pytest.mark.unit
 
@@ -219,3 +219,26 @@ def test_l_mid_recovers_the_pipeline_delay_under_a_real_exposure_model():
     out = summarize(lat, rtt, fps=120)
     assert misses == 0 and abs(out["l_mid"] - L) < 0.0003
     assert L - E / 2 <= out["l_min"] <= L + E / 2
+
+
+def test_saturation_warning_starts_at_240():
+    assert saturation_warning(239.9) is None
+    assert "saturation" in saturation_warning(240)
+
+
+class BrightCam(LedCam):
+    def read(self):
+        f = super().read()
+        return f and Frame(np.where(f.image.max() > 100, 255, f.image), f.t_s)
+
+
+def test_run_warns_once_when_the_led_window_saturates(capsys):
+    _, kw = rig(itertools.repeat(LED_DELAY), BrightCam)
+    run(trials=3, **kw)
+    assert capsys.readouterr().out.count("saturation") == 1
+
+
+def test_run_stays_quiet_when_the_led_window_is_dim(capsys):
+    _, kw = rig(itertools.repeat(LED_DELAY))
+    run(trials=3, **kw)
+    assert "saturation" not in capsys.readouterr().out
