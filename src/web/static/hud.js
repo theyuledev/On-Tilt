@@ -92,7 +92,7 @@ function hud(s, maze) {
   }
   const was = prev || r;
   $("timer").textContent = fmtLap(Math.max(0, r.elapsed_s ?? 0));
-  $("cps").textContent = `CP ${r.reached}/${maze.checkpoints.length}`;
+  if (maze) $("cps").textContent = `CP ${r.reached}/${maze.checkpoints.length}`;
   countdown(r, was);
   split(r, was, performance.now());
   penalty(r, was);

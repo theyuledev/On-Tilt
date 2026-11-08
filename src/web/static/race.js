@@ -5,6 +5,7 @@ const GHOST = "#CC79A7";
 const GHOST_RING_PX = 4;
 const GHOST_TRAIL_PX = 3;
 const TAG_FONT = "700 20px system-ui, sans-serif";
+const WALL = "#bbb";
 const GATE = "#777";
 const GATE_LIT = "#009E73";
 const GATE_PULSE_MS = 600;
@@ -47,6 +48,13 @@ function plate(ctx, mm) {
   ctx.lineWidth = 2;
   ctx.strokeStyle = "#ccc";
   ctx.strokeRect(-mm / 2, -mm / 2, mm, mm);
+}
+
+function walls(ctx, maze) {
+  ctx.lineJoin = ctx.lineCap = "round";
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = WALL;
+  maze.walls.forEach((w) => polyline(ctx, w));
 }
 
 function ribbon(ctx, maze, w) {
@@ -132,8 +140,11 @@ function draw(ctx, cfg, maze, s) {
   if (g) keep(ghostTrail, g, s.t_s, TRAIL_S); else ghostTrail.length = 0;
   ctx.setTransform(px / mm, 0, 0, -px / mm, px / 2, px / 2);
   plate(ctx, mm);
-  ribbon(ctx, maze, cfg.ball_d_mm);
-  gates(ctx, maze, r, s.race);
+  if (maze) {
+    if (maze.walls) walls(ctx, maze);
+    ribbon(ctx, maze, cfg.ball_d_mm);
+    gates(ctx, maze, r, s.race);
+  }
   tail(ctx, trail, s.t_s, TRAIL_S, r / 2, PLAYER, 1);
   if (g) ghost(ctx, s.race, r, k, s.t_s);
   // the player's ball goes on last so nothing drawn later can cover it

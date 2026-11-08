@@ -134,10 +134,11 @@ function beat() {
 }
 
 const json = url => fetch(url).then(r => r.ok ? r.json() : Promise.reject(new Error(`${url} ${r.status}`)));
-Promise.all([json("/config"), json("/race/maze")]).then(([c, m]) => {
+// no maze just means no race, the plate still has to arm and kill
+Promise.all([json("/config"), json("/race/maze").catch(() => null)]).then(([c, m]) => {
   cfg = c;
   maze = m;
-  $("cps").textContent = `0/${maze.checkpoints.length}`;
+  if (maze) $("cps").textContent = `0/${maze.checkpoints.length}`;
   connect();
   beat();
 }).catch(e => { $("banner").textContent = `load failed: ${e.message}`; });

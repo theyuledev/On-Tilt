@@ -8,14 +8,14 @@ pytestmark = pytest.mark.unit
 def test_square_loads_as_float_tuples():
     m = maze.load("square")
     assert m.points == (
-        (100.0, 100.0),
-        (-100.0, 100.0),
-        (-100.0, -100.0),
-        (100.0, -100.0),
-        (100.0, 100.0),
+        (85.0, 85.0),
+        (-85.0, 85.0),
+        (-85.0, -85.0),
+        (85.0, -85.0),
+        (85.0, 85.0),
     )
     assert m.checkpoints == (1, 2, 3, 4)
-    assert m.start == (100.0, 100.0)
+    assert m.start == (85.0, 85.0)
     assert m.walls == ()
     assert all(type(v) is float for p in m.points for v in p)
 

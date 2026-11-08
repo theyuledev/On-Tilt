@@ -74,12 +74,13 @@ def test_race_on_the_square_runs_to_finished():
     def adv(r, record):
         return race.advance(r, record, False, False, sq, GAME, RIG, scoring.step)
 
-    r = race.start(race.Race(), rec(0.0, 100.0, 100.0), False, False, sq, GAME)
+    x0, y0 = sq.start
+    r = race.start(race.Race(), rec(0.0, x0, y0), False, False, sq, GAME)
     assert r.state == "countdown"
-    r = adv(r, rec(3.0, 100.0, 100.0))
+    r = adv(r, rec(3.0, x0, y0))
     assert r.state == "running"
-    laps = [(4.0, 60.0, 100.0), (5.0, -100.0, 100.0), (6.0, -100.0, -100.0)]
-    laps += [(7.0, 100.0, -100.0), (8.0, 100.0, 100.0)]
+    laps = [(4.0, x0 - 40.0, y0)]
+    laps += [(5.0 + n, *sq.points[i]) for n, i in enumerate(sq.checkpoints)]
     for t, x, y in laps:
         r = adv(r, rec(t, x, y))
     assert r.state == "finished"
