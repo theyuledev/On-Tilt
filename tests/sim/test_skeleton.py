@@ -79,7 +79,7 @@ def test_sim_ball_starts_centred_and_rolls_downhill(clock):
 
 def test_tick_error_stops_the_server_instead_of_dying_quietly():
     loop = Loop(load())
-    loop.mode = "nope"
+    loop.cfg = {}
     server = SimpleNamespace(should_exit=False)
 
     async def go():
