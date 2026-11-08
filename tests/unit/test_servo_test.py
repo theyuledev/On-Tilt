@@ -197,3 +197,21 @@ def test_ctrl_c_mid_run_keeps_what_was_logged_and_levels_the_servos(bench):
     assert out is None
     assert 0 < len(commands) < len(steps) and len(rows) > 0
     assert board.sent[-2:] == ["P 1500 1500", "D"] and not board.armed
+
+
+def test_finish_after_ctrl_c_saves_and_skips_the_report(bench, tmp_path, monkeypatch, capsys):
+    import tools.servo_test as st
+
+    monkeypatch.setattr(st, "OUT", tmp_path)
+    board, b = bench
+    steps = [(1550, "find")] * 40
+    clock = Clock()
+    cam = CutCam([frame(0)] + [frame(4)] * 80, clock, 30)
+    tracker, commands, rows = PairTracker(1550), [], []
+    out = guarded(
+        b, 0.01, lambda: run(b, cam, steps, 1500, 0, TICK, tracker, clock, commands, rows)
+    )
+    assert out is None and len(rows) >= 12
+    st.finish("cut", commands, rows, tracker, "ang", load()["rig"], True)
+    assert (tmp_path / "cut.csv").exists()
+    assert "partial run, ctrl-c" in capsys.readouterr().out

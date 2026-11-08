@@ -27,7 +27,6 @@ def plan(rig: dict, axis: int, tick: float) -> list[tuple[int, str]]:
     r = round(min(c - lo, hi - c))
     rate = rig["slew_us_s"] / 4
     out: list[tuple[int, str]] = []
-
     def hold(us, s, phase):
         out.extend([(us, phase)] * round(s / tick))
 
@@ -163,7 +162,6 @@ def main() -> None:
     else:
         tracker, kind = PairTracker(max(us for us, _ in steps)), "ang"
     print(f"{len(steps) * tick:.0f}s planned, ctrl-c kills", flush=True)
-
     cam = CameraSource(open_camera(rig))
     bench = Bench(open_board(rig), rig)
     bench.submit("l")
@@ -177,15 +175,20 @@ def main() -> None:
         )
     finally:
         cam.close()
-    if done is None:
+    finish(name, commands, rows, tracker, kind, rig, done is None)
+
+
+def finish(name, commands, rows, tracker, kind: str, rig: dict, cut: bool) -> None:
+    if cut:
         print("partial run, ctrl-c")
         if not (commands or rows):
             return
     print(f"wrote {save(name, commands, rows, kind)} ({len(rows)} frames)", flush=True)
     if kind == "ang" and tracker.seed:
         annotate_pair(tracker, OUT / f"{name}.jpg")
-    if len(rows) < 10:
+    if len(rows) < 10 and not cut:
         print("too few frames, target not found")
+    if cut or len(rows) < 10:
         return
     if kind == "quad":
         annotate(tracker, OUT / f"{name}.jpg")
