@@ -2,13 +2,17 @@ import json
 import socket
 import time
 from dataclasses import asdict
+from itertools import pairwise
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 from src.app import Loop
 from src.contracts import Intent
+from src.inputs import hand_process
 from src.inputs.hand import PALM, HandInput, HandIntent, palm_center, send_intent
+from src.io.camera import CameraSource
 from src.io.settings import load
 
 pytestmark = pytest.mark.unit
@@ -107,12 +111,15 @@ def test_socket_round_trip():
     hand_in = HandInput(0)
     sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     send_intent(sender, Intent(0.1, -0.2, True, 5.0), hand_in.port, seen=True, calibrating=True)
-    send_intent(sender, Intent(0.3, 0.4, True, 6.0), hand_in.port, seen=True, calibrating=False)
+    send_intent(
+        sender, Intent(0.3, 0.4, True, 6.0), hand_in.port, seen=True, calibrating=False, lag_s=0.03
+    )
     for _ in range(100):
         if hand_in.latest().t_s == 6.0:
             break
     assert hand_in.latest() == Intent(0.3, 0.4, True, 6.0)
     assert hand_in.seen and not hand_in.calibrating
+    assert hand_in.lag_s == 0.03
     sender.close()
     hand_in.close()
 
@@ -127,6 +134,7 @@ def test_an_intent_without_the_flags_still_counts_as_a_seen_hand():
             break
     assert hand_in.latest() == Intent(0.3, 0.4, True, 6.0)
     assert hand_in.seen and not hand_in.calibrating
+    assert hand_in.lag_s is None
     sender.close()
     hand_in.close()
 
@@ -155,6 +163,48 @@ def test_a_non_finite_hand_intent_is_dropped_and_the_last_one_goes_stale(bad):
     assert loop.tick(10.01 + stale_s, 0.01).intent.x == -1.0
     sender.close()
     hand_in.close()
+
+
+class CountingCapture:
+    """Frames carry their number, a new one every millisecond."""
+
+    def __init__(self):
+        self.i = 0
+        self.alive = True
+
+    def read(self):
+        if not self.alive:
+            return False, None
+        self.i += 1
+        time.sleep(0.001)
+        return True, np.full((2, 2), self.i, np.int32)
+
+    def release(self):
+        pass
+
+
+def test_hand_process_runs_the_model_on_the_newest_frame_and_reports_lag():
+    cap = CountingCapture()
+    seen, sent = [], []
+
+    def slow_model(img, t):
+        seen.append(int(img[0, 0]))
+        time.sleep(0.02)
+        if len(seen) == 5:
+            cap.alive = False
+        return None
+
+    def send(intent, **flags):
+        sent.append(flags)
+
+    frames = CameraSource(cap)
+    hand_process.run(frames, slow_model, HandIntent(CFG), send)
+    frames.close()
+    assert len(seen) >= 5 and len(sent) == len(seen)
+    assert all(b > a for a, b in pairwise(seen))
+    # the frames that piled up while the model ran were skipped, not queued
+    assert max(b - a for a, b in pairwise(seen)) > 1
+    assert all(f["lag_s"] >= 0 and f["seen"] is False for f in sent)
 
 
 class FakeHand:

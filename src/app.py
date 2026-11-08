@@ -37,7 +37,7 @@ class Loop:
     ):
         self.cfg = cfg
         self.bus = Bus()
-        self.keys = KeyboardInput()
+        self.keys = KeyboardInput(cfg["input"])
         self.hand = hand
         self.frames = frames
         self.frame: Frame | None = None

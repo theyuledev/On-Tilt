@@ -30,7 +30,7 @@ def test_hand_step_back_to_zero_lands_exactly_on_centre(clock):
     cfg["control"]["inverter_on"] = True  # must stay out of the way in hand mode
     loop = Loop(cfg)
     loop.arm()
-    ticks(loop, clock, 100, key=(0.3, 0.0))
+    ticks(loop, clock, 100, key=(0.9, 0.0))
     assert loop.last.plate_state.est_x_deg > 3
     ticks(loop, clock, 200, key=(0.0, 0.0))
     assert (loop.last.servo_cmd.x_us, loop.last.servo_cmd.y_us) == center(loop.cfg["rig"])
