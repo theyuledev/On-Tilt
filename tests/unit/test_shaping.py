@@ -121,6 +121,13 @@ def floor_part(x, y):
     return ox - (1 - fx / 1.5) * sx, oy - (1 - fy / 1.5) * sy
 
 
+def test_no_dead_zone_does_not_divide_by_zero():
+    for c in (cfg(dead_zone=0.0), cfg(REAL, ROUGH, dead_zone=0.0)):
+        assert shape(0.0, 0.0, c) == (0.0, 0.0)
+        x, y = shape(0.5, 0.0, c)
+        assert math.isfinite(x) and x > 0 and y == 0
+
+
 def test_no_step_at_the_dead_zone_edge_with_friction():
     h = 1e-6
     for x, y in ((DZ, 0.0), (0.0, -DZ)):

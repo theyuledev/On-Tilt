@@ -31,12 +31,12 @@ def shape(x: float, y: float, cfg: dict) -> tuple[float, float]:
     """Intent -1..1 -> tilt degrees: smooth radial dead zone, then cubic expo from floor to top."""
     r = math.hypot(x, y)
     dz, e = cfg["input"]["dead_zone"], cfg["input"]["expo"]
-    if r < dz:
+    if r <= dz or r == 0:
         return 0.0, 0.0
     # full stick stays full, the direction stays
     u = _ease(r, dz) / (1 - 1.5 * dz)
     # the floor fades in over one more dead zone width so the edge has no step
-    b = min(1.0, (r - dz) / dz)
+    b = 1.0 if dz <= 0 else min(1.0, (r - dz) / dz)
 
     def bend(d: float, lo: float, hi: float) -> float:
         v = u * d
