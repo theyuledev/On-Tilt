@@ -41,5 +41,5 @@ def test_lacrosse_ball_at_the_edge_is_found_against_the_background(cap):
 
 def test_lacrosse_ball_rolling_along_the_edge_is_tracked(cap):
     # the hand nudges the ball around 13386-13408 and takes it back from 13432 on
-    ((radii, missed),) = run(str(CLIP), [(13310, 13430)], CFG).values()
+    ((radii, missed),) = run(str(CLIP), [(13310, 13430)], CFG).windows.values()
     assert len(radii) / (len(radii) + len(missed)) >= 0.85
