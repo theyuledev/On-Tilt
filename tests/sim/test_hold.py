@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.app import Loop
+from src.contracts import BallState
 from src.control.pulse_map import center, tilt_to_pulse
 from src.io.serial_link import BoardLink, SerialActuator
 from src.io.settings import load
@@ -109,6 +110,20 @@ def test_hold_while_disarmed_arms_and_holds_but_not_with_the_board_lost(loop, cl
     lost.board_lost = True
     lost.hold()
     assert not lost.safety.armed and not lost.holding
+
+
+def test_hold_keeps_the_dead_band_inverter_off_in_a_closed_loop_mode(loop, clock):
+    loop.cfg["control"] = {**loop.cfg["control"], "mode": "balance", "inverter_on": True}
+    loop.mode = "balance"
+    loop.ball = BallState(60.0, -40.0, 0.0, 0.0, valid=True, t_s=clock[0])
+    loop.arm()
+    ticks(loop, clock, 100, (0.0, 0.0))
+    assert pulse(loop) != level(loop)
+    loop.hold()
+    ticks(loop, clock, slew_ticks(loop), (0.0, 0.0))
+    for _ in range(200):
+        ticks(loop, clock, 1, (0.0, 0.0))
+        assert pulse(loop) == level(loop)
 
 
 def test_a_refused_arm_keeps_the_hold(loop, clock):

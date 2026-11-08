@@ -163,7 +163,7 @@ class Loop:
         sent = safety.step(self.safety, target, stale, dt, self.cfg["rig"])
         if self.cfg["control"]["inverter_on"]:
             # only the closed loop modes get the dead band help, a player closes the loop himself
-            idle = not self.safety.armed or self.safety.killing or stale
+            idle = not self.safety.armed or self.safety.killing or stale or self.holding
             off = idle or self.mode not in CLOSED_LOOP
             self.band, sent = invert(self.band, sent, off, self.cfg)
         try:
