@@ -9,6 +9,7 @@ import cv2
 from src.io.ports import Frame
 
 WARMUP_READS = 30
+OPEN_TRIES = 3
 
 
 def _first_frame_shape(cap) -> tuple[int, ...] | None:
@@ -47,19 +48,27 @@ def set_exposure(rig: dict, run=subprocess.run) -> bool:
     return True
 
 
+def revive_camera(run=subprocess.run) -> bool:
+    tool = shutil.which("uvc-util")
+    if tool is None:
+        return False
+    # a jammed stream comes back after a round trip through auto exposure
+    run([tool, "-I", "0", "-s", "auto-exposure-mode=8"])
+    return True
+
+
 def _open_fast(index: int, rig: dict, video_capture):
     cap = video_capture(index)
     # on mac this camera stops sending frames if width/height get set, and the
     # fast mode only kicks in if MJPG + fps are set before the first read
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
     cap.set(cv2.CAP_PROP_FPS, rig["camera_fps"])
-    if _first_frame_shape(cap) is None:
-        cap.release()
-        raise RuntimeError("camera found but sends no frames in fast mode")
     return cap
 
 
 def _stream_alive(cap) -> bool:
+    if _first_frame_shape(cap) is None:
+        return False
     n = WARMUP_READS // 3
     return sum(cap.read()[0] for _ in range(n)) >= n / 2
 
@@ -67,16 +76,15 @@ def _stream_alive(cap) -> bool:
 def open_camera(rig: dict, video_capture=cv2.VideoCapture, run=subprocess.run):
     want = overhead_shape(rig)
     index = find_camera(lambda s: s == want, f"{want[1]}x{want[0]} frames", video_capture)
-    cap = _open_fast(index, rig, video_capture)
-    if not _stream_alive(cap):
-        # first open after a replug or exposure change can die right after the warm-up frame
-        cap.release()
+    for attempt in range(OPEN_TRIES):
+        if attempt:
+            revive_camera(run)
         cap = _open_fast(index, rig, video_capture)
-        if not _stream_alive(cap):
-            cap.release()
-            raise RuntimeError("camera stream dead after reopen")
-    set_exposure(rig, run)
-    return cap
+        if _stream_alive(cap):
+            set_exposure(rig, run)
+            return cap
+        cap.release()
+    raise RuntimeError(f"camera gives no frames after {OPEN_TRIES} opens")
 
 
 class CameraSource:
