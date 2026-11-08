@@ -14,17 +14,17 @@ from src.safety import limits
 pytestmark = pytest.mark.sim
 
 DT = 0.01
-NEUTRAL = (0.5, 0.5)
-# the webcam faces the player, so their right is image left, and image y points down
-MOVES = {"right": (-1, 0), "left": (1, 0), "up": (0, -1), "down": (0, 1)}
+NEUTRAL = (0.0, 0.0)  # palm roll, pitch in degrees
+# webcam above the hand looking down: right side down reads roll +,
+# tipping the fingertips down (away from the player) reads pitch -
+MOVES = {"right": (1, 0), "left": (-1, 0), "up": (0, -1), "down": (0, 1)}
 
 
 def palm(cfg, move=None, spans=1.0):
-    # TODO(#223): palm angle trace once the angle mapping lands
     if move is None:
         return NEUTRAL
     dx, dy = MOVES[move]
-    d = spans * cfg["input"]["hand_span"]
+    d = spans * cfg["input"]["hand_tilt_span_deg"]
     return NEUTRAL[0] + dx * d, NEUTRAL[1] + dy * d
 
 
@@ -151,7 +151,10 @@ def test_a_palm_back_inside_the_keep_window_steers_without_a_new_hold(rig):
     assert rig.pulses[-1] == level(rig)
     rec = rig.tick(palm(rig.cfg, "up"))
     assert rec.intent.valid and not rig.loop.snapshot()["hand_calibrating"]
-    rig.hold(0.3, palm(rig.cfg, "up"))
+    # it eases in from level rather than snapping to the held tilt
+    assert (rec.intent.x, rec.intent.y) == (0.0, 0.0)
+    rec = rig.hold(rig.cfg["input"]["key_ramp_s"], palm(rig.cfg, "up"))
+    assert rec.intent.y == pytest.approx(1.0)
     assert rig.pulses[-1][1] > level(rig)[1]
 
 
