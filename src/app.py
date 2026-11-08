@@ -62,9 +62,15 @@ def main() -> None:
     if cfg["rig"]["actuator"] == "real":
         actuator = SerialActuator(open_board(cfg["rig"]), cfg["rig"])
     cal = (lambda: getattr(loop.step, "status", None)) if "selfcal" in MODES else None
-    game = Game(cfg, maze.load(cfg["game"]["maze"]), scoring.step, cal=cal)
+    try:
+        game = Game(cfg, maze.load(cfg["game"]["maze"]), scoring.step, cal=cal)
+    except (OSError, ValueError, KeyError) as e:
+        # a bad maze file costs the race, not balance or hand play
+        print(f"race off: {e!r}")
+        game = None
     loop = Loop(cfg, hand, frames, actuator, exposure, game)
-    loop.bus.subscribe("tick", lambda rec: game.tick(rec, loop.safety.killing, loop.board_lost))
+    if game is not None:
+        loop.bus.subscribe("tick", lambda rec: game.tick(rec, loop.safety.killing, loop.board_lost))
     start_run_log(loop.bus)
     port = int(env("PORT", "8000"))
     server = uvicorn.Server(

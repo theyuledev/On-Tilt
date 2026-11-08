@@ -3,6 +3,7 @@ import asyncio
 import pytest
 
 from src import app
+from src.io.settings import load
 
 pytestmark = pytest.mark.unit
 
@@ -78,3 +79,14 @@ def test_each_loop_tick_reaches_the_game(monkeypatch):
     loop = start(monkeypatch, boom, lambda rig: None)
     rec = loop.tick(1.0, 0.01)
     assert loop.game.last is rec and loop.snapshot()["race"]["state"] == "idle"
+
+
+def test_a_missing_maze_turns_the_race_off_and_the_app_still_starts(monkeypatch, capsys):
+    cfg = load()
+    cfg["game"]["maze"] = "no-such-maze"
+    monkeypatch.setattr(app, "load", lambda: cfg)
+    loop = start(monkeypatch, boom, lambda rig: None)
+    assert loop.game is None
+    assert capsys.readouterr().out.count("race off") == 1
+    loop.tick(1.0, 0.01)
+    assert "race" not in loop.snapshot()
