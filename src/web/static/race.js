@@ -5,8 +5,13 @@ const GHOST = "#CC79A7";
 const GHOST_RING_PX = 4;
 const GHOST_TRAIL_PX = 3;
 const TAG_FONT = "700 20px system-ui, sans-serif";
+const GATE = "#777";
+const GATE_LIT = "#009E73";
+const GATE_PULSE_MS = 600;
+const GATE_FLASH_MS = 120;
 const trail = [];
 const ghostTrail = [];
+let gatesHit = 0, gateHitAt = -Infinity;
 
 function fit(canvas) {
   const px = Math.round(canvas.clientWidth * devicePixelRatio);
@@ -54,15 +59,30 @@ function ribbon(ctx, maze, w) {
   polyline(ctx, maze.points);
 }
 
-function gates(ctx, maze, r) {
-  const finish = maze.checkpoints.length - 1;
-  ctx.strokeStyle = ctx.fillStyle = "#777";
+function gates(ctx, maze, r, race) {
+  const finish = maze.checkpoints.length - 1, now = performance.now();
+  const reached = race && race.state ? race.reached : 0;
+  const live = race && (race.state === "countdown" || race.state === "running");
+  const pulse = 0.6 + 0.4 * Math.cos((2 * Math.PI * now) / GATE_PULSE_MS);
+  if (reached > gatesHit) gateHitAt = now;
+  gatesHit = reached;
   maze.checkpoints.forEach((i, n) => {
+    ctx.strokeStyle = n < reached ? GATE_LIT : GATE;
+    ctx.globalAlpha = live && n === reached ? pulse : 1;
     ctx.lineWidth = n === finish ? 3 : 2;
     circle(ctx, maze.points[i], r);
     ctx.stroke();
     if (n === finish) { circle(ctx, maze.points[i], r + 6); ctx.stroke(); }
   });
+  ctx.globalAlpha = 1;
+  const since = now - gateHitAt;
+  if (reached && since < GATE_FLASH_MS) {
+    ctx.strokeStyle = PLAYER;
+    ctx.lineWidth = 3;
+    circle(ctx, maze.points[maze.checkpoints[reached - 1]], r * (1 + since / GATE_FLASH_MS));
+    ctx.stroke();
+  }
+  ctx.fillStyle = GATE;
   circle(ctx, maze.start, 4);
   ctx.fill();
 }
@@ -113,7 +133,7 @@ function draw(ctx, cfg, maze, s) {
   ctx.setTransform(px / mm, 0, 0, -px / mm, px / 2, px / 2);
   plate(ctx, mm);
   ribbon(ctx, maze, cfg.ball_d_mm);
-  gates(ctx, maze, r);
+  gates(ctx, maze, r, s.race);
   tail(ctx, trail, s.t_s, TRAIL_S, r / 2, PLAYER, 1);
   if (g) ghost(ctx, s.race, r, k, s.t_s);
   // the player's ball goes on last so nothing drawn later can cover it

@@ -21,6 +21,10 @@
     <div class="arena">
       <canvas id="race"></canvas>
       <span id="timer" class="hud">00:00.00</span>
+      <span id="delta" class="hud"></span>
+      <span id="count" class="hud"></span>
+      <span id="pen" class="hud"></span>
+      <div id="result" class="hud"><b></b><span></span></div>
       <span id="cps" class="hud">0/4</span>
       <span id="speed" class="hud">0</span>
       <span id="banner" class="hud">arm to race</span>
@@ -33,6 +37,7 @@
   <div class="row">
     <button id="arm">arm</button>
     <button id="kill">kill (space)</button>
+    <button id="racebtn">race (r)</button>
   </div>
   <div class="row dim"><span id="tilt">tilt x 0.00°  y 0.00°</span><span>arrows / wasd to tilt</span><span>c re-centres the hand neutral</span></div>
 </main>
@@ -44,6 +49,7 @@
 <script src="/static/race.js"></script>
 <script src="/static/pad.js"></script>
 <script src="/static/strip.js"></script>
+<script src="/static/hud.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

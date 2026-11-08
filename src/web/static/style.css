@@ -13,7 +13,7 @@ main { display: grid; gap: 12px; justify-items: center; }
 #strip { display: block; width: min(66vh, 56vw); height: 60px; background: #1c1c1c; border-radius: 4px; }
 .hud { position: absolute; font: 700 6vmin system-ui, sans-serif; font-variant-numeric: tabular-nums; text-shadow: 0 0 10px #000, 0 0 2px #000; pointer-events: none; }
 #timer { top: 4px; left: 50%; transform: translateX(-50%); font-size: max(80px, 10vmin); line-height: 1; color: #fff; }
-#cps { top: 6px; right: 12px; }
+#cps { top: 6px; left: 12px; font-size: 32px; }
 #speed { bottom: 6px; right: 12px; }
 #speed::after { content: " mm/s"; font-size: 40%; font-weight: 400; color: #aaa; }
 #banner { inset: 0; display: grid; place-items: center; color: #ffb300; }
@@ -24,9 +24,33 @@ button { font: inherit; padding: 10px 22px; border: 0; border-radius: 6px; curso
 button:disabled { opacity: .4; cursor: default; }
 #arm { background: #2e7d32; }
 #kill { background: #c62828; font-weight: 700; font-size: 22px; padding: 14px 44px; }
+#racebtn { background: #0072B2; }
 .dim { color: #aaa; gap: 24px; }
 #tilt { font: 24px ui-monospace, Menlo, monospace; color: #fff; white-space: pre; }
 .view { position: fixed; left: 12px; bottom: 12px; color: #aaa; }
 #cam { display: block; width: 200px; border-radius: 4px; }
 .ring { position: absolute; box-sizing: border-box; border: 2px solid #ff3; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
 .ring::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; background: #ff3; border-radius: 50%; transform: translate(-50%, -50%); }
+#delta { top: calc(8px + max(80px, 10vmin)); left: 50%; translate: -50% 0; font-size: 48px; white-space: pre; }
+#count { inset: 0; display: grid; place-items: center; font-size: 40vmin; }
+#pen { top: 40%; left: 50%; translate: -50% 0; color: #E69F00; }
+#result { top: 28%; left: 0; right: 0; text-align: center; }
+#result b, #result span { display: block; }
+#result span { font-size: 4vmin; white-space: pre-line; }
+#result[data-state="finished"] span { font-size: 120px; }
+.tick { animation: tick 1s forwards; }
+.go { color: #56B4E9; animation: go .6s forwards; }
+.split { animation: split 2.5s forwards; }
+.pen { animation: pen 1.2s forwards; }
+.end { animation: pop .25s; }
+.brief { animation: brief 1.5s forwards; }
+.racing .pills { scale: .75; opacity: .5; }
+.racing .dim, .racing .view { visibility: hidden; }
+.offpath .arena::after { content: ""; position: absolute; inset: 0; border: 6px solid #E69F00; pointer-events: none; animation: blink .5s infinite; }
+@keyframes tick { 0% { scale: 1.4; opacity: 1; } 25% { scale: 1; } 80% { opacity: 1; } 100% { scale: 1; opacity: 0; } }
+@keyframes go { 0% { scale: 1.4; opacity: 1; } 40% { scale: 1; } 70% { opacity: 1; } 100% { scale: 1; opacity: 0; } }
+@keyframes split { 0% { scale: 1.4; opacity: 1; } 8% { scale: 1; } 88% { opacity: 1; } 100% { scale: 1; opacity: 0; } }
+@keyframes pen { 0% { scale: 1.4; opacity: 1; } 15% { scale: 1; } 70% { opacity: 1; } 100% { scale: 1; opacity: 0; } }
+@keyframes pop { from { scale: 1.4; } }
+@keyframes brief { 70% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes blink { 50% { opacity: .2; } }
