@@ -56,17 +56,17 @@ est_pos_noise_mm = { value = 0.15, label = "uncalibrated default (NOT TESTED, ex
 est_gate_mm = { value = 30, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 est_hold_s = { value = 0.2, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 est_v_max_mm_s = { value = 1500, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-ki_deg_s_mm = { value = 0.04, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+ki_deg_s_mm = { value = 0.04, label = "sim-tuned (PR #266)" }
 i_max_deg = { value = 1.5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-i_err_max_mm = { value = 60, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+i_err_max_mm = { value = 60, label = "sim-tuned (PR #266)" }
 db_comp_us = { value = 14, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 db_flip_us = { value = 2, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 inverter_on = { value = false, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 vel_ema_s = { value = 0.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-unstick_gain = { value = 1.2, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-unstick_in_mm = { value = 1, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-unstick_full_mm = { value = 10, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-unstick_v_mm_s = { value = 80, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+unstick_gain = { value = 1.2, label = "sim-tuned (PR #266)" }
+unstick_in_mm = { value = 1, label = "sim-tuned (PR #266)" }
+unstick_full_mm = { value = 10, label = "sim-tuned (PR #266)" }
+unstick_v_mm_s = { value = 80, label = "sim-tuned (PR #266)" }
 
 [game]
 heartbeat_stale_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
