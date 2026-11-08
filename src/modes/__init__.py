@@ -1,4 +1,5 @@
 from src.contracts import BallState, Intent, PlateCommand
+from src.control.pid import Integral, integrate, pid
 from src.modes.assist import goal_mm
 from src.modes.path import clip, target
 
@@ -20,20 +21,25 @@ def hand(ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
 def pd_toward(ball: BallState, goal: tuple[float, float], cfg: dict) -> PlateCommand:
     """Tilt that pulls the ball to goal and brakes its motion."""
     c = cfg["control"]
-
-    def pd(err: float, vel: float) -> float:
-        d = min(max(c["kd_deg_s_mm"] * vel, -c["d_max_deg"]), c["d_max_deg"])
-        return -(c["kp_deg_mm"] * err + d)
-
     return PlateCommand(
-        pd(ball.x_mm - goal[0], ball.vx_mm_s), pd(ball.y_mm - goal[1], ball.vy_mm_s)
+        pid(ball.x_mm - goal[0], ball.vx_mm_s, 0.0, c),
+        pid(ball.y_mm - goal[1], ball.vy_mm_s, 0.0, c),
     )
 
 
-def balance(ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
-    if not ball.valid:
-        return LEVEL
-    return pd_toward(ball, (0.0, 0.0), cfg)
+class Balance:
+    def __init__(self, cfg: dict):
+        self.acc = Integral()
+
+    def __call__(self, ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
+        c = cfg["control"]
+        self.acc = integrate(self.acc, ball, c)
+        if not ball.valid:
+            return LEVEL
+        return PlateCommand(
+            tilt_x_deg=pid(ball.x_mm, ball.vx_mm_s, self.acc.x, c),
+            tilt_y_deg=pid(ball.y_mm, ball.vy_mm_s, self.acc.y, c),
+        )
 
 
 def assist(ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
@@ -64,7 +70,7 @@ class PathFollower:
         return pd_toward(ball, goal, cfg)
 
 
-MODES = {"hand": hand, "balance": balance, "path": PathFollower, "assist": assist}
+MODES = {"hand": hand, "balance": Balance, "path": PathFollower, "assist": assist}
 
 
 def make_mode(name: str, cfg: dict):
