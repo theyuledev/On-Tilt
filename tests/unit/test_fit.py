@@ -7,7 +7,7 @@ from src.contracts import BallState, PlateCommand, PlateState
 from src.control.pulse_map import tilt_to_pulse
 from src.io.settings import load
 from src.sim.ball import roll
-from src.sim.fit import ball_accel, settle, step_response
+from src.sim.fit import ball_accel, pulse_fit, settle, step_response
 from src.sim.plate import SimActuator
 
 pytestmark = pytest.mark.unit
@@ -103,3 +103,27 @@ def test_settle_already_inside_the_band_is_zero_seconds():
     s = settle(t, np.full_like(t, 3.0), np.zeros_like(t))
     assert s.t20_s == 0 and s.t5_s == 0
     assert s.rms_mm == pytest.approx(3.0)
+
+
+def test_pulse_fit_recovers_level_gain_and_axis_directions():
+    g, dt, fine = 9810.0, 0.01, 10
+    level, per_us, axis = np.array([1410.0, 1430.0]), (100.0, 80.0), np.radians([20.0, 110.0])
+    k = 5 / 7 * g * math.pi / 180
+    A = np.array([np.cos(axis), np.sin(axis)]) * k / np.array(per_us)
+    rng = np.random.default_rng(1)
+    windows = []
+    for _ in range(30):
+        t = np.arange(40 * fine) * dt / fine
+        f, ph = rng.uniform(0.5, 3, 2), rng.uniform(0, 6, 2)
+        p = level[:, None] + 60 * np.sin(2 * np.pi * f[:, None] * t + ph[:, None])
+        a = A @ (p - level[:, None])
+        v = rng.uniform(-50, 50, (2, 1)) + np.cumsum(a, axis=1) * dt / fine
+        pos = rng.uniform(-40, 40, (2, 1)) + np.cumsum(v, axis=1) * dt / fine
+        windows.append((*pos[:, ::fine], *p[:, ::fine]))
+
+    fit = pulse_fit(windows, dt, 1420.0, g)
+
+    assert fit.level_us == pytest.approx(tuple(level), abs=1.0)
+    assert fit.us_per_deg == pytest.approx(per_us, rel=0.03)
+    assert fit.axis_deg == pytest.approx((20.0, 110.0), abs=1.0)
+    assert fit.r2 > 0.99
