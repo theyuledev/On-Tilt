@@ -135,7 +135,8 @@ def test_hold_sends_only_the_level_p_once_a_tick(clock):
 
     board.armed = False  # board self levelled and dropped out
     ticks(loop, clock, 2, FULL)
-    assert not loop.snapshot()["armed"] and not loop.holding
+    snap = loop.snapshot()
+    assert not snap["armed"] and not snap["holding"]
 
 
 def faded_in(loop, clock):

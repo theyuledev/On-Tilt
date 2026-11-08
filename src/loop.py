@@ -9,7 +9,7 @@ from src.estimate import BallEstimator
 from src.inputs.keyboard import KeyboardInput
 from src.io.ports import Frame, FrameSource, InputSource, TiltActuator
 from src.io.serial_link import LinkError
-from src.modes import CLOSED_LOOP, make_mode
+from src.modes import CLOSED_LOOP, fade_in, make_mode
 from src.sim.ball import roll
 from src.sim.plate import SimActuator
 from src.vision.tracker import BallPx
@@ -93,8 +93,12 @@ class Loop:
             # an old frame says nothing about where the ball is now
             ball = replace(ball, valid=False)
         intent, stale = self._intent(now)
-        plate_cmd = self._command(ball, intent, stale)
-        target = tilt_to_pulse(self._fade(plate_cmd, dt), rig)
+
+        if not self.safety.armed or self.safety.killing or stale:
+            self.step = make_mode(self.mode, self.cfg)  # fresh mode state, no kick on arm
+        plate_cmd = self.step(ball, intent, self.cfg)
+        self.armed_s += dt
+        target = tilt_to_pulse(fade_in(plate_cmd, self.holding, self.armed_s, rig), rig)
         sent, plate_state = self._drive(target, stale, dt, now)
         tilt = (plate_state.sent_x_deg, plate_state.sent_y_deg) if sent is not None else (0.0, 0.0)
         self._watch("command", now, PlateCommand(*tilt))
@@ -114,18 +118,6 @@ class Loop:
         self.last = rec
         self.bus.publish("tick", rec)
         return rec
-
-    def _command(self, ball: BallState, intent: Intent, stale: bool) -> PlateCommand:
-        self.holding = self.holding and self.safety.armed
-        if not self.safety.armed or self.safety.killing or stale or self.holding:
-            self.step = make_mode(self.mode, self.cfg)  # fresh mode state, no kick on arm
-        return PlateCommand(0.0, 0.0) if self.holding else self.step(ball, intent, self.cfg)
-
-    def _fade(self, cmd: PlateCommand, dt: float) -> PlateCommand:
-        # after an arm the tilt fades in from level instead of slewing straight there
-        self.armed_s += dt
-        k = min(1.0, self.armed_s / self.cfg["rig"]["arm_fade_s"])
-        return PlateCommand(cmd.tilt_x_deg * k, cmd.tilt_y_deg * k)
 
     def _intent(self, now: float) -> tuple[Intent, bool]:
         rig = self.cfg["rig"]
@@ -197,7 +189,7 @@ class Loop:
     def snapshot(self) -> dict:
         snap = self.last.to_dict() if self.last else {}
         snap["killing"] = self.safety.killing
-        snap["holding"] = self.holding
+        snap["holding"] = self.holding and self.safety.armed
         snap["stale"] = self.stale
         snap["board_lost"] = self.board_lost
         snap["camera_lost"] = self.camera_lost

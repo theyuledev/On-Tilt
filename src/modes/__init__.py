@@ -81,3 +81,11 @@ def make_mode(name: str, cfg: dict):
     """The callable for one run of a mode; modes that keep state are classes built from cfg."""
     mode = MODES[name]
     return mode(cfg) if isinstance(mode, type) else mode
+
+
+def fade_in(cmd: PlateCommand, holding: bool, armed_s: float, rig: dict) -> PlateCommand:
+    """Level while holding, else the tilt fades in from level after an arm."""
+    if holding:
+        return LEVEL
+    k = min(1.0, armed_s / rig["arm_fade_s"])
+    return PlateCommand(cmd.tilt_x_deg * k, cmd.tilt_y_deg * k)
