@@ -131,6 +131,60 @@ def test_ws_save_without_a_game_is_ignored_and_the_socket_stays_open():
             assert sock.receive_json() == {"ok": 1}
 
 
+def _ws_loop(calls):
+    keys = SimpleNamespace(set=lambda x, y: calls.append("keys"))
+    return SimpleNamespace(
+        cfg=load(),
+        keys=keys,
+        arm=lambda: calls.append("arm"),
+        kill=lambda: calls.append("kill"),
+        snapshot=lambda: {},
+    )
+
+
+def test_ws_bad_x_drops_only_that_message():
+    calls = []
+    with TestClient(make_app(_ws_loop(calls))).websocket_connect("/ws") as sock:
+        sock.send_json({"x": "abc", "y": 0})
+        sock.receive_json()
+        sock.send_json({"kill": True})
+        sock.receive_json()
+    assert calls == ["kill"]
+
+
+def test_ws_kill_with_a_bad_x_still_kills():
+    calls = []
+    with TestClient(make_app(_ws_loop(calls))).websocket_connect("/ws") as sock:
+        sock.send_json({"kill": True, "x": "abc", "y": 0})
+        sock.receive_json()
+    assert calls == ["kill"]
+
+
+def test_ws_non_dict_message_keeps_the_socket_open():
+    calls = []
+    with TestClient(make_app(_ws_loop(calls))).websocket_connect("/ws") as sock:
+        sock.send_json([1, 2])
+        sock.receive_json()
+        sock.send_json({"kill": True})
+        sock.receive_json()
+    assert calls == ["kill"]
+
+
+def test_ws_save_that_raises_keeps_the_socket_open():
+    def save(name):
+        raise OSError("disk full")
+
+    calls = []
+    loop = _ws_loop(calls)
+    loop.game = SimpleNamespace(save=save)
+    with TestClient(make_app(loop)).websocket_connect("/ws") as sock:
+        sock.send_json({"save": "abc"})
+        sock.receive_json()
+        sock.send_json({"kill": True})
+        sock.receive_json()
+    assert calls == ["kill"]
+
+
 def test_page_has_a_results_panel_loaded_after_hud_and_before_app(client):
     page = client.get("/").text
     assert all(f'id="{i}"' in page for i in RESULT_IDS)
