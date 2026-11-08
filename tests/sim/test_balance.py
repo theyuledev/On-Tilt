@@ -23,7 +23,7 @@ def run(start, seconds, estimate=False):
     rig, control = cfg["rig"], cfg["control"]
     dt = 1 / control["sim_tick_hz"]
     # sim frames are stamped exactly and the sim servo's dead time already holds the camera
-    cfg["control"] = {**control, "est_cam_latency_s": 0.0}
+    cfg["vision"] = {**cfg["vision"], "camera_latency_s": 0.0}
     est = BallEstimator(cfg)
     plate = SimActuator(rig, control)
     guard = safety.SafetyState()

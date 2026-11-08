@@ -20,8 +20,9 @@ class BallEstimator:
         self.k = ROLL * self.c["sim_g_mm_s2"]
         self.q = self.c["est_accel_noise_mm_s2"] ** 2
         self.r = self.c["est_pos_noise_mm"] ** 2
+        self.cam_s = cfg["vision"]["camera_latency_s"]
         # the measured dead time runs command to first visible motion, so the camera is in it
-        self.dead_s = max(self.c["servo_dead_time_s"] - self.c["est_cam_latency_s"], 0.0)
+        self.dead_s = max(self.c["servo_dead_time_s"] - self.cam_s, 0.0)
         self.lost_after = cfg["vision"]["lost_after_misses"]
         self.cmds: deque[tuple[float, float, float]] = deque(maxlen=64)
         self.s = np.zeros((2, 2))
@@ -42,7 +43,7 @@ class BallEstimator:
         self.misses = 0
         stale = t_s - self.seen_s > self.c["est_hold_s"]
         self.seen_s = t_s
-        t_m = t_s - self.c["est_cam_latency_s"]
+        t_m = t_s - self.cam_s
         z = np.array([x_mm, y_mm])
         if self.t is None or stale:
             self._reinit(z, t_m)

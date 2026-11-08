@@ -16,15 +16,15 @@ CFG = {
         "sim_g_mm_s2": 9810,
         "est_accel_noise_mm_s2": 150,
         "est_pos_noise_mm": 0.15,
-        "est_cam_latency_s": 0.015,
         "est_gate_mm": 30,
         "est_hold_s": 0.2,
         "est_v_max_mm_s": 1500,
     },
-    "vision": {"lost_after_misses": 5},
+    "vision": {"camera_latency_s": 0.015, "lost_after_misses": 5},
 }
 C = CFG["control"]
-DEAD = C["servo_dead_time_s"] - C["est_cam_latency_s"]  # servo only, the camera is measured in
+CAM = CFG["vision"]["camera_latency_s"]
+DEAD = C["servo_dead_time_s"] - CAM  # servo only, the camera is measured in
 FPS = 120
 FINE = 0.001
 
@@ -77,7 +77,7 @@ def test_constant_tilt_tracks_velocity_without_bias_and_predicts_the_plate_lag()
     xs, vs = tilted(2.0, 0.7)
     est = BallEstimator(CFG)
     est.command(0.0, PlateCommand(2.0, 0.0))
-    lat = C["est_cam_latency_s"]
+    lat = CAM
     for t in frames(0.6):
         # the frame stamped at t shows the ball as it was one camera latency earlier
         s = est.update(t, at(xs, max(t - lat, 0)), 0.0)
@@ -93,7 +93,7 @@ def test_74_ms_gap_keeps_the_velocity_on_track():
     est = BallEstimator(CFG)
     est.command(0.0, PlateCommand(2.0, 0.0))
     for t in frames(0.6, gap=(0.3, 0.374)):
-        s = est.update(t, at(xs, max(t - C["est_cam_latency_s"], 0)), 0.0)
+        s = est.update(t, at(xs, max(t - CAM, 0)), 0.0)
         if t > 0.3:
             assert abs(s.vx_mm_s - at(vs, s.t_s)) < 15
 

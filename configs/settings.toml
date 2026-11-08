@@ -48,7 +48,6 @@ path_capture_mm = { value = 15, label = "uncalibrated default (NOT TESTED, expec
 assist_margin_mm = { value = 20, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 est_accel_noise_mm_s2 = { value = 150, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 est_pos_noise_mm = { value = 0.15, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-est_cam_latency_s = { value = 0.015, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 est_gate_mm = { value = 30, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 est_hold_s = { value = 0.2, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 est_v_max_mm_s = { value = 1500, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
@@ -64,6 +63,7 @@ max_race_s = { value = 60, label = "uncalibrated default (NOT TESTED, expected p
 attract = { value = false, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 
 [vision]
+camera_latency_s = { value = 0.015, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 min_ball_r_px = { value = 10, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 max_ball_r_px = { value = 90, label = "sim-tuned (PR #138)" }
 min_contrast = { value = 0.4, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
