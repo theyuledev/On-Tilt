@@ -15,7 +15,7 @@ from src.io.ports import Frame, FrameSource, InputSource, TiltActuator
 from src.io.run_log import start_run_log
 from src.io.serial_link import LinkError, SerialActuator, open_board
 from src.io.settings import env, load
-from src.modes import MODES
+from src.modes import MODES, make_mode
 from src.sim.ball import roll
 from src.sim.plate import SimActuator
 from src.vision.px_to_mm import SPAN, ball_state
@@ -52,8 +52,18 @@ class Loop:
         self.track: list[BallState] = []
         self.last: RunLogRecord | None = None
 
+    @property
+    def mode(self) -> str:
+        return self._mode
+
+    @mode.setter
+    def mode(self, name: str) -> None:
+        # picking a mode by name builds its callable; a path starts over at its first segment
+        self._mode, self.step = name, make_mode(name, self.cfg)
+
     def arm(self) -> None:
         if not self.board_lost:
+            self.step = make_mode(self.mode, self.cfg)
             self.safety.arm()
 
     def kill(self) -> None:
@@ -79,7 +89,7 @@ class Loop:
             self.hand_calibrating = fresh and self.hand.calibrating
         stale = self.stale = now - intent.t_s > rig["stale_intent_s"]
 
-        plate_cmd = MODES[self.mode](ball, intent, self.cfg)
+        plate_cmd = self.step(ball, intent, self.cfg)
         target = tilt_to_pulse(plate_cmd, rig)
         sent, plate_state = self._drive(target, stale, dt, now)
         if sim:
