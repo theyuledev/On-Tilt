@@ -19,7 +19,8 @@ jobs:
           python3 -m pip install --user --break-system-packages uv
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgl1
-      - run: uv sync --locked
+      # python 3.12 is also a github download on this image
+      - run: uv sync --locked || (sleep 20 && uv sync --locked)
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
