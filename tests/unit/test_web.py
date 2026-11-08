@@ -1,5 +1,5 @@
 import time
-import tomllib
+from functools import partial
 from types import SimpleNamespace
 
 import cv2
@@ -7,9 +7,10 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
+from src.games import maze
 from src.inputs.keyboard import KeyboardInput
 from src.io.ports import Frame
-from src.io.settings import ROOT, load
+from src.io.settings import load
 from src.safety import SafetyState
 from src.web.server import JPEG_PERIOD_S, make_app
 
@@ -401,12 +402,37 @@ def test_board_draws_cmd_real_ball_bars_and_the_ghost_hand(client):
     assert '$("handhint").hidden = !on;' in js
 
 
-def test_race_maze_is_the_configured_maze_file(client):
-    name = load()["game"]["maze"]
-    with (ROOT / "configs" / "mazes" / f"{name}.toml").open("rb") as f:
-        maze = tomllib.load(f)
-    assert set(maze) == {"points", "checkpoints", "start"}
-    assert client.get("/race/maze").json() == maze
+def race_maze(name):
+    cfg = load()
+    cfg["game"]["maze"] = name
+    return TestClient(make_app(SimpleNamespace(cfg=cfg))).get("/race/maze").json()
+
+
+def test_race_maze_is_the_configured_maze_as_lists(client):
+    m = maze.load(load()["game"]["maze"])
+    assert client.get("/race/maze").json() == {
+        "points": [list(p) for p in m.points],
+        "checkpoints": list(m.checkpoints),
+        "start": list(m.start),
+        "walls": [list(map(list, w)) for w in m.walls],
+    }
+
+
+def test_race_maze_sends_the_walls_and_none_for_the_square(monkeypatch, tmp_path):
+    assert race_maze("square")["walls"] == []
+    (tmp_path / "w.toml").write_text(
+        "points = [[0, 0], [10, 0]]\ncheckpoints = [1]\nstart = [0, 0]\n"
+        "walls = [[[-20, 5], [20, 5]], [[-20, -5], [0, -5], [20, -5]]]\n"
+    )
+    monkeypatch.setattr(maze, "load", partial(maze.load, root=tmp_path))
+    assert race_maze("w")["walls"] == [[[-20, 5], [20, 5]], [[-20, -5], [0, -5], [20, -5]]]
+
+
+def test_race_js_draws_walls_under_the_race_line_only_when_the_maze_has_them(client):
+    js = static(client, "race.js")
+    assert "function walls(ctx, maze)" in js and "maze.walls.forEach((w) => polyline(ctx, w))" in js
+    guarded = js.index("if (maze.walls) walls(ctx, maze);")
+    assert guarded < js.index("ribbon(ctx, maze, cfg.ball_d_mm)")
 
 
 def test_race_js_draws_the_plate_in_mm_with_a_ball_trail(client):
