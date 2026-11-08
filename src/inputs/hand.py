@@ -23,12 +23,18 @@ class HandIntent:
     def __init__(self, cfg: dict):
         self.cfg = cfg
         self.neutral: tuple[float, float] | None = None
+        self.seen = False
         self._samples: list[tuple[float, float, float]] = []
         self._last_seen: float | None = None
         self._x = self._y = 0.0
 
+    @property
+    def calibrating(self) -> bool:
+        return self.seen and self.neutral is None
+
     def update(self, palm: tuple[float, float] | None, t: float) -> Intent:
         cfg = self.cfg
+        self.seen = palm is not None
         if palm is None:
             if self._last_seen is not None and t - self._last_seen > cfg["neutral_s"]:
                 self.neutral = None
@@ -38,15 +44,8 @@ class HandIntent:
         self._last_seen = t
         if self.neutral is None:
             self._samples.append((t, *palm))
-            if t - self._samples[0][0] < cfg["neutral_s"]:
+            if not self._lock_neutral(t):
                 return Intent(x=0.0, y=0.0, valid=False, t_s=t)
-            n = len(self._samples)
-            self.neutral = (
-                sum(s[1] for s in self._samples) / n,
-                sum(s[2] for s in self._samples) / n,
-            )
-            self._samples = []
-            self._x = self._y = 0.0
 
         # the webcam faces the player, so their right is image left, and image y points down
         raw_x = _clamp(-(palm[0] - self.neutral[0]) / cfg["hand_span"])
@@ -56,9 +55,26 @@ class HandIntent:
         self._y = s * self._y + (1 - s) * raw_y
         return Intent(x=self._x, y=self._y, valid=True, t_s=t)
 
+    def _lock_neutral(self, t: float) -> bool:
+        # a full window of a still hand sets neutral, a moving hand throws the window away
+        if t - self._samples[0][0] < self.cfg["neutral_s"]:
+            return False
+        xs = [s[1] for s in self._samples]
+        ys = [s[2] for s in self._samples]
+        self._samples = []
+        still = self.cfg["hand_span"] / 4
+        if max(xs) - min(xs) >= still or max(ys) - min(ys) >= still:
+            return False
+        self.neutral = (sum(xs) / len(xs), sum(ys) / len(ys))
+        self._x = self._y = 0.0
+        return True
 
-def send_intent(sock: socket.socket, intent: Intent, port: int) -> None:
-    sock.sendto(json.dumps(asdict(intent)).encode(), ("127.0.0.1", port))
+
+def send_intent(
+    sock: socket.socket, intent: Intent, port: int, *, seen: bool, calibrating: bool
+) -> None:
+    msg = {**asdict(intent), "seen": seen, "calibrating": calibrating}
+    sock.sendto(json.dumps(msg).encode(), ("127.0.0.1", port))
 
 
 class HandInput:
@@ -70,6 +86,7 @@ class HandInput:
         self.sock.setblocking(False)
         self.port = self.sock.getsockname()[1]
         self._intent = Intent(x=0.0, y=0.0, valid=False, t_s=0.0)
+        self.seen = self.calibrating = False
 
     def latest(self) -> Intent:
         while True:
@@ -77,7 +94,9 @@ class HandInput:
                 data = self.sock.recv(1024)
             except BlockingIOError:
                 return self._intent
-            self._intent = Intent(**json.loads(data))
+            msg = json.loads(data)
+            self.seen, self.calibrating = msg.pop("seen"), msg.pop("calibrating")
+            self._intent = Intent(**msg)
 
     def close(self) -> None:
         self.sock.close()

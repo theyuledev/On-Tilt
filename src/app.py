@@ -117,6 +117,8 @@ class Loop:
         snap["stale"] = self.stale
         snap["board_lost"] = self.board_lost
         snap["camera_lost"] = self.camera_lost
+        snap["hand_seen"] = self.hand is not None and self.hand.seen
+        snap["hand_calibrating"] = self.hand is not None and self.hand.calibrating
         return snap
 
 
