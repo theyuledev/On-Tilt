@@ -133,10 +133,11 @@ def _delta(race: Race, splits: list[float]) -> float | None:
 def _ghost(race: Race, rec: RunLogRecord, trace: list[list[float]], t: float | None):
     if not trace:
         return None
-    if race.state in ("running", "finished"):
-        return ghost.at(trace, t)
     lap = trace[-1][0]
-    if race.state in ("idle", "dnf") and lap > 0:
+    # a ghost you beat stays where it was at your finish, otherwise it loops
+    if race.state == "running" or (race.state == "finished" and t < lap):
+        return ghost.at(trace, t)
+    if race.state in ("idle", "dnf", "finished") and lap > 0:
         return ghost.at(trace, rec.t_s % lap)
     return None
 

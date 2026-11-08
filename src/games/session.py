@@ -86,3 +86,5 @@ class Game:
             return
         time_s = self.view()["score"]["time_s"]
         ghost.save(self.records, ROOT / "data" / "runs" / f"{name}-{int(time_s * 1000)}.jsonl")
+        if not self.trace or time_s < self.trace[-1][0]:
+            self.set_ghost(self.records)

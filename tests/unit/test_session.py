@@ -84,6 +84,26 @@ def test_save_writes_the_run_only_when_finished(tmp_path, monkeypatch):
     assert ghost.load(path) == g.records
 
 
+def test_save_makes_the_first_or_a_faster_run_the_ghost(tmp_path, monkeypatch):
+    monkeypatch.setattr(session, "ROOT", tmp_path)
+    g = Game(CFG, MAZE, fake_step)
+    race_to_finish(g)
+    g.save("LUCAS")
+    v = g.view()
+    assert g.trace and v["ghost_lap_s"] == v["elapsed_s"] == 6.0
+    race_to_finish(g, exit_t=3.5)
+    g.save("LUCAS")
+    assert g.view()["ghost_lap_s"] == 6.0
+    g.tick(rec(0.0), False, False)
+    g.start()
+    for t, x, y in [(3.0, -100.0, 0.0), (4.0, -60.0, 0.0), (5.0, 0.0, 0.0), (6.0, 100.0, 0.0)]:
+        g.tick(rec(t, x, y), False, False)
+    g.tick(rec(7.0, 100.0, 100.0), False, False)
+    g.save("LUCAS")
+    assert g.view()["ghost_lap_s"] == 3.0
+    assert len(list((tmp_path / "data" / "runs").iterdir())) == 3
+
+
 def test_mode_switches_with_the_race_and_attract():
     g = Game(CFG, MAZE, fake_step)
     assert g.mode() is None
