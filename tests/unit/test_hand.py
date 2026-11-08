@@ -1,5 +1,6 @@
 import json
 import socket
+import time
 from dataclasses import asdict
 from types import SimpleNamespace
 
@@ -126,6 +127,32 @@ def test_an_intent_without_the_flags_still_counts_as_a_seen_hand():
             break
     assert hand_in.latest() == Intent(0.3, 0.4, True, 6.0)
     assert hand_in.seen and not hand_in.calibrating
+    sender.close()
+    hand_in.close()
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+def test_a_non_finite_hand_intent_is_dropped_and_the_last_one_goes_stale(bad):
+    cfg = load()
+    hand_in = HandInput(0)
+    sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    good = Intent(0.5, 0.0, True, 10.0)
+    send_intent(sender, good, hand_in.port, seen=True, calibrating=False)
+    send_intent(sender, Intent(bad, 0.0, True, 10.5), hand_in.port, seen=False, calibrating=True)
+    send_intent(sender, Intent(0.0, bad, True, 10.5), hand_in.port, seen=False, calibrating=True)
+    for _ in range(100):
+        if hand_in.latest().t_s == 10.0:
+            break
+    for _ in range(20):
+        time.sleep(0.005)
+        assert hand_in.latest() == good
+        assert hand_in.seen and not hand_in.calibrating
+
+    loop = Loop(cfg, hand_in)
+    stale_s = cfg["rig"]["stale_intent_s"]
+    loop.keys._intent = Intent(-1.0, 0.0, True, 10.0 + stale_s)
+    assert loop.tick(10.01, 0.01).intent.x == 0.5
+    assert loop.tick(10.01 + stale_s, 0.01).intent.x == -1.0
     sender.close()
     hand_in.close()
 
