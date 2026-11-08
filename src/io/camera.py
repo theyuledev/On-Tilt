@@ -114,14 +114,16 @@ class CameraSource:
 class ClipSource:
     """Replays a clip. Uses the capture times from <clip>.csv when the recorder wrote one."""
 
-    def __init__(self, path):
+    def __init__(self, path, start: int = 0):
         path = Path(path)
         self._cap = cv2.VideoCapture(str(path))
         if not self._cap.isOpened():
             raise FileNotFoundError(path)
+        if start:
+            self._cap.set(cv2.CAP_PROP_POS_FRAMES, start)
         times = path.with_suffix(".csv")
         self._times = [float(t) for t in times.read_text().split()] if times.exists() else None
-        self._i = 0
+        self._i = start
 
     def read(self) -> Frame | None:
         ok, image = self._cap.read()

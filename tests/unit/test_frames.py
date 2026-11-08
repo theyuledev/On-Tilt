@@ -41,12 +41,16 @@ def test_camera_keeps_only_the_newest_frame():
     assert cap.released
 
 
-def test_clip_replays_every_frame_in_order(tmp_path):
-    path = tmp_path / "clip.avi"
+def write_clip(path, n=5):
     out = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), 10, (32, 24))
-    for i in range(5):
+    for i in range(n):
         out.write(np.full((24, 32, 3), i * 40, np.uint8))
     out.release()
+
+
+def test_clip_replays_every_frame_in_order(tmp_path):
+    path = tmp_path / "clip.avi"
+    write_clip(path)
 
     src = ClipSource(path)
     frames = []
@@ -57,6 +61,21 @@ def test_clip_replays_every_frame_in_order(tmp_path):
     assert len(frames) == 5
     times = [f.t_s for f in frames]
     assert times == sorted(times) and times[0] < times[-1]
+
+
+def test_clip_can_start_part_way_in_with_the_capture_times_lined_up(tmp_path):
+    path = tmp_path / "clip.avi"
+    write_clip(path)
+    path.with_suffix(".csv").write_text("0.0\n0.1\n0.2\n0.3\n0.4\n")
+
+    src = ClipSource(path, start=3)
+    frames = []
+    while (f := src.read()) is not None:
+        frames.append(f)
+    src.close()
+
+    assert [f.t_s for f in frames] == [0.3, 0.4]
+    assert frames[0].image[0, 0] == pytest.approx(120, abs=4)
 
 
 def test_missing_clip_fails_loudly(tmp_path):

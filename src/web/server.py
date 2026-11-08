@@ -24,6 +24,7 @@ def make_app(loop) -> FastAPI:
         return {
             "plate_inner_mm": rig["plate_inner_mm"],
             "ball_d_mm": rig["ball_d_mm"],
+            "camera_width": rig["camera_width"],
             "heartbeat_stale_s": game["heartbeat_stale_s"],
         }
 
