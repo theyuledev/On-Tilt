@@ -12,12 +12,17 @@ from src.loop import Loop
 from src.safety import limits
 from src.vision.pipeline import Pipeline
 from tests.replay.test_guard_clip import CLIP
+from tests.replay.test_pipeline_clip import CLIP as SQUASH
+from tests.replay.test_pipeline_clip import END as SQUASH_END
+from tests.replay.test_pipeline_clip import START as SQUASH_START
 from tests.sim.test_edge_guard import reversals
 
 pytestmark = pytest.mark.replay
 
 START, FRAMES = 13000, 460
 MOST = 0.5
+# the release never gets w to 0, under this the guard is a rounding error on the player
+LET_GO_W = 0.01
 
 
 class Pusher:
@@ -44,12 +49,12 @@ class Pusher:
         self.intent = Intent(x, y, valid=True, t_s=now)
 
 
-def run(guard_on: bool, stamps: list[float]):
+def run(clip, start: int, stamps: list[float], guard_on: bool):
     # module fixtures run before the conftest one that hides settings.local.toml
     cfg = load(local=Path("/dev/null"))
     cfg["control"].update(mode="hand", guard_on=guard_on)
     hand = Pusher()
-    frames = ClipSource(CLIP, START, process=Pipeline(cfg).step)
+    frames = ClipSource(clip, start, process=Pipeline(cfg).step)
     loop = Loop(cfg, hand=hand, frames=frames)
     loop.arm()
     out, prev = [], stamps[0]
@@ -62,15 +67,24 @@ def run(guard_on: bool, stamps: list[float]):
     return cfg, out
 
 
+def twin(clip, start: int, end: int):
+    """The same frames with the guard on and off."""
+    if not clip.exists():
+        pytest.skip(f"{clip.name} not on this machine")
+    stamps = [float(t) for t in clip.with_suffix(".csv").read_text().split()][start:end]
+    cfg, a = run(clip, start, stamps, True)
+    _, b = run(clip, start, stamps, False)
+    return cfg, a, b
+
+
 @pytest.fixture(scope="module")
 def runs():
-    if not CLIP.exists():
-        pytest.skip(f"{CLIP.name} not on this machine")
-    stamps = [float(t) for t in CLIP.with_suffix(".csv").read_text().split()]
-    stamps = stamps[START : START + FRAMES]
-    cfg, a = run(True, stamps)
-    _, b = run(False, stamps)
-    return cfg, a, b
+    return twin(CLIP, START, START + FRAMES)
+
+
+@pytest.fixture(scope="module")
+def free_roll():
+    return twin(SQUASH, SQUASH_START, SQUASH_END)
 
 
 def tilts(rec) -> tuple[float, float]:
@@ -121,24 +135,27 @@ def test_a_weighted_axis_leans_inward_of_the_player(runs):
     assert sum(d < 0 for d in seen) / len(seen) > MOST
 
 
-@pytest.mark.xfail(reason="x stays weighted the whole roll and the release only decays w")
-def test_once_it_lets_go_the_command_is_the_players(runs):
-    cfg, a, b = runs
-    cap = Guard(cfg).cap
-    hold = cfg["control"]["guard_release_s"] + 1 / cfg["rig"]["camera_fps"]
+@pytest.mark.xfail(strict=True, reason="the release decays w exponentially, it never lets go here")
+def test_once_it_lets_go_the_command_is_the_players(free_roll):
+    cfg, a, b = free_roll
+    guard = Guard(cfg)
+    # the lean is w times the brake against the player, neither past the clamp
+    tol = LET_GO_W * max(c + p for c, p in zip(guard.clamp, guard.cap, strict=True))
     since, free = None, []
     for k, (t, _, snap) in enumerate(a):
-        if any(snap["guard"]["w"]):
+        if max(snap["guard"]["w"]) >= LET_GO_W:
             since = None
             continue
         since = t if since is None else since
-        if t - since > hold:
+        if t - since > cfg["control"]["guard_release_s"]:
             free.append(k)
     assert free
-    assert all(list(tilts(a[k][1])) == capped(cap, b[k][1]) for k in free)
+    for k in free:
+        for got, player in zip(tilts(a[k][1]), capped(guard.cap, b[k][1]), strict=True):
+            assert abs(got - player) <= tol
 
 
-@pytest.mark.xfail(reason="side flips on velocity noise as w decays: y 3.9 reversals/s, 1.6 off")
+@pytest.mark.xfail(strict=True, reason="side flips on velocity noise while w decays, y chatters")
 def test_the_sent_pulse_does_not_chatter_on_tracker_noise(runs):
     cfg, a, _ = runs
     band = cfg["control"]["servo_dead_band_us"]
