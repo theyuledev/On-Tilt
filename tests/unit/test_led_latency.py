@@ -221,24 +221,28 @@ def test_l_mid_recovers_the_pipeline_delay_under_a_real_exposure_model():
     assert L - E / 2 <= out["l_min"] <= L + E / 2
 
 
-def test_saturation_warning_starts_at_240():
-    assert saturation_warning(239.9) is None
-    assert "saturation" in saturation_warning(240)
+def test_saturation_warning_starts_at_240_on_the_window_peak():
+    img = np.zeros((8, 8), np.float32)
+    img[3, 3] = 239.9
+    assert saturation_warning(img, (0, 8, 0, 8)) is None
+    img[3, 3] = 240
+    assert "saturation" in saturation_warning(img, (0, 8, 0, 8))
+    assert saturation_warning(img, (4, 8, 4, 8)) is None
 
 
-class BrightCam(LedCam):
-    def read(self):
-        f = super().read()
-        return f and Frame(np.where(f.image.max() > 100, 255, f.image), f.t_s)
-
-
-def test_run_warns_once_when_the_led_window_saturates(capsys):
-    _, kw = rig(itertools.repeat(LED_DELAY), BrightCam)
+def test_run_warns_once_when_the_led_spot_saturates(capsys):
+    _, kw = rig(itertools.repeat(LED_DELAY))
     run(trials=3, **kw)
     assert capsys.readouterr().out.count("saturation") == 1
 
 
-def test_run_stays_quiet_when_the_led_window_is_dim(capsys):
-    _, kw = rig(itertools.repeat(LED_DELAY))
+class DimCam(LedCam):
+    def read(self):
+        f = super().read()
+        return f and Frame(np.minimum(f.image, 200).astype(np.uint8), f.t_s)
+
+
+def test_run_stays_quiet_when_the_led_spot_is_dim(capsys):
+    _, kw = rig(itertools.repeat(LED_DELAY), DimCam)
     run(trials=3, **kw)
     assert "saturation" not in capsys.readouterr().out
