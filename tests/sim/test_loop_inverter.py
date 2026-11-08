@@ -67,6 +67,9 @@ def test_a_kill_that_ends_inside_one_tick_still_leaves_on_the_level_pulse(clock)
     assert loop.band[0].committed != center(cfg["rig"])[0]
     loop.kill()
     hold_ball_at(loop, clock, 6.0, 1, dt=0.05)
+    # the 40 ms level hold counts from the first level pulse, not the slow tick that got there
+    assert loop.safety.armed
+    hold_ball_at(loop, clock, 6.0, 4)
     assert not loop.safety.armed
     assert (loop.last.servo_cmd.x_us, loop.last.servo_cmd.y_us) == center(cfg["rig"])
 
