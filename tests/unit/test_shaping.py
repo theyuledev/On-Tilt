@@ -11,8 +11,18 @@ from src.modes import MODES
 pytestmark = pytest.mark.unit
 
 INPUT = {"dead_zone": 0.08, "expo": 0.3, "intent_gain_deg": 6.0, "key_ramp_s": 0.3}
-WIDE = {"limit_x_us": 150, "limit_y_us": 150, "us_per_deg_x": 10.0, "us_per_deg_y": 10.0}
-REAL = {"limit_x_us": 150, "limit_y_us": 150, "us_per_deg_x": 100.0, "us_per_deg_y": -100.0}
+RIG = {
+    "center_x_us": 1500,
+    "center_y_us": 1500,
+    "trim_x_us": 0,
+    "trim_y_us": 0,
+    "startup_flag": False,
+    "startup_range_us": 150,
+    "limit_x_us": 150,
+    "limit_y_us": 150,
+}
+WIDE = {**RIG, "us_per_deg_x": 10.0, "us_per_deg_y": 10.0}
+REAL = {**RIG, "us_per_deg_x": 100.0, "us_per_deg_y": -100.0}
 SLICK = {"sim_g_mm_s2": 9810, "rolling_friction_x_mm_s2": 0.0, "rolling_friction_y_mm_s2": 0.0}
 ROUGH = {"sim_g_mm_s2": 9810, "rolling_friction_x_mm_s2": 47, "rolling_friction_y_mm_s2": 39}
 
@@ -98,18 +108,37 @@ def test_top_is_the_cap_or_the_servo_clamp_whichever_is_less():
     assert top_deg(cfg(REAL, {"player_max_deg": 4.0})) == (1.5, 1.5)
 
 
-def test_just_past_the_dead_zone_is_the_friction_floor():
+def test_top_follows_the_startup_range_while_the_startup_flag_is_on():
+    wide = {**REAL, "limit_x_us": 300, "limit_y_us": 300}
+    assert top_deg(cfg({**wide, "startup_flag": True})) == (1.5, 1.5)
+    assert top_deg(cfg({**wide, "startup_flag": False})) == (3.0, 3.0)
+
+
+def floor_part(x, y):
+    # what friction adds on top of the plain curve: out = floor + (top - floor) * curve
+    (sx, sy), (ox, oy) = shape(x, y, cfg(REAL)), shape(x, y, FELT)
     fx, fy = floor_deg(FELT)
-    assert shape(DZ * 1.001, 0.0, FELT)[0] == pytest.approx(fx, rel=0.01)
-    assert shape(0.0, -DZ * 1.001, FELT)[1] == pytest.approx(-fy, rel=0.01)
+    return ox - (1 - fx / 1.5) * sx, oy - (1 - fy / 1.5) * sy
+
+
+def test_no_step_at_the_dead_zone_edge_with_friction():
+    h = 1e-6
+    for x, y in ((DZ, 0.0), (0.0, -DZ)):
+        lo, hi = shape(x * (1 - h), y * (1 - h), FELT), shape(x * (1 + h), y * (1 + h), FELT)
+        assert hi == pytest.approx(lo, abs=1e-4)
+
+
+@pytest.mark.parametrize("r", [0.1, 0.12, 0.16, 0.3, 1.0])
+def test_the_floor_fades_in_over_one_dead_zone_width_then_stays_full(r):
+    fx, fy = floor_deg(FELT)
+    b = min(1.0, (r - DZ) / DZ)
+    assert floor_part(r, 0.0) == pytest.approx((fx * b, 0.0))
+    assert floor_part(0.0, -r) == pytest.approx((0.0, -fy * b))
 
 
 def test_a_diagonal_splits_the_floor_instead_of_doubling_it():
     fx, fy = floor_deg(FELT)
-    k = DZ * 1.001 / math.hypot(0.7, 0.7)
-    x, y = shape(0.7 * k, 0.7 * k, FELT)
-    assert x == pytest.approx(fx * math.sqrt(0.5), rel=0.01)
-    assert y == pytest.approx(fy * math.sqrt(0.5), rel=0.01)
+    assert floor_part(0.7, 0.7) == pytest.approx((fx * math.sqrt(0.5), fy * math.sqrt(0.5)))
 
 
 def test_full_stick_reaches_the_top_on_each_axis():

@@ -1,6 +1,7 @@
 import math
 
 from src.control import ROLL
+from src.safety import limits
 
 
 def _ease(r: float, dz: float) -> float:
@@ -12,7 +13,9 @@ def top_deg(cfg: dict) -> tuple[float, float]:
     """Full stick tilt per axis: the player cap, or the servo clamp if that comes first."""
     rig = cfg["rig"]
     cap = cfg["control"].get("player_max_deg", cfg["input"]["intent_gain_deg"])
-    tx, ty = (min(cap, rig[f"limit_{a}_us"] / abs(rig[f"us_per_deg_{a}"])) for a in "xy")
+    x_lo, x_hi, y_lo, y_hi = limits(rig)
+    tx = min(cap, (x_hi - x_lo) / 2 / abs(rig["us_per_deg_x"]))
+    ty = min(cap, (y_hi - y_lo) / 2 / abs(rig["us_per_deg_y"]))
     return tx, ty
 
 
@@ -32,10 +35,12 @@ def shape(x: float, y: float, cfg: dict) -> tuple[float, float]:
         return 0.0, 0.0
     # full stick stays full, the direction stays
     u = _ease(r, dz) / (1 - 1.5 * dz)
+    # the floor fades in over one more dead zone width so the edge has no step
+    b = min(1.0, (r - dz) / dz)
 
     def bend(d: float, lo: float, hi: float) -> float:
         v = u * d
-        return lo * d + (hi - lo) * ((1 - e) * v + e * v**3)
+        return lo * d * b + (hi - lo) * ((1 - e) * v + e * v**3)
 
     (fx, fy), (tx, ty) = floor_deg(cfg), top_deg(cfg)
     return bend(x / r, fx, tx), bend(y / r, fy, ty)

@@ -7,6 +7,7 @@ import pytest
 from src.control import ROLL
 from src.inputs.shaping import shape
 from src.io.settings import load
+from src.safety import limits
 
 pytestmark = pytest.mark.sim
 
@@ -20,7 +21,8 @@ RIM_MM = 140.0
 START_MM, GOAL_MM, BAND_MM = -80.0, 80.0, 10.0
 
 REAL = load()
-CLAMP_DEG = REAL["rig"]["limit_x_us"] / US_PER_DEG
+X_LO, X_HI, _, _ = limits(REAL["rig"])
+CLAMP_DEG = (X_HI - X_LO) / 2 / US_PER_DEG
 FRICTION = REAL["control"]["rolling_friction_x_mm_s2"]
 
 
@@ -83,8 +85,8 @@ def test_full_stick_is_the_plate_clamp_not_past_it():
     assert shape(1.0, 0.0, NEW)[0] == pytest.approx(CLAMP_DEG)
 
 
-def test_just_past_the_dead_zone_starts_a_resting_ball():
-    nudge = 1.1 * NEW["input"]["dead_zone"]
+def test_just_past_twice_the_dead_zone_starts_a_resting_ball():
+    nudge = 2.02 * NEW["input"]["dead_zone"]
     assert run(NEW, hold=nudge, x0=0.0, seconds=3.0)[-1] > 0.0
     assert run(TODAY, hold=nudge, x0=0.0, seconds=3.0)[-1] == 0.0
 

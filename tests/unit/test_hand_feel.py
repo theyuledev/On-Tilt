@@ -3,7 +3,7 @@ import pytest
 
 from src.inputs.hand import HandIntent
 from src.inputs.one_euro import one_euro
-from src.inputs.shaping import floor_deg, shape, top_deg
+from src.inputs.shaping import shape, top_deg
 from src.io.settings import load
 
 pytestmark = pytest.mark.unit
@@ -101,11 +101,8 @@ def test_recentre_on_a_shaky_hand_keeps_the_plate_level():
         if i >= 60:
             cmds.append(shape(intent.x, intent.y, CFG))
     assert cmds[0] == (0.0, 0.0)
-    # jitter can poke past the dead zone edge now and then: that lands on the friction
-    # floor, which holds a resting ball, and the smooth edge keeps the rest tiny
-    (fx, fy), (tx, ty) = floor_deg(CFG), top_deg(CFG)
-    assert max(abs(c[0]) for c in cmds) < fx + 0.05 * tx
-    assert max(abs(c[1]) for c in cmds) < fy + 0.05 * ty
+    # jitter can poke past the dead zone edge now and then, the smooth edge keeps that tiny
+    assert max(np.hypot(*c) for c in cmds) < 0.05 * min(top_deg(CFG))
 
 
 RAW_TILT = {**TILT, "hand_min_cutoff_hz": 1e9, "hand_beta": 0.0}  # filter passes through
