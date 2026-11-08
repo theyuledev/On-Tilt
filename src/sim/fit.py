@@ -3,6 +3,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from src.control import ROLL
+
 TAU_FRAC = 1 - math.exp(-1)
 
 
@@ -100,4 +102,43 @@ def settle(t, x, y) -> Settle:
         overshoot_pct=overshoot,
         rms_mm=float(np.sqrt(np.mean(r[last] ** 2))),
         period_s=period,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class PulseFit:
+    level_us: tuple[float, float]
+    us_per_deg: tuple[float, float]
+    axis_deg: tuple[float, float]  # which way a + pulse on each axis rolls the ball
+    r2: float
+
+
+def _twice_integrated(f, dt: float):
+    v = np.r_[0.0, np.cumsum(f[1:] + f[:-1]) * dt / 2]
+    return np.r_[0.0, np.cumsum(v[1:] + v[:-1]) * dt / 2]
+
+
+def pulse_fit(windows, dt: float, ref_us: float, g: float) -> PulseFit:
+    """Fits a = A (pulse - ref_us) + b over windows of (x, y, px, py) sampled every dt, each
+    window's start position and speed left free. level is where the free roll accel is zero."""
+    rows, xs, ys = [], [], []
+    for x, y, px, py in windows:
+        tau = np.arange(len(x)) * dt
+        free = np.c_[np.ones_like(tau), tau]
+        drop = np.eye(len(x)) - free @ np.linalg.pinv(free)
+        cols = np.c_[_twice_integrated(px - ref_us, dt), _twice_integrated(py - ref_us, dt)]
+        rows.append(drop @ np.c_[cols, tau**2 / 2])
+        xs.append(drop @ x)
+        ys.append(drop @ y)
+    X, tx, ty = np.vstack(rows), np.concatenate(xs), np.concatenate(ys)
+    cx, cy = (np.linalg.lstsq(X, v, rcond=None)[0] for v in (tx, ty))
+    resid = np.sum((tx - X @ cx) ** 2) + np.sum((ty - X @ cy) ** 2)
+    A = np.array([cx[:2], cy[:2]])
+    level = ref_us - np.linalg.solve(A, [cx[2], cy[2]])
+    per_deg = ROLL * g * math.pi / 180
+    return PulseFit(
+        level_us=tuple(level),
+        us_per_deg=tuple(per_deg / np.linalg.norm(A, axis=0)),
+        axis_deg=tuple(np.degrees(np.arctan2(A[1], A[0]))),
+        r2=float(1 - resid / (np.sum(tx**2) + np.sum(ty**2))),
     )

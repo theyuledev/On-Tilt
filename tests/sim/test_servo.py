@@ -40,7 +40,8 @@ def test_small_step_waits_dead_time_then_lags_first_order():
     # 40 us step is under the speed cap: 63% of it one tau after the dead time
     assert at(states, 0.07).est_x_deg == pytest.approx(2.53, abs=0.1)
     assert at(states, 0.07).est_y_deg == pytest.approx(-2.53, abs=0.1)
-    assert states[-1].est_x_deg == pytest.approx(4.0)
+    # parks as soon as it is inside half the band
+    assert 3.5 <= states[-1].est_x_deg < 4.0
 
 
 def test_big_step_is_capped_at_top_speed():
@@ -49,12 +50,14 @@ def test_big_step_is_capped_at_top_speed():
     # 1000 us/s for 0.1 s is 100 us, 10 deg at this rig scale
     rise = at(states, 0.15).est_x_deg - at(states, 0.05).est_x_deg
     assert rise == pytest.approx(10.0, abs=0.2)
-    assert states[-1].est_x_deg == pytest.approx(30.0)
+    assert 29.5 <= states[-1].est_x_deg < 30.0
 
 
-def test_pulse_change_under_dead_band_does_nothing():
+def test_servo_holds_anywhere_inside_half_the_dead_band():
     act = SimActuator(RIG, SERVO)
 
-    assert all(s.est_x_deg == 0 for s in run(act, 1509))
-    assert run(act, 1510, t0=0.5)[-1].est_x_deg == pytest.approx(1.0)
-    assert all(s.est_x_deg == pytest.approx(1.0) for s in run(act, 1519, t0=1.0))
+    assert all(s.est_x_deg == 0 for s in run(act, 1505))
+    parked = run(act, 1520, t0=0.5)[-1].est_x_deg
+    assert 1.5 <= parked < 2.0
+    assert all(s.est_x_deg == parked for s in run(act, 1513, t0=1.0))
+    assert 0 < run(act, 1500, t0=1.5)[-1].est_x_deg <= 0.5

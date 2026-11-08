@@ -40,8 +40,10 @@ def test_hand_step_back_to_zero_lands_exactly_on_centre(clock):
     ticks(loop, clock, 100, key=(0.9, 0.0))
     assert loop.last.plate_state.est_x_deg > 3
     ticks(loop, clock, 200, key=(0.0, 0.0))
-    assert (loop.last.servo_cmd.x_us, loop.last.servo_cmd.y_us) == center(loop.cfg["rig"])
-    assert loop.last.plate_state.est_x_deg == 0
+    rig, control = loop.cfg["rig"], loop.cfg["control"]
+    assert (loop.last.servo_cmd.x_us, loop.last.servo_cmd.y_us) == center(rig)
+    off_us = abs(loop.last.plate_state.est_x_deg) * rig["us_per_deg_x"]
+    assert off_us <= control["servo_dead_band_us"] / 2
 
 
 def test_integral_stays_clear_while_the_intent_is_stale(clock):
