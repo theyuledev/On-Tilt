@@ -124,7 +124,7 @@ def test_page_has_a_strip_loaded_after_race_and_before_app(client):
     assert 'id="strip"' in page
     at = [page.index(f"/static/{name}.js") for name in ("race", "pad", "strip", "app")]
     assert at == sorted(at)
-    assert "strip(s);" in static(client, "app.js")
+    assert "strip(cfg, s);" in static(client, "app.js")
 
 
 def test_strip_plots_ball_error_and_sent_tilt_over_the_last_5_s(client):
@@ -133,6 +133,13 @@ def test_strip_plots_ball_error_and_sent_tilt_over_the_last_5_s(client):
     assert "const STRIP_S = 5;" in js and "keep(stripBuf, [err, tilt], s.t_s, STRIP_S)" in js
     assert "now - buf[0].t > keepS" in static(client, "race.js")
     assert "fit(c)" in js and "err --" in js
+
+
+def test_strip_err_has_a_fixed_plate_half_width_scale_and_tilt_autoscales(client):
+    js = static(client, "strip.js")
+    assert '"x", cfg.plate_inner_mm / 2, ERR_COLOR' in js
+    assert "Math.min(p[key] / top, 1)" in js
+    assert '"y", Math.max(...stripBuf.map(q => q.y)) || 1, TILT_COLOR' in js
 
 
 def test_page_rings_the_tracked_ball_on_the_camera_image(client):
