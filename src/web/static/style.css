@@ -23,6 +23,7 @@ main { display: grid; gap: 12px; justify-items: center; }
 button { font: inherit; padding: 10px 22px; border: 0; border-radius: 6px; cursor: pointer; color: #fff; }
 button:disabled { opacity: .4; cursor: default; }
 #arm { background: #2e7d32; }
+#armblock { color: #f33; font-weight: 700; }
 #kill { background: #c62828; font-weight: 700; font-size: 22px; padding: 14px 44px; }
 .dim { color: #aaa; gap: 24px; }
 #tilt { font: 24px ui-monospace, Menlo, monospace; color: #fff; white-space: pre; }

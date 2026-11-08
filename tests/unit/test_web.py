@@ -93,6 +93,17 @@ def test_space_or_enter_never_clicks_a_focused_arm_button(client):
         assert f'$("{b}").onclick = e => {{ pending.{b} = true; e.currentTarget.blur(); }}' in js
 
 
+def test_arm_block_reason_sits_by_arm_and_hides_when_null_or_missing(client):
+    page = client.get("/").text
+    assert '<span id="armblock" hidden></span>' in page
+    assert page.index('id="arm"') < page.index('id="armblock"')
+    js = static(client, "app.js")
+    # !undefined and !null are both true, so a snapshot without the key stays hidden
+    assert '$("armblock").hidden = !s.arm_blocked;' in js
+    assert '$("armblock").textContent = s.arm_blocked || "";' in js
+    assert "#armblock { color: #f33;" in static(client, "style.css")
+
+
 def test_watch_tab_sends_nothing_and_takes_no_input(client):
     js = static(client, "app.js")
     assert 'has("watch")' in js and "watch ? {} :" in js
