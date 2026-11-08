@@ -7,6 +7,7 @@ import uvicorn
 from src import safety
 from src.bus import Bus
 from src.contracts import BallState, PlateState, RunLogRecord, ServoCommand
+from src.control.deadband import invert, start
 from src.control.pulse_map import tilt_to_pulse
 from src.inputs.hand import HandInput
 from src.inputs.keyboard import KeyboardInput
@@ -41,6 +42,7 @@ class Loop:
         self.frames = frames
         self.frame: Frame | None = None
         self.safety = safety.SafetyState()
+        self.band = start(cfg["rig"])
         self.actuator = actuator or SimActuator(cfg["rig"], cfg["control"])
         self.board_lost = False
         self.stale = False
@@ -89,6 +91,8 @@ class Loop:
             self.hand_calibrating = fresh and self.hand.calibrating
         stale = self.stale = now - intent.t_s > rig["stale_intent_s"]
 
+        if not self.safety.armed or self.safety.killing or stale:
+            self.step = make_mode(self.mode, self.cfg)  # fresh mode state, no kick on arm
         plate_cmd = self.step(ball, intent, self.cfg)
         target = tilt_to_pulse(plate_cmd, rig)
         sent, plate_state = self._drive(target, stale, dt, now)
@@ -124,6 +128,15 @@ class Loop:
         if self.board_lost:
             return None, LEVEL
         sent = safety.step(self.safety, target, stale, dt, self.cfg["rig"])
+        if self.cfg["control"]["inverter_on"]:
+            # only the closed loop modes get the dead band help, a player closes the loop himself
+            off = (
+                not self.safety.armed
+                or self.safety.killing
+                or stale
+                or self.mode not in ("balance", "path", "assist")
+            )
+            self.band, sent = invert(self.band, sent, off, self.cfg)
         try:
             return sent, self.actuator.send(sent, now)
         except LinkError as e:

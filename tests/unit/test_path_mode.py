@@ -3,7 +3,7 @@ import math
 import pytest
 
 from src.contracts import BallState, Intent
-from src.modes import MODES, PathFollower, balance, make_mode, pd_toward
+from src.modes import MODES, Balance, PathFollower, make_mode, pd_toward
 from src.modes.path import advance, clip, project, target, walk
 
 pytestmark = pytest.mark.unit
@@ -104,5 +104,7 @@ def test_path_follower_parks_on_the_last_point_and_levels_without_a_ball():
 
 def test_each_run_gets_its_own_follower_and_plain_modes_come_back_as_is():
     assert make_mode("path", CFG) is not make_mode("path", CFG)
-    assert make_mode("balance", CFG) is balance
+    assert make_mode("hand", CFG) is MODES["hand"]
+    assert make_mode("balance", CFG) is not make_mode("balance", CFG)
+    assert isinstance(make_mode("balance", CFG), Balance)
     assert set(MODES) == {"hand", "balance", "path", "assist"}

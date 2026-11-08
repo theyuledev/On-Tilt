@@ -1,16 +1,27 @@
 import pytest
 
 from src.contracts import BallState, Intent
-from src.modes import MODES
+from src.modes import make_mode
 
 pytestmark = pytest.mark.unit
 
-CFG = {"control": {"kp_deg_mm": 0.1, "kd_deg_s_mm": 0.01, "d_max_deg": 2.0}}
+CFG = {
+    "control": {
+        "kp_deg_mm": 0.1,
+        "kd_deg_s_mm": 0.01,
+        "d_max_deg": 2.0,
+        "ki_deg_s_mm": 0.015,
+        "i_max_deg": 1.0,
+        "i_err_max_mm": 30,
+        "vel_ema_s": 0.0,
+    }
+}
 NO_INTENT = Intent(0.0, 0.0, valid=False, t_s=0.0)
 
 
 def tilt(x, y, vx=0.0, vy=0.0, valid=True):
-    cmd = MODES["balance"](BallState(x, y, vx, vy, valid=valid, t_s=0.0), NO_INTENT, CFG)
+    ball = BallState(x, y, vx, vy, valid=valid, t_s=0.0)
+    cmd = make_mode("balance", CFG)(ball, NO_INTENT, CFG)
     return pytest.approx((cmd.tilt_x_deg, cmd.tilt_y_deg))
 
 
