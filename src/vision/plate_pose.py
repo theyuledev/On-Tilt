@@ -85,10 +85,23 @@ class QuadTracker:
 
 
 def phase_mask(t: np.ndarray, tc: np.ndarray, phase: np.ndarray, name: str) -> np.ndarray:
-    """Samples at t that fall inside the commands' phase `name`."""
+    """Samples at t that fall inside the commands' phase `name`, none if it never ran."""
     sel = np.flatnonzero(phase == name)
+    if len(sel) == 0:
+        return np.zeros(len(t), bool)
     end = tc[sel[-1] + 1] if sel[-1] + 1 < len(tc) else np.inf
     return (t >= tc[sel[0]]) & (t < end)
+
+
+def no_data(t, tc, phase) -> list[str]:
+    """Phases with under two samples, e.g. a run cut short before them."""
+    return [n for n in ("hold", "sweep", "step") if phase_mask(t, tc, phase, n).sum() < 2]
+
+
+def sweep_fit(t, y, tc, p, phase):
+    """(slope, offset) of y against the pulse over the sweep, None under two samples."""
+    sw = phase_mask(t, tc, phase, "sweep")
+    return np.polyfit(np.interp(t[sw], tc, p), y[sw], 1) if sw.sum() > 1 else None
 
 
 def _first(cond: np.ndarray) -> int | None:
@@ -152,11 +165,10 @@ def tilt_report(commands, tilts, axis: int) -> dict:
     tt = np.array([r[0] for r in tilts], float)
     a = np.array([r[1 + axis] for r in tilts], float)
     hold = a[phase_mask(tt, tc, phase, "hold")]
-    noise = max(float(hold[len(hold) // 2 :].std()), 0.02)
+    noise = max(float(hold[len(hold) // 2 :].std()) if len(hold) else 0, 0.02)
     dt = np.diff(tt)
     med = float(np.median(dt))
-    sw = phase_mask(tt, tc, phase, "sweep")
-    k = np.polyfit(np.interp(tt[sw], tc, p), a[sw], 1)[0]
+    fit = sweep_fit(tt, a, tc, p, phase)
     moved = [(s, dp) for s, dp in responses(tt, a, tc, p, phase, "step", noise) if s]
     steps = [s for s, _ in moved]
     return {
@@ -165,9 +177,10 @@ def tilt_report(commands, tilts, axis: int) -> dict:
         "settle_ms": _median_ms(steps, "settle"),
         "overshoot_pct": max(s["overshoot"] for s in steps) if steps else None,
         "deg_per_us": float(np.mean([abs(s["change"] / dp) for s, dp in moved])) if moved else None,
-        "deg_per_us_sweep": float(k),
-        "noise_deg": noise,
+        "deg_per_us_sweep": None if fit is None else float(fit[0]),
+        "noise_deg": noise if len(hold) else None,
         "fps": 1 / med,
         "dropped_frames": int((dt > 1.5 * med).sum()),
         "frames": len(tt),
+        "no_data": no_data(tt, tc, phase),
     }

@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 
 from src.control.pulse_map import center
-from src.vision.plate_pose import phase_mask, responses
+from src.vision.plate_pose import no_data, phase_mask, responses, sweep_fit
 
 Point = tuple[float, float]
 
@@ -112,9 +112,9 @@ def report(commands, angles, rig: dict, axis: int = 0) -> dict:
     # second half of the hold, the first half may still be settling from the find nudge
     hold = a[phase_mask(ta, tc, phase, "hold")]
     hold = hold[len(hold) // 2 :]
-    noise = max(float(hold.std()), 0.02)
-    sw = phase_mask(ta, tc, phase, "sweep")
-    k, b = np.polyfit(np.interp(ta[sw], tc, p), a[sw], 1)
+    noise = max(float(hold.std()) if len(hold) else 0, 0.02)
+    fit = sweep_fit(ta, a, tc, p, phase)
+    k, b = (None, None) if fit is None else fit
     cx = center(rig)[axis]
 
     steps = [s for s, _ in responses(ta, a, tc, p, phase, "step", noise) if s]
@@ -133,13 +133,14 @@ def report(commands, angles, rig: dict, axis: int = 0) -> dict:
     rev_lag_ms = 1000 * float(np.median(rev_delays)) if rev_delays else None
     reject = dead is None or dead > 25 or (delay_ms and rev_lag_ms and rev_lag_ms > 2 * delay_ms)
     return {
-        "us_per_deg": 1 / k,
-        "hysteresis_deg": float(hold.mean() - (k * cx + b)),
-        "noise_deg": noise,
-        "noise_band_us": 3 * noise / abs(k),
+        "us_per_deg": None if fit is None else 1 / k,
+        "hysteresis_deg": None if fit is None else float(hold.mean() - (k * cx + b)),
+        "noise_deg": noise if len(hold) else None,
+        "noise_band_us": None if fit is None else 3 * noise / abs(k),
         "delay_ms": delay_ms,
         "top_speed_deg_s": float(max(speeds)) if speeds else None,
         "dead_band_us": dead,
         "reversal_lag_ms": rev_lag_ms,
         "verdict": "reject" if reject else "ok",
+        "no_data": no_data(ta, tc, phase),
     }

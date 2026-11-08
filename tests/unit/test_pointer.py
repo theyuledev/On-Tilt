@@ -164,7 +164,17 @@ def test_report_recovers_toy_servo(rig):
     assert out["top_speed_deg_s"] == pytest.approx(slope, rel=0.3)
     assert out["dead_band_us"] == 8
     assert out["reversal_lag_ms"] == pytest.approx(30, abs=15)
-    assert out["verdict"] == "ok"
+    assert out["verdict"] == "ok" and out["no_data"] == []
+
+
+@pytest.mark.parametrize("kept", [{"find"}, {"find", "hold"}])
+def test_report_on_a_cut_run_skips_the_phases_it_never_reached(rig, kept):
+    steps = [s for s in plan(rig, 0, TICK) if s[1] in kept]
+    out = report(*toy_servo(steps, rig), rig)
+    for k in ("us_per_deg", "hysteresis_deg", "noise_band_us", "delay_ms", "dead_band_us"):
+        assert out[k] is None
+    assert (out["noise_deg"] is None) == ("hold" not in kept)
+    assert out["no_data"] == [p for p in ("hold", "sweep", "step") if p not in kept]
 
 
 def test_report_rejects_wide_dead_band(rig):

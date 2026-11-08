@@ -12,6 +12,7 @@ from src.vision.plate_pose import (
     plate_tilt,
     square,
     step_response,
+    sweep_fit,
     tilt_report,
 )
 from tools.servo_test import plan
@@ -178,7 +179,25 @@ def test_tilt_report_recovers_the_toy_plate():
     assert out["deg_per_us"] == pytest.approx(1 / rig["us_per_deg_x"], rel=0.05)
     assert out["deg_per_us_sweep"] == pytest.approx(1 / rig["us_per_deg_x"], rel=0.1)
     assert out["fps"] == pytest.approx(119, rel=0.01) and out["dropped_frames"] == 0
-    assert out["frames"] == len(tilts)
+    assert out["frames"] == len(tilts) and out["no_data"] == []
+
+
+@pytest.mark.parametrize("kept", [{"find"}, {"find", "hold"}])
+def test_tilt_report_on_a_cut_run_skips_the_phases_it_never_reached(kept):
+    rig = load()["rig"]
+    steps = [s for s in plan(rig, 0, TICK) if s[1] in kept]
+    out = tilt_report(*toy_plate(steps, rig), 0)
+    assert out["deg_per_us_sweep"] is None and out["delay_ms"] is None
+    assert (out["noise_deg"] is None) == ("hold" not in kept)
+    assert out["no_data"] == [p for p in ("hold", "sweep", "step") if p not in kept]
+
+
+def test_sweep_fit_needs_two_samples():
+    tc, p = np.array([0.0, 1.0, 2.0]), np.array([1500.0, 1600, 1700])
+    phase = np.array(["hold", "sweep", "sweep"])
+    assert sweep_fit(np.array([0.5, 1.5]), np.array([0.0, 1.0]), tc, p, phase) is None
+    k, b = sweep_fit(np.array([0.5, 1.0, 2.0]), np.array([0.0, 1.0, 2.0]), tc, p, phase)
+    assert k == pytest.approx(0.01) and b == pytest.approx(-15)
 
 
 def test_tilt_report_counts_dropped_frames_and_the_y_axis():
