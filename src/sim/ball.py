@@ -1,11 +1,11 @@
 import math
 
 from src.contracts import BallState, PlateState
+from src.control import ROLL
 
 
 def _axis(pos: float, vel: float, tilt_deg: float, dt: float, wall: float, g: float):
-    # solid ball rolling without slipping
-    vel += 5 / 7 * g * math.sin(math.radians(tilt_deg)) * dt
+    vel += ROLL * g * math.sin(math.radians(tilt_deg)) * dt
     pos += vel * dt
     if abs(pos) > wall:
         return math.copysign(wall, pos), 0.0
