@@ -20,7 +20,6 @@ RIGHT = {"x": 1, "y": 0}
 # snapshot fields the page reads that the bare loop does not send
 NOT_SENT = {
     "race": "only there once a game is wired",
-    "guard": "not sent yet, the board skips the glow without it",
 }
 FN = re.compile(r"^function \w+\(([^)]*)\) \{$(.*?)^\}", re.M | re.S)
 # ways a reconnect can drop a queued arm; add forms here, don't loosen these
@@ -156,6 +155,9 @@ def page_reads():
 
 
 def test_every_snapshot_field_the_page_reads_is_sent(page):
+    # the guard field only has its full shape while the guard is on
+    page.loop.cfg["control"]["guard_on"] = True
+    page.loop.mode = "hand"
     run(page, 1)
     snap = say(page, {})
     reads = page_reads()
