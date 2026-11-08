@@ -94,6 +94,23 @@ def test_ws_race_start_and_abort_reach_the_game():
     assert calls == ["start", "abort"]
 
 
+def test_ws_race_key_without_a_game_keeps_the_socket_open():
+    calls = []
+    loop = SimpleNamespace(
+        cfg=load(),
+        keys=KeyboardInput(),
+        arm=lambda: calls.append("arm"),
+        kill=lambda: calls.append("kill"),
+        snapshot=lambda: {},
+    )
+    with TestClient(make_app(loop)).websocket_connect("/ws") as sock:
+        sock.send_json({"race": "start"})
+        sock.receive_json()
+        sock.send_json({"kill": True})
+        sock.receive_json()
+    assert calls == ["kill"]
+
+
 def test_page_has_a_hand_pill_keyed_on_the_snapshot_flags(client):
     assert 'id="hand"' in client.get("/").text
     js = static(client, "app.js")
