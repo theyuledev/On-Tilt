@@ -47,6 +47,8 @@ def rig_cfg(ball_d=61.8, lim=150, upd=57.0, cap=None):
     rig = cfg["rig"]
     rig.update(ball_d_mm=ball_d, limit_x_us=lim, limit_y_us=lim, startup_range_us=150)
     rig.update(startup_flag=lim <= 150, us_per_deg_x=upd, us_per_deg_y=upd)
+    # no rolling friction on purpose: friction helps the brake, so this is the worst case
+    cfg["control"].update(rolling_friction_x_mm_s2=0.0, rolling_friction_y_mm_s2=0.0)
     if cap is not None:
         cfg["control"]["player_max_deg"] = cap
     return cfg
