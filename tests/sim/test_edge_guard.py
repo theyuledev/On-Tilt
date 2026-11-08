@@ -205,11 +205,13 @@ def test_a_slow_servo_chain_still_stops_the_push(clock, ball_d, lim):
     assert worst_push(cfg, clock) > 5
 
 
+@pytest.mark.parametrize("lim,gap", [(150, 0), (300, 5)])
 @pytest.mark.parametrize("ball_d", BALLS)
-def test_a_guard_that_overrates_the_linkage_still_stops_the_push(clock, ball_d):
-    # it thinks 57 us/deg, the plate really needs 100: both the push and the brake come out weaker
-    truth = rig_cfg(ball_d, 300, 100.0)
-    assert worst_push(rig_cfg(ball_d, 300, 57.0), clock, plant=truth) > 5
+def test_a_guard_that_overrates_the_linkage_still_stops_the_push(clock, ball_d, lim, gap):
+    # it thinks 57 us/deg, the plate really needs 100: both the push and the brake come out weaker.
+    # at +-150 a 1.75x wrong gain only gets no rim hit, not the 5 mm margin
+    truth = rig_cfg(ball_d, lim, 100.0)
+    assert worst_push(rig_cfg(ball_d, lim, 57.0), clock, plant=truth) > gap
 
 
 def test_the_page_sees_the_guard_weight_and_side(clock):
