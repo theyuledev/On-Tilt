@@ -1,0 +1,107 @@
+import pytest
+
+from src.games import ghost, session
+from src.games.session import Game
+from tests.unit.test_race import FINISH, GAME, MAZE, RIG, fake_step, rec
+
+pytestmark = pytest.mark.unit
+
+CFG = {"game": GAME, "rig": RIG}
+APPROACH = [(0.0, 50.0, 50.0), (1.0, -100.0, 0.0), (2.0, -100.0, 0.0)]
+LAP = [(3.0, -60.0, 0.0), *FINISH]
+TAIL = [(11.0, 100.0, 100.0), (12.0, 0.0, 0.0)]
+
+
+def records(path):
+    return [rec(t, x, y) for t, x, y in path]
+
+
+def race_to_finish(g, exit_t=4.0):
+    g.tick(rec(0.0), False, False)
+    g.start()
+    g.tick(rec(3.0), False, False)
+    g.tick(rec(exit_t, -60.0), False, False)
+    for t, x, y in FINISH:
+        g.tick(rec(t, x, y), False, False)
+
+
+def test_lap_cuts_approach_and_tail():
+    recs = records(APPROACH + LAP + TAIL)
+    lap = ghost.lap(recs, MAZE, GAME, RIG, fake_step)
+    assert lap == records(LAP)
+    assert ghost.lap(records(APPROACH + LAP[:-1] + TAIL[1:]), MAZE, GAME, RIG, fake_step) == []
+    assert ghost.lap([], MAZE, GAME, RIG, fake_step) == []
+
+
+def test_lap_accepts_a_saved_race_that_starts_outside_the_ring():
+    assert ghost.lap(records(LAP), MAZE, GAME, RIG, fake_step) == records(LAP)
+
+
+def test_splits_are_on_the_lap_clock():
+    assert ghost.splits(records(LAP), MAZE, GAME, RIG, fake_step) == [2.0, 5.0, 7.0]
+    assert ghost.splits([], MAZE, GAME, RIG, fake_step) == []
+
+
+def test_tick_keeps_records_from_the_ring_exit():
+    g = Game(CFG, MAZE, fake_step)
+    g.start()  # no record yet
+    assert g.race.state == "idle"
+    race_to_finish(g)
+    assert g.race.state == "finished"
+    assert [r.t_s for r in g.records] == [4.0, *(t for t, _, _ in FINISH)]
+    g.tick(rec(11.0), False, False)
+    assert len(g.records) == 6
+    g.start()
+    assert g.records == [] and g.race.state == "countdown"
+
+
+def test_save_writes_the_run_only_when_finished(tmp_path, monkeypatch):
+    monkeypatch.setattr(session, "ROOT", tmp_path)
+    g = Game(CFG, MAZE, fake_step)
+    g.save("abc")
+    assert not (tmp_path / "data").exists()
+    race_to_finish(g)
+    g.save("abc")
+    path = tmp_path / "data" / "runs" / "abc-7000.jsonl"
+    assert ghost.load(path) == g.records
+
+
+def test_mode_switches_with_the_race_and_attract():
+    g = Game(CFG, MAZE, fake_step)
+    assert g.mode() == "hand"
+    g.attract = True
+    assert g.mode() == "hand"
+    g.tick(rec(0.0), False, False)
+    assert g.mode() == "path"
+    g.tick(rec(0.1, armed=False), False, False)
+    assert g.mode() == "hand"
+    g.tick(rec(0.2), False, False)
+    g.start()
+    assert g.mode() == "hand"
+    g.tick(rec(3.5), False, False)
+    assert g.mode() == "hand"
+    g.abort()
+    assert g.mode() == "path"
+
+
+def test_ghost_from_records_and_from_the_settings_path(tmp_path, monkeypatch):
+    g = Game(CFG, MAZE, fake_step, records(APPROACH + LAP + TAIL))
+    assert g.trace[0] == [0.0, -60.0, 0.0]
+    assert g.splits == [2.0, 5.0, 7.0]
+    g.tick(rec(0.0), False, False)
+    assert g.view()["ghost_lap_s"] == 7.0
+    monkeypatch.setattr(session, "ROOT", tmp_path)
+    cfg = {**CFG, "game": {**GAME, "ghost": "lap.jsonl"}}
+    assert Game(cfg, MAZE, fake_step).trace == []
+    ghost.save(records(LAP), tmp_path / "lap.jsonl")
+    g = Game(cfg, MAZE, fake_step)
+    assert g.splits == [2.0, 5.0, 7.0]
+    g.seed_ghost(tmp_path / "nope.jsonl")
+    assert g.splits == [2.0, 5.0, 7.0]
+
+
+def test_view_is_empty_before_the_first_tick():
+    g = Game(CFG, MAZE, fake_step)
+    assert g.view() == {}
+    g.tick(rec(0.0), False, False)
+    assert g.view()["state"] == "idle"
