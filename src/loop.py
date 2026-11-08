@@ -73,9 +73,7 @@ class Loop:
             self.holding = False
 
     def hold(self) -> None:
-        # armed and level between runs, so the next arm starts from level, not the sag
-        if not self.safety.armed:
-            self.arm()
+        # level between runs so the next arm starts from level, not the sag; never arms
         if self.safety.armed and not self.safety.killing:
             self.holding = True
 

@@ -85,6 +85,7 @@ function banner(s, live, lost) {
 
 function show(s) {
   armedNow = !!s.armed;
+  $("hold").disabled = watch || !s.armed || s.killing;
   // HAND LOST only when a hand that was steering this arm drops out
   if (!s.armed) handWasSeen = false; else if (s.hand_seen) handWasSeen = true;
   banner(s, true, s.armed && handWasSeen && !s.hand_seen);

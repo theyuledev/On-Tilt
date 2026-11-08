@@ -93,6 +93,7 @@ def test_kill_during_hold_ramps_and_disarms_like_any_kill(loop, clock):
 
 
 def test_arm_during_hold_hands_the_plate_back_to_the_mode(loop, clock):
+    loop.arm()
     loop.hold()
     ticks(loop, clock, 20, FULL)
     assert pulse(loop) == level(loop)
@@ -102,11 +103,13 @@ def test_arm_during_hold_hands_the_plate_back_to_the_mode(loop, clock):
     assert pulse(loop)[0] > level(loop)[0] and loop.safety.armed
 
 
-def test_hold_while_disarmed_arms_and_holds_but_not_with_the_board_lost(loop, clock):
-    loop.hold()
-    assert loop.safety.armed and loop.holding
-    ticks(loop, clock, 5, FULL)
-    assert loop.last.armed and pulse(loop) == level(loop)
+def test_hold_while_disarmed_or_board_lost_does_nothing(loop, clock):
+    board = FakeBoard()
+    idle = Loop(loop.cfg, actuator=SerialActuator(BoardLink(board), loop.cfg["rig"]))
+    idle.hold()
+    assert not idle.safety.armed and not idle.holding
+    ticks(idle, clock, 5, FULL)
+    assert board.sent == [] and not board.armed and not idle.snapshot()["holding"]
 
     lost = Loop(loop.cfg)
     lost.board_lost = True
@@ -129,6 +132,7 @@ def test_hold_keeps_the_dead_band_inverter_off_in_a_closed_loop_mode(loop, clock
 
 
 def test_a_refused_arm_keeps_the_hold(loop, clock):
+    loop.arm()
     loop.hold()
     loop.mode, loop.exposure = "balance", "exposure off"
     loop.arm()
@@ -169,6 +173,7 @@ def faded_in(loop, clock):
 def test_tilt_fades_in_from_level_after_an_arm(loop, clock, before):
     ticks(loop, clock, 10, HALF)
     if before == "holding":
+        loop.arm()
         loop.hold()
         ticks(loop, clock, 50, HALF)
     loop.arm()
@@ -191,9 +196,12 @@ def test_arm_while_already_armed_does_not_dip_the_plate(loop, clock):
 
 def test_ws_hold_holds_and_a_kill_in_the_same_message_wins(loop, clock):
     with TestClient(make_app(loop)).websocket_connect("/ws") as sock:
-        sock.send_json({"hold": True, "kill": True})
+        for msg in ({"hold": True, "kill": True}, {"hold": True}):
+            sock.send_json(msg)
+            sock.receive_json()
+        assert not loop.safety.armed and not loop.holding  # hold never arms
+        sock.send_json({"arm": True})
         sock.receive_json()
-        assert not loop.safety.armed and not loop.holding
         sock.send_json({"hold": True})
         assert sock.receive_json()["holding"] and loop.safety.armed
         sock.send_json({"hold": True, "kill": True})
@@ -209,6 +217,9 @@ def test_page_has_a_hold_button_an_h_key_and_a_holding_pill(loop):
     assert '$("hold").onclick = e => { pending.hold = true; e.currentTarget.blur(); }' in js
     assert '$("hold").disabled = $("arm").disabled = $("kill").disabled' in js
     assert 's.armed ? (s.holding ? "holding" : "armed")' in js
+    shown = js[js.index("function show(s)") : js.index("function connect")]
+    lock = '$("hold").disabled = watch || !s.armed || s.killing;'
+    assert lock in shown and shown.index(lock) < shown.index("if (!s.plate_state) return;")
 
 
 def test_a_zero_fade_turns_the_fade_off():
