@@ -1,12 +1,18 @@
 import pytest
 
 from src.contracts import BallState
-from src.vision.px_to_mm import SPAN, ball_state
+from src.vision.px_to_mm import ball_state
 from src.vision.tracker import BallPx
 
 pytestmark = pytest.mark.unit
 
-CFG = {"px_per_mm": 2.0, "plate_centre_px": [640, 400]}
+CFG = {
+    "px_per_mm": 2.0,
+    "plate_centre_px": [640, 400],
+    "plate_yaw_deg": 0.0,
+    "velocity_span_frames": 4,
+}
+SPAN = CFG["velocity_span_frames"]
 
 
 def seen(x, y, t, valid=True):
@@ -26,6 +32,14 @@ def test_plate_centre_is_the_origin_with_y_up_and_the_scale_in_mm():
     assert (s.x_mm, s.y_mm) == (10.0, 10.0)
     s = ball_state(seen(600, 440, 1.0), [], CFG)
     assert (s.x_mm, s.y_mm) == (-20.0, -20.0)
+
+
+def test_plate_yaw_turns_the_flipped_image_axes_onto_the_plate():
+    cfg = {**CFG, "plate_yaw_deg": 90.0}
+    right = ball_state(seen(660, 400, 1.0), [], cfg)
+    assert (right.x_mm, right.y_mm) == pytest.approx((0.0, 10.0))
+    up = ball_state(seen(640, 380, 1.0), [], cfg)
+    assert (up.x_mm, up.y_mm) == pytest.approx((-10.0, 0.0))
 
 
 def test_velocity_is_the_difference_over_four_frames():
