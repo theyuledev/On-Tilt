@@ -1,0 +1,26 @@
+// one "do this next" line for the banner, first match wins; tone is "" | "warn" | "stop"
+function guide(s, ctx) {
+  s = s || {};
+  const r = s.race && s.race.state ? s.race : {};
+  const say = (text, tone = "") => ({ text, tone });
+  if (!ctx.live) return say("connecting...", "warn");
+  if (s.board_lost) return say("board lost, check the usb cable", "stop");
+  if (s.camera_lost) return say("camera lost", "stop");
+  if (s.killing) return say("stopped", "stop");
+  if (ctx.watch) return say("");
+  if (!s.armed && s.arm_blocked) return say(s.arm_blocked, "warn");
+  if (s.armed && s.hand_calibrating) return say("hold still... locking neutral", "warn");
+  if (s.armed && s.stale) return say("no input, plate levelled", "warn");
+  if (ctx.lost) return say("HAND LOST", "stop");
+  // the hud has these
+  if (["countdown", "running", "finished", "dnf"].includes(r.state)) return say("");
+  if (r.state === "calibrating") {
+    return say((r.cal && r.cal.msg) || "calibrating... keep your hand off, place the ball in the middle", "warn");
+  }
+  if (r.state === "staging") return say("roll the ball into the start ring");
+  if (!s.armed && !(s.ball && s.ball.valid)) return say("put the ball on the plate");
+  if (!s.armed) return say("click arm to start");
+  if (!ctx.hand) return say("arrows / wasd to tilt, r to race");
+  if (!s.hand_seen) return say("hand flat under the webcam, palm down");
+  return say("tilt your hand to roll the ball, r to race");
+}

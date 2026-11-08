@@ -41,6 +41,7 @@ def make_app(loop) -> FastAPI:
             "camera_width": rig["camera_width"],
             "heartbeat_stale_s": game["heartbeat_stale_s"],
             "dead_zone": inp["dead_zone"],
+            "hand": loop.hand is not None,
         }
 
     @app.get("/race/maze")

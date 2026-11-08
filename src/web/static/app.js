@@ -75,24 +75,28 @@ function ring(px) {
   el.style.width = el.style.height = `${2 * k * px[2]}px`;
 }
 
+function banner(s, live, lost) {
+  const g = guide(s, { live, watch, hand: cfg.hand, lost });
+  $("banner").textContent = g.text;
+  $("banner").dataset.tone = g.tone;
+}
+
 function show(s) {
   armedNow = !!s.armed;
+  // HAND LOST only when a hand that was steering this arm drops out
+  if (!s.armed) handWasSeen = false; else if (s.hand_seen) handWasSeen = true;
+  banner(s, true, s.armed && handWasSeen && !s.hand_seen);
   if (!s.plate_state) return;
   if (s.t_s !== lastT) { lastT = s.t_s; lastSeen = performance.now(); }
   const b = s.ball, p = s.plate_state;
   pill("ballpill", "ball: " + (b.valid ? "tracked" : "lost"), b.valid ? "on" : "warn");
   $("speed").textContent = b.valid ? Math.round(Math.hypot(b.vx_mm_s, b.vy_mm_s)) : 0;
   $("timer").hidden = $("cps").hidden = s.race === undefined;
-  // the banner only shouts when a hand that was steering this arm drops out
-  if (!s.armed) handWasSeen = false; else if (s.hand_seen) handWasSeen = true;
-  const lost = s.armed && handWasSeen && !s.hand_seen;
-  $("banner").textContent = !s.armed ? "arm to race" : lost ? "HAND LOST" : "";
-  $("banner").classList.toggle("lost", lost);
   pill("armed", s.killing ? "killing" : s.armed ? "armed" : "disarmed",
        s.killing ? "warn" : s.armed ? "on" : "");
   $("armblock").hidden = !s.arm_blocked;
   $("armblock").textContent = s.arm_blocked || "";
-  $("stale").hidden = $("level").hidden = !(s.stale && s.armed);
+  $("stale").hidden = $("level").hidden = !(s.stale && s.armed && !s.hand_calibrating);
   $("board").hidden = !s.board_lost;
   pill("hand", "hand: " + (!s.hand_seen ? "none" : s.hand_calibrating ? "hold still" : "live"),
        !s.hand_seen ? "" : s.hand_calibrating ? "warn" : "on");
@@ -110,7 +114,7 @@ function show(s) {
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
   ws.onopen = () => { pill("link", "live", "on"); nextCam(); nextHand(); frame(); };
-  ws.onclose = () => { pill("link", "offline", "warn"); setTimeout(connect, 1000); };
+  ws.onclose = () => { pill("link", "offline", "warn"); banner(null, false, false); setTimeout(connect, 1000); };
   ws.onmessage = e => { show(JSON.parse(e.data)); requestAnimationFrame(frame); };
 }
 
