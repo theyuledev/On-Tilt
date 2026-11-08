@@ -181,7 +181,10 @@ def test_hand_process_runs_the_model_on_the_newest_frame_and_reports_lag():
 
     def slow_model(img, t):
         seen.append(int(img[0, 0]))
-        time.sleep(0.02)
+        # busy until 3 newer frames are grabbed, however slow the grab thread runs
+        deadline = time.monotonic() + 2.0
+        while cap.alive and cap.i < seen[-1] + 3 and time.monotonic() < deadline:
+            time.sleep(0.001)
         if len(seen) == 5:
             cap.alive = False
         return None
