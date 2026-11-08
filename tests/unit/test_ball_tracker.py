@@ -127,3 +127,35 @@ def test_ball_at_the_frame_edge_is_found_with_the_box_clamped():
     n = lock(tr, [ball(plate(), 60 - 5 * i, 400, 45) for i in range(3)])
     out = tr.update(ball(plate(), 45, 400, 45), n * DT)
     assert out.valid and tr.misses == 0 and out.x_px == pytest.approx(45, abs=2)
+
+
+def flat(img, x, y, r, cut):
+    """Ball with its right side shaved off, so it fills less of its enclosing circle."""
+    ball(img, x, y, r)
+    cv2.rectangle(img, (x + r - cut, y - r - 2), (x + r + 2, y + r + 2), 210, -1)
+    return img
+
+
+def test_small_locked_ball_stays_locked_when_its_fill_dips():
+    tr = BallTracker(CFG)
+    n = lock(tr, [ball(plate(), 500, 400, 15) for _ in range(3)])
+    # fill ~0.70: under min_fill, over min_fill_locked
+    for i in range(CFG["lost_after_misses"] + 2):
+        out = tr.update(flat(plate(), 500, 400, 15, 7), (n + i) * DT)
+        assert out.valid and tr.misses == 0 and out.x_px == pytest.approx(498, abs=3)
+
+
+def test_dipped_ball_is_not_picked_up_from_cold():
+    tr = BallTracker(CFG)
+    assert not any(tr.update(flat(plate(), 500, 400, 15, 7), i * DT).valid for i in range(3))
+
+
+def test_ragged_junk_smaller_than_the_locked_ball_is_not_taken():
+    tr = BallTracker(CFG)
+    n = lock(tr, [ball(plate(), 500, 400, 15) for _ in range(3)])
+    # r ~10, fill ~0.69: passes min_fill_locked, too small for the radius window
+    junk = flat(plate(), 525, 400, 12, 6)
+    for i in range(CFG["lost_after_misses"] + 3):
+        tr.update(junk, (n + i) * DT)
+        assert tr.misses > 0 or tr.r is None
+    assert not tr.update(junk, 1.0).valid

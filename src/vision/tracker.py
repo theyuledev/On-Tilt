@@ -121,7 +121,8 @@ class BallTracker:
             return found[0] if found else None
         tol = self.cfg["radius_tol"]
         lo, hi = self.r * (1 - tol), self.r * (1 + tol)
-        near = {**self.cfg, "max_ball_r_px": hi}
+        # the radius window keeps out the smaller ragged junk a looser fill would let in
+        near = {**self.cfg, "max_ball_r_px": hi, "min_fill": self.cfg["min_fill_locked"]}
         h, w = gray.shape
         px, py = self.predict(t_s)
         px, py = min(max(px, 0), w - 1), min(max(py, 0), h - 1)
