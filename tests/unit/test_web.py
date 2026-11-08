@@ -105,6 +105,14 @@ def test_page_rings_the_tracked_ball_on_the_camera_image(client):
     assert "s.ball_px" in js and "cfg.camera_width" in js
 
 
+def test_page_says_when_config_fails_and_retries_a_lost_camera(client):
+    js = static(client, "app.js")
+    assert "r.ok ? r.json()" in js and ".catch(" in js and "load failed" in js
+    assert "camRetry = setTimeout(nextCam, 1000)" in js
+    # hidden must beat #cam's display: block or a broken image icon shows
+    assert "[hidden] { display: none !important; }" in static(client, "style.css")
+
+
 def test_camera_jpeg_is_half_res_and_cached_for_a_frame_period(monkeypatch):
     now = [1000.0]
     monkeypatch.setattr(time, "monotonic", lambda: now[0])

@@ -8,6 +8,7 @@ const $ = id => document.getElementById(id);
 const cam = $("cam"), nocam = $("nocam"), ctx = $("race").getContext("2d");
 const padCtx = $("pad").getContext("2d");
 const nextCam = () => { cam.src = "/camera.jpg?" + performance.now(); };
+let camRetry;
 
 if (watch) {
   // a projector tab must never overwrite the player's keys
@@ -23,7 +24,12 @@ if (watch) {
   $("kill").onclick = () => { pending.kill = true; };
 }
 cam.onload = () => { cam.hidden = false; nocam.hidden = true; nextCam(); };
-cam.onerror = () => { cam.hidden = true; nocam.hidden = false; };
+cam.onerror = () => {
+  cam.hidden = true;
+  nocam.hidden = false;
+  clearTimeout(camRetry);
+  camRetry = setTimeout(nextCam, 1000);
+};
 
 function intent() {
   let x = 0, y = 0;
@@ -92,11 +98,11 @@ function beat() {
   requestAnimationFrame(beat);
 }
 
-const json = url => fetch(url).then(r => r.json());
+const json = url => fetch(url).then(r => r.ok ? r.json() : Promise.reject(new Error(`${url} ${r.status}`)));
 Promise.all([json("/config"), json("/race/maze")]).then(([c, m]) => {
   cfg = c;
   maze = m;
   $("cps").textContent = `0/${maze.checkpoints.length}`;
   connect();
   beat();
-});
+}).catch(e => { $("banner").textContent = `load failed: ${e.message}`; });
