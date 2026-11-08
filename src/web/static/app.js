@@ -109,6 +109,7 @@ function show(s) {
   results(s);
   draw(ctx, cfg, maze, s);
   drawPad(padCtx, cfg, s);
+  board(s, cfg);
 }
 
 function connect() {
