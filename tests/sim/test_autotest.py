@@ -85,7 +85,9 @@ def test_a_bigger_tilt_waits_longer_and_still_passes_the_timeout(monkeypatch):
     monkeypatch.setattr(autotest_board, "TILT_US", 140)
     results, board = board_run()
     assert results["board timeout"] is None
-    assert board.since_ms == round(autotest_board.quiet_s(150) * 1000)
+    # the wait follows the tilt actually reached, which lands between TILT_US and the limit
+    lo, hi = (round(autotest_board.quiet_s(us) * 1000) for us in (140, 150))
+    assert lo <= board.since_ms <= hi
 
 
 def scaled(k):
