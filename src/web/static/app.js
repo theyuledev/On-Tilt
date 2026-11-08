@@ -83,6 +83,7 @@ function banner(s, live, lost) {
 
 function show(s) {
   armedNow = !!s.armed;
+  document.body.dataset.state = frameState(s);
   // HAND LOST only when a hand that was steering this arm drops out
   if (!s.armed) handWasSeen = false; else if (s.hand_seen) handWasSeen = true;
   banner(s, true, s.armed && handWasSeen && !s.hand_seen);
@@ -115,7 +116,7 @@ function show(s) {
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
   ws.onopen = () => { pill("link", "live", "on"); nextCam(); nextHand(); frame(); };
-  ws.onclose = () => { pill("link", "offline", "warn"); banner(null, false, false); setTimeout(connect, 1000); };
+  ws.onclose = () => { pill("link", "offline", "warn"); banner(null, false, false); document.body.dataset.state = ""; setTimeout(connect, 1000); };
   ws.onmessage = e => { show(JSON.parse(e.data)); requestAnimationFrame(frame); };
 }
 

@@ -11,11 +11,8 @@
   <div class="row pills">
     <span id="link" class="pill">offline</span>
     <span id="armed" class="pill">disarmed</span>
-    <span id="beat" class="pill warn">no data</span>
-    <span id="stale" class="pill warn" hidden>no input</span>
     <span id="board" class="pill warn" hidden>board lost</span>
     <span id="hand" class="pill">hand: none</span>
-    <span id="ballpill" class="pill warn">ball: lost</span>
   </div>
   <div class="stage">
     <div class="arena">
@@ -44,6 +41,12 @@
         <span class="hint">race again: R</span>
         <span id="resbeat" class="hint" hidden>beat it</span>
       </div>
+      <ol id="howto">
+        <li>put the ball on the plate</li>
+        <li>hand flat, palm down, under the webcam, hold still</li>
+        <li>click arm, then tilt to steer</li>
+      </ol>
+      <p id="keys" class="dim">space stops everything · r races · c re-centres the hand neutral · arrows / wasd to tilt</p>
     </div>
     <canvas id="strip"></canvas>
   </div>
@@ -53,7 +56,12 @@
     <button id="kill">kill (space)</button>
     <button id="racebtn">race (r)</button>
   </div>
-  <div class="row dim"><span id="tilt">tilt x 0.00°  y 0.00°</span><span>arrows / wasd to tilt</span><span>c re-centres the hand neutral</span></div>
+  <div class="row dim"><span id="tilt">tilt x 0.00°  y 0.00°</span></div>
+  <div class="row dim debug">
+    <span id="beat" class="pill warn">no data</span>
+    <span id="stale" class="pill warn" hidden>no input</span>
+    <span id="ballpill" class="pill warn">ball: lost</span>
+  </div>
 </main>
 <div class="view">
   <img id="cam" alt="overhead cam">

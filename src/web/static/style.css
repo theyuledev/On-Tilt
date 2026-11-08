@@ -6,7 +6,11 @@ main { display: grid; gap: 12px; justify-items: center; }
 .pill { padding: 2px 9px; border-radius: 99px; background: #333; }
 .on { background: #2e7d32; }
 .warn { background: #c62828; }
-.stage { display: grid; grid-template-columns: auto auto; gap: 8px 16px; }
+.stage { display: grid; grid-template-columns: auto auto; gap: 8px 16px; padding: 6px; border: 6px solid transparent; border-radius: 10px; }
+body[data-state="disarmed"] .stage { border-color: #555; }
+body[data-state="armed"] .stage { border-color: #2e7d32; }
+body[data-state="killing"] .stage { border-color: #c62828; }
+body[data-state="calibrating"] .stage { border-color: #ffb300; }
 .arena { position: relative; width: min(66vh, 56vw); height: min(66vh, 56vw); }
 #side { width: 22vw; grid-row: span 2; }
 #race { display: block; width: 100%; height: 100%; }
@@ -30,6 +34,10 @@ button:disabled { opacity: .4; cursor: default; }
 #racebtn { background: #0072B2; }
 .dim { color: #aaa; gap: 24px; }
 #tilt { font: 24px ui-monospace, Menlo, monospace; color: #fff; white-space: pre; }
+.debug { font-size: 12px; gap: 6px; opacity: .6; }
+#howto { margin: 0 0 8px; padding-left: 20px; line-height: 1.5; }
+body[data-state="armed"] #howto, body[data-state="calibrating"] #howto { display: none; }
+#keys { margin: 0; font-size: 13px; }
 .view { position: fixed; left: 12px; bottom: 12px; color: #aaa; }
 #cam { display: block; width: 200px; border-radius: 4px; }
 .ring { position: absolute; box-sizing: border-box; border: 2px solid #ff3; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
