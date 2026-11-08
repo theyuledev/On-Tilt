@@ -3,7 +3,7 @@ import pytest
 from src.contracts import ServoCommand
 from src.io.serial_link import ENVELOPE_US
 from src.io.settings import load
-from src.safety import SafetyState, limits, step
+from src.safety import LEVEL_HOLD_S, SafetyState, limits, step
 
 pytestmark = pytest.mark.unit
 
@@ -89,8 +89,22 @@ def test_kill_holds_the_level_pulse_40ms_before_disarming():
     level = []
     while (out := step(s, ServoCommand(1650, 1650), False, 0.01, RIG)) is not None:
         level.append(out)
-    assert level == [ServoCommand(1500, 1500)] * 4
+    assert level == [ServoCommand(1500, 1500)] * 5
     assert not s.armed and s.level_s == 0
+
+
+def test_kill_hold_starts_after_a_slow_tick_reaches_level():
+    s = armed()
+    run(s, ServoCommand(1650, 1650), 50)
+    s.kill()
+    run(s, ServoCommand(1650, 1650), 149)
+    dts = [0.05] + [0.01] * 10
+    out = [step(s, ServoCommand(1650, 1650), False, dt, RIG) for dt in dts]
+    level = out[: out.index(None)]
+    assert level == [ServoCommand(1500, 1500)] * 5
+    # disarms on the last level pulse, a full hold after the first one
+    assert sum(dts[1 : len(level)]) >= LEVEL_HOLD_S
+    assert not s.armed
 
 
 def test_arm_during_kill_ramp_is_ignored():

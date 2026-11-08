@@ -13,6 +13,7 @@ class SafetyState:
     x_us: float | None = None
     y_us: float | None = None
     level_s: float = 0.0
+    level_sent: bool = False
 
     def arm(self) -> None:
         # a kill runs to the end, no re-arming half way down the ramp
@@ -68,9 +69,12 @@ def step(
 
     # last pulses out are the level one, servos hold there once pulses stop
     if state.killing and (state.x_us, state.y_us) == (cx, cy):
-        state.level_s += dt
+        # hold counts from the first level pulse sent, not the tick that got there
+        if state.level_sent:
+            state.level_s += dt
+        state.level_sent = True
         if state.level_s >= LEVEL_HOLD_S:
-            state.armed = state.killing = False
+            state.armed = state.killing = state.level_sent = False
             state.x_us = state.y_us = None
             state.level_s = 0.0
 
