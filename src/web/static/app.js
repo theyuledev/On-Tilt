@@ -18,6 +18,7 @@ if (watch) {
   // a focused button clicks on enter or space keyup, so space after a kill could re-arm
   const clickKeys = new Set(["Space", "Enter", "NumpadEnter"]);
   addEventListener("keydown", e => {
+    if (typing(e)) return;
     if (clickKeys.has(e.code)) e.preventDefault();
     if (e.code === "Space") { pending.kill = true; return; }
     if (e.code === "KeyC" && !e.metaKey && !e.ctrlKey) { pending.recentre = true; return; }
@@ -26,7 +27,7 @@ if (watch) {
       pending.race = raceCmd();
     }
   });
-  addEventListener("keyup", e => { if (clickKeys.has(e.code)) e.preventDefault(); held.delete(e.code); });
+  addEventListener("keyup", e => { if (!typing(e) && clickKeys.has(e.code)) e.preventDefault(); held.delete(e.code); });
   addEventListener("blur", () => held.clear());
   $("arm").onclick = e => { pending.arm = true; e.currentTarget.blur(); };
   $("kill").onclick = e => { pending.kill = true; e.currentTarget.blur(); };
@@ -87,6 +88,7 @@ function show(s) {
   ring(s.ball_px);
   strip(cfg, s);
   hud(s, maze);
+  results(s);
   draw(ctx, cfg, maze, s);
   drawPad(padCtx, cfg, s);
 }

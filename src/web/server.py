@@ -1,4 +1,5 @@
 import math
+import re
 import time
 import tomllib
 from pathlib import Path
@@ -15,6 +16,11 @@ MAZES = ROOT / "configs" / "mazes"
 JPEG_SCALE = 0.5  # 1280x800 camera -> 640x400 on the page
 JPEG_PERIOD_S = 1 / 15  # one encode per ~66 ms, the control loop shares this process
 FULL_JPEG_QUALITY = 95  # calibration fits the lens from these, keep the pixels honest
+NAME_MAX = 8  # same as the name field maxlength, the name ends up in a file name
+
+
+def clean_name(raw) -> str:
+    return re.sub(r"[^A-Za-z0-9 _-]", "", str(raw)).strip()[:NAME_MAX].strip()
 
 
 def make_app(loop) -> FastAPI:
@@ -76,6 +82,8 @@ def make_app(loop) -> FastAPI:
                     game.start()
                 elif game is not None and msg.get("race") == "abort":
                     game.abort()
+                if "save" in msg and game is not None and (name := clean_name(msg["save"])):
+                    game.save(name)
                 await sock.send_json(loop.snapshot())
         except WebSocketDisconnect:
             pass
