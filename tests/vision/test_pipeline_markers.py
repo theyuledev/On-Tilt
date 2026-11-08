@@ -116,6 +116,18 @@ def test_no_lens_or_no_board_file_is_the_ball_only_path(monkeypatch, tmp_path, l
     assert not o.occluded and o.plate_corners_px is None
 
 
+def test_the_pose_dropping_out_and_back_does_not_kick_the_velocity(monkeypatch):
+    # an uncalibrated plate centre puts the flat route 30 mm off the marker route
+    monkeypatch.setattr(pipeline, "to_mm", lambda *_: (BALL_MM[0] + 30, BALL_MM[1]))
+    frame, r, _ = scene()
+    hidden = erase(frame.copy(), PLATE, r, T)
+    p = pipe()
+    obs = [p.step(f, i / 60) for i, f in enumerate([frame] * 3 + [hidden] * 3 + [frame] * 3)]
+    assert [o.occluded for o in obs] == [False] * 3 + [True] * 3 + [False] * 3
+    assert obs[3].ball.x_mm == pytest.approx(obs[2].ball.x_mm + 30, abs=1.0)
+    assert max(math.hypot(o.ball.vx_mm_s, o.ball.vy_mm_s) for o in obs) < 5
+
+
 def _throw(*_):
     raise cv2.error("degenerate")
 

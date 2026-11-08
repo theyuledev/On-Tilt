@@ -64,17 +64,20 @@ class Pipeline:
         if self.markers is not None:
             tilt, pose = self.markers.update(gray, t_read)[1:3], self.markers.plate_pose
         ball_px = self.tracker.update(gray, t_read)
-        if ball_px.valid and self.last is not None and not self.last.ball_px.valid:
-            self.history = []  # relock: the velocity must not bridge the gap
         xy = None if pose is None else ball_on_plate(ball_px[:2], self.lens, *pose, self.r_ball)
         if xy is None or not np.isfinite(xy).all():
             if pose is not None:
                 self.markers.plate_pose = None  # a ray off the plate: not a guess worth keeping
             tilt, pose, xy = (math.nan, math.nan), None, to_mm(ball_px, self.cfg)
+        occluded = self.markers is not None and pose is None
+        if self.last is not None:
+            relock = ball_px.valid and not self.last.ball_px.valid
+            if relock or self.last.occluded != occluded:
+                # the velocity must not bridge a gap or mix the marker and flat routes
+                self.history = []
         ball = with_velocity(*xy, ball_px, self.history, self.cfg)
         self.history = [*self.history, ball][-self.cfg["velocity_span_frames"] :]
         quad = None if pose is None else plate_to_px(self.corners_mm, self.lens, *pose)
         ms = (time.perf_counter() - t0) * 1e3
-        occluded = self.markers is not None and pose is None
         self.last = Observation(ball, ball_px, *tilt, occluded, t_read, ms, quad)
         return self.last
