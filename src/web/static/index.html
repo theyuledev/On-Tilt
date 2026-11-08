@@ -4,139 +4,41 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>On-Tilt</title>
-<style>
-  body { margin: 0; font: 15px system-ui, sans-serif; background: #111; color: #eee; display: grid; place-items: center; min-height: 100vh; }
-  main { display: grid; gap: 20px; justify-items: center; }
-  .stage { perspective: 700px; width: 320px; height: 320px; display: grid; place-items: center; }
-  .plate { width: 260px; height: 260px; background: #c8a46a; border: 10px solid #8a6a3a; border-radius: 4px; transition: transform 30ms linear; position: relative; }
-  .view { position: relative; }
-  #cam { display: block; width: 400px; max-width: 45vw; border-radius: 4px; }
-  .ring { position: absolute; box-sizing: border-box; border: 2px solid #ff3; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
-  .ring::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; background: #ff3; border-radius: 50%; transform: translate(-50%, -50%); }
-  .ball { position: absolute; border-radius: 50%; background: #e8e8f0; box-shadow: 0 1px 3px #0009; transform: translate(-50%, -50%); }
-  .row { display: flex; gap: 10px; align-items: center; }
-  button { font: inherit; padding: 10px 22px; border: 0; border-radius: 6px; cursor: pointer; }
-  #arm { background: #2e7d32; color: #fff; }
-  #kill { background: #c62828; color: #fff; font-weight: 700; }
-  .pill { padding: 3px 10px; border-radius: 99px; background: #333; }
-  .on { background: #2e7d32; }
-  .warn { background: #c62828; }
-  pre { margin: 0; color: #aaa; }
-</style>
+<link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <main>
-  <div class="row">
+  <div class="row pills">
     <span id="link" class="pill">offline</span>
     <span id="armed" class="pill">disarmed</span>
     <span id="beat" class="pill warn">no data</span>
     <span id="stale" class="pill warn" hidden>no input</span>
     <span id="board" class="pill warn" hidden>board lost</span>
     <span id="hand" class="pill">hand: none</span>
+    <span id="ballpill" class="pill warn">ball: lost</span>
   </div>
-  <div class="row">
-    <div class="stage"><div id="plate" class="plate"><div id="ball" class="ball" hidden></div></div></div>
-    <div class="view"><img id="cam" alt="overhead cam"><div id="seen" class="ring" hidden></div></div>
-    <span id="nocam" hidden>no camera</span>
+  <div class="stage">
+    <div class="arena">
+      <canvas id="race"></canvas>
+      <span id="timer" class="hud">00:00.00</span>
+      <span id="cps" class="hud">0/4</span>
+      <span id="speed" class="hud">0</span>
+      <span id="banner" class="hud">arm to race</span>
+    </div>
+    <div id="side"></div>
   </div>
   <div class="row">
     <button id="arm">arm</button>
     <button id="kill">kill (space)</button>
   </div>
-  <pre id="nums"></pre>
-  <div>arrows / wasd to tilt</div>
+  <div class="row dim"><span id="tilt">tilt x 0.00°  y 0.00°</span><span>arrows / wasd to tilt</span></div>
 </main>
-<script>
-const held = new Set();
-const keymap = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1],
-                 KeyA: [-1, 0], KeyD: [1, 0], KeyW: [0, 1], KeyS: [0, -1] };
-let pending = {};
-let ws, cfg, lastT, lastSeen;
-const cam = document.getElementById("cam"), nocam = document.getElementById("nocam");
-const nextCam = () => { cam.src = "/camera.jpg?" + performance.now(); };
-
-addEventListener("keydown", e => {
-  if (e.code === "Space") { pending.kill = true; e.preventDefault(); return; }
-  if (keymap[e.code]) { held.add(e.code); e.preventDefault(); }
-});
-addEventListener("keyup", e => held.delete(e.code));
-addEventListener("blur", () => held.clear());
-document.getElementById("arm").onclick = () => { pending.arm = true; };
-document.getElementById("kill").onclick = () => { pending.kill = true; };
-cam.onload = () => { cam.hidden = false; nocam.hidden = true; nextCam(); };
-cam.onerror = () => { cam.hidden = true; nocam.hidden = false; };
-
-function intent() {
-  let x = 0, y = 0;
-  for (const k of held) { x += keymap[k][0]; y += keymap[k][1]; }
-  return { x: Math.max(-1, Math.min(1, x)), y: Math.max(-1, Math.min(1, y)) };
-}
-
-function show(s) {
-  if (!s.plate_state) return;
-  if (s.t_s !== lastT) { lastT = s.t_s; lastSeen = performance.now(); }
-  const b = s.ball, ball = document.getElementById("ball");
-  ball.hidden = !b.valid;
-  if (b.valid) {
-    ball.style.left = `${50 + 100 * b.x_mm / cfg.plate_inner_mm}%`;
-    ball.style.top = `${50 - 100 * b.y_mm / cfg.plate_inner_mm}%`;
-  }
-  const px = s.ball_px, ring = document.getElementById("seen");
-  ring.hidden = !px || cam.hidden;
-  if (px) {
-    const k = cam.clientWidth / cfg.camera_width;
-    ring.style.left = `${k * px[0]}px`;
-    ring.style.top = `${k * px[1]}px`;
-    ring.style.width = ring.style.height = `${2 * k * px[2]}px`;
-  }
-  const p = s.plate_state;
-  document.getElementById("plate").style.transform =
-    `rotateX(${p.sent_y_deg}deg) rotateY(${p.sent_x_deg}deg)`;
-  const armed = document.getElementById("armed");
-  armed.textContent = s.killing ? "killing" : s.armed ? "armed" : "disarmed";
-  armed.className = "pill " + (s.killing ? "warn" : s.armed ? "on" : "");
-  document.getElementById("stale").hidden = !(s.stale && s.armed);
-  document.getElementById("board").hidden = !s.board_lost;
-  const hand = document.getElementById("hand");
-  hand.textContent = "hand: " + (!s.hand_seen ? "none" : s.hand_calibrating ? "hold still" : "live");
-  hand.className = "pill " + (!s.hand_seen ? "" : s.hand_calibrating ? "warn" : "on");
-  nocam.textContent = s.camera_lost ? "camera lost" : "no camera";
-  document.getElementById("nums").textContent =
-    `tilt x ${p.sent_x_deg.toFixed(2)}°  y ${p.sent_y_deg.toFixed(2)}°\n` +
-    (s.armed ? `servo x ${s.servo_cmd.x_us} us  y ${s.servo_cmd.y_us} us\n` : `servo off\n`) +
-    `intent x ${s.intent.x}  y ${s.intent.y}`;
-}
-
-function connect() {
-  ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.onopen = () => { document.getElementById("link").textContent = "live"; document.getElementById("link").className = "pill on"; nextCam(); frame(); };
-  ws.onclose = () => { document.getElementById("link").textContent = "offline"; document.getElementById("link").className = "pill warn"; setTimeout(connect, 1000); };
-  ws.onmessage = e => { show(JSON.parse(e.data)); requestAnimationFrame(frame); };
-}
-
-function frame() {
-  if (ws.readyState !== 1) return;
-  ws.send(JSON.stringify({ ...intent(), ...pending }));
-  pending = {};
-}
-
-function beat() {
-  if (lastSeen !== undefined) {
-    const age = (performance.now() - lastSeen) / 1000;
-    const el = document.getElementById("beat");
-    el.textContent = `tick ${Math.round(age * 1000)} ms ago`;
-    el.className = "pill " + (age > cfg.heartbeat_stale_s ? "warn" : "on");
-  }
-  requestAnimationFrame(beat);
-}
-
-fetch("/config").then(r => r.json()).then(c => {
-  cfg = c;
-  const ball = document.getElementById("ball");
-  ball.style.width = ball.style.height = `${100 * cfg.ball_d_mm / cfg.plate_inner_mm}%`;
-  connect();
-  beat();
-});
-</script>
+<div class="view">
+  <img id="cam" alt="overhead cam">
+  <div id="seen" class="ring" hidden></div>
+  <span id="nocam" hidden>no camera</span>
+</div>
+<script src="/static/race.js"></script>
+<script src="/static/app.js"></script>
 </body>
 </html>

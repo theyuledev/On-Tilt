@@ -58,7 +58,8 @@ def test_dead_grab_thread_shows_camera_lost_instead_of_the_last_frame():
 
 
 def test_page_has_the_cam():
-    page = TestClient(make_app(Loop(load()))).get("/").text
-    assert 'src = "/camera.jpg?' in page
-    assert "no camera" in page
-    assert '"camera lost"' in page
+    client = TestClient(make_app(Loop(load())))
+    assert "no camera" in client.get("/").text
+    js = client.get("/static/app.js").text
+    assert 'src = "/camera.jpg?' in js
+    assert '"camera lost"' in js

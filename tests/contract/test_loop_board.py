@@ -266,3 +266,29 @@ def test_dead_link_marks_board_lost_and_stops_sending(loop, board, clock, fail):
     assert len(board.sent) == n
     snap = loop.snapshot()
     assert snap["board_lost"] and not snap["armed"]
+
+
+def test_late_but_exact_echo_still_carries_on(loop, board, clock):
+    loop.arm()
+    ticks(loop, clock, 3, key=(1.0, 0.0))
+    board.late = True  # the reply is the right one, it just misses the read
+    ticks(loop, clock, 1, key=(1.0, 0.0))
+    assert loop.last.armed and board.sent[-1] == "S" and "D" not in board.sent
+    ticks(loop, clock, 1, key=(1.0, 0.0))
+    assert board.sent[-1].startswith("P") and board.armed and loop.snapshot()["armed"]
+
+
+def test_wrong_echo_then_nothing_acceptable_disarms(loop, board, clock, capsys):
+    loop.arm()
+    ticks(loop, clock, 3, key=(1.0, 0.0))
+    board._replies.append("OK P 1490 1490")  # last tick's reply turning up late
+    board.silent = True  # and this tick's own reply does not make the read
+    ticks(loop, clock, 1, key=(1.0, 0.0))
+    assert not loop.last.armed and "echo mismatch" in capsys.readouterr().out
+    assert board.sent[-1].startswith("P") and "S" not in board.sent and "D" not in board.sent
+    board.silent = False
+    n = len(board.sent)
+    ticks(loop, clock, 3, key=(1.0, 0.0))
+    assert board.sent[n:] == []
+    snap = loop.snapshot()
+    assert not snap["armed"] and not snap["board_lost"]

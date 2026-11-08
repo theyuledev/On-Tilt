@@ -1,4 +1,5 @@
 import time
+import tomllib
 from types import SimpleNamespace
 
 import cv2
@@ -7,10 +8,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.io.ports import Frame
-from src.io.settings import load
+from src.io.settings import ROOT, load
 from src.web.server import JPEG_PERIOD_S, make_app
 
 pytestmark = pytest.mark.unit
+
+HUD_IDS = ("race", "timer", "speed", "cps", "banner", "ballpill", "kill", "seen")
+PILL_IDS = ("hand", "beat", "board", "stale")
 
 
 @pytest.fixture
@@ -18,25 +22,35 @@ def client():
     return TestClient(make_app(SimpleNamespace(cfg=load())))
 
 
-def test_page_has_ball_heartbeat_and_board_lost(client):
+def static(client, name):
+    r = client.get(f"/static/{name}")
+    assert r.status_code == 200
+    return r.text
+
+
+def test_page_has_the_race_hud_pills_and_kill(client):
     page = client.get("/").text
-    assert 'id="ball"' in page
-    assert 'id="beat"' in page
-    assert 'id="board"' in page
-    assert 'id="stale"' in page and "no input" in page
+    assert all(f'id="{i}"' in page for i in HUD_IDS + PILL_IDS)
+    assert "00:00.00" in page and "no input" in page and 'id="side"' in page
+    assert "/static/style.css" in page and "/static/app.js" in page and "/static/race.js" in page
 
 
 def test_page_has_a_hand_pill_keyed_on_the_snapshot_flags(client):
-    page = client.get("/").text
-    assert 'id="hand"' in page and "hold still" in page
-    assert "s.hand_seen" in page and "s.hand_calibrating" in page
+    assert 'id="hand"' in client.get("/").text
+    js = static(client, "app.js")
+    assert "hold still" in js and "s.hand_seen" in js and "s.hand_calibrating" in js
 
 
 def test_page_tracks_held_keys_by_code_so_shift_cannot_stick_one(client):
-    page = client.get("/").text
-    assert "e.code" in page and "e.key" not in page
-    assert all(k in page for k in ("KeyA", "KeyD", "KeyW", "KeyS"))
-    assert 'addEventListener("blur", () => held.clear())' in page
+    js = static(client, "app.js")
+    assert "e.code" in js and "e.key" not in js
+    assert all(k in js for k in ("KeyA", "KeyD", "KeyW", "KeyS"))
+    assert 'addEventListener("blur", () => held.clear())' in js
+
+
+def test_watch_tab_sends_nothing_and_takes_no_input(client):
+    js = static(client, "app.js")
+    assert 'has("watch")' in js and "watch ? {} :" in js
 
 
 def test_config_gives_plate_ball_and_stale_limit_from_settings(client):
@@ -49,10 +63,25 @@ def test_config_gives_plate_ball_and_stale_limit_from_settings(client):
     }
 
 
+def test_race_maze_is_the_configured_maze_file(client):
+    name = load()["game"]["maze"]
+    with (ROOT / "configs" / "mazes" / f"{name}.toml").open("rb") as f:
+        maze = tomllib.load(f)
+    assert set(maze) == {"points", "checkpoints", "start"}
+    assert client.get("/race/maze").json() == maze
+
+
+def test_race_js_draws_the_plate_in_mm_with_a_ball_trail(client):
+    js = static(client, "race.js")
+    assert "function draw(ctx, cfg, maze, s)" in js
+    assert "cfg.plate_inner_mm" in js and "TRAIL_S" in js and "s.ball.valid" in js
+
+
 def test_page_rings_the_tracked_ball_on_the_camera_image(client):
     page = client.get("/").text
     assert 'id="seen"' in page and 'class="view"' in page
-    assert "s.ball_px" in page and "cfg.camera_width" in page
+    js = static(client, "app.js")
+    assert "s.ball_px" in js and "cfg.camera_width" in js
 
 
 def test_camera_jpeg_is_half_res_and_cached_for_a_frame_period(monkeypatch):
