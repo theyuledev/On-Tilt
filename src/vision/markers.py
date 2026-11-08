@@ -12,8 +12,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from src.io.settings import ROOT
 from src.vision.calib import undistort
 
+BOARD_PATH = ROOT / "configs" / "board.local.json"
 DICTS = {"DICT_4X4_50": cv2.aruco.DICT_4X4_50}
 EYE = np.eye(3)
 
@@ -98,6 +100,17 @@ def load_board(path) -> tuple[dict[int, np.ndarray], dict[int, np.ndarray]]:
     return _board(data["plate"]), _board(data["base"])
 
 
+def _pose(found, board, lens, guess, min_count):
+    """board_pose, or None when the solve throws or comes back non-finite."""
+    try:
+        pose = board_pose(found, board, lens, guess, min_count)
+    except cv2.error:
+        return None
+    if pose is None or not all(np.isfinite(v).all() for v in pose):
+        return None
+    return pose
+
+
 class TiltTracker:
     """Plate tilt from the markers frame to frame; rows are (t, tilt_x, tilt_y, n_plate),
     tilt nan while fewer than marker_min_count plate markers show."""
@@ -111,8 +124,8 @@ class TiltTracker:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
         found = find(self.det, gray)
         n = len(set(found) & set(self.plate))
-        self.plate_pose = board_pose(found, self.plate, self.lens, self.plate_pose, self.min_count)
-        base = board_pose(found, self.base, self.lens, self.base_pose, self.min_count)
+        self.plate_pose = _pose(found, self.plate, self.lens, self.plate_pose, self.min_count)
+        base = _pose(found, self.base, self.lens, self.base_pose, self.min_count)
         # the table does not move, so the last base pose stands in while it is covered
         self.base_pose = self.base_pose if base is None else base
         if self.plate_pose is None:
