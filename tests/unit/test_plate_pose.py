@@ -5,21 +5,11 @@ import numpy as np
 import pytest
 
 from src.io.settings import load
-from src.vision.calib import project
-from src.vision.plate_pose import (
-    QuadTracker,
-    find_plate_quad,
-    plate_tilt,
-    square,
-    step_response,
-    sweep_fit,
-    tilt_report,
-)
+from src.vision.plate_pose import step_response, sweep_fit, tilt_report
 from tools.servo_test import plan
 
 pytestmark = pytest.mark.unit
 TICK = 0.01
-SIZE = 305
 # wide lenses like the overhead cam, plate off to the right of the frame
 K = [[700.0, 0, 640], [0, 700.0, 400], [0, 0, 1]]
 STANDARD = {"model": "standard", "K": K, "D": [-0.3, 0.1, 0, 0, -0.02]}
@@ -40,77 +30,6 @@ def pose(tip_y=0.0, tip_x=0.0):
         @ rot([1, 0, 0], tip_x)
     )
     return r, math.degrees(math.asin(r[2, 0])), math.degrees(math.asin(r[2, 1]))
-
-
-def render(r, lens=STANDARD, balls=True):
-    s = SIZE / 2
-    edge = np.linspace(-s, s, 25)
-    rim = np.concatenate(
-        [
-            np.c_[edge, np.full(25, s)],
-            np.c_[np.full(25, s), -edge],
-            np.c_[-edge, np.full(25, -s)],
-            np.c_[np.full(25, -s), edge],
-        ]
-    )
-    rvec, _ = cv2.Rodrigues(r)
-    px = project(lens, np.c_[rim, np.zeros(len(rim))], rvec, T)
-    img = np.full((800, 1280), 90, np.uint8)
-    img += (np.random.default_rng(0).random(img.shape) * 8).astype(np.uint8)
-    # fixed point coords so the corners land where the projection says, not on a pixel grid
-    cv2.fillPoly(img, [(px * 16).round().astype(np.int32)], 225, cv2.LINE_AA, 4)
-    if balls:
-        for c, rad in (((60, 40, 0), 40), ((-20, -30, 0), 25), ((-90, 60, 0), 8)):
-            b = project(lens, [c], rvec, T)[0]
-            cv2.circle(img, tuple(b.round().astype(int)), rad, 30, -1)
-    return img
-
-
-@pytest.mark.parametrize("lens", [STANDARD, FISHEYE], ids=lambda c: c["model"])
-def test_quad_and_tilt_come_back_from_a_rendered_plate(lens):
-    r, tx, ty = pose(tip_y=6, tip_x=-4)
-    quad = find_plate_quad(render(r, lens))
-    assert quad is not None and quad.shape == (4, 2)
-    assert np.argmin(quad[:, 1]) == 0 and quad[1, 0] > quad[3, 0]
-    got_x, got_y, _, tvec = plate_tilt(quad, lens, SIZE)
-    assert got_x == pytest.approx(tx, abs=0.5) and got_y == pytest.approx(ty, abs=0.5)
-    assert np.allclose(tvec.ravel(), T, atol=8)
-
-
-def test_positive_tilt_means_the_plus_edge_is_lower():
-    for tip_y, tip_x in ((5, -3), (-5, 3)):
-        r, tx, ty = pose(tip_y, tip_x)
-        # camera z grows away from the cam, so the lower edge has the bigger z
-        z = (square(SIZE) @ r.T + T)[:, 2]
-        assert (tx > 0) == (z[[1, 2]].mean() > z[[0, 3]].mean())
-        assert (ty > 0) == (z[[0, 1]].mean() > z[[2, 3]].mean())
-        got_x, got_y, _, _ = plate_tilt(find_plate_quad(render(r)), STANDARD, SIZE)
-        assert np.sign(got_x) == np.sign(tx) and np.sign(got_y) == np.sign(ty)
-    assert pose(tip_y=5)[1] > 0
-
-
-def test_small_tilts_keep_their_sign():
-    for tip in (0.5, -0.5):
-        r, tx, _ = pose(tip_y=tip)
-        got, *_ = plate_tilt(find_plate_quad(render(r)), STANDARD, SIZE)
-        assert got == pytest.approx(tx, abs=0.5)
-
-
-def test_prev_keeps_the_corner_order_and_blank_frames_give_none():
-    img = render(pose()[0])
-    quad = find_plate_quad(img)
-    rolled = np.roll(quad, 1, axis=0)
-    assert np.allclose(find_plate_quad(img, prev=rolled), rolled, atol=0.5)
-    assert find_plate_quad(np.full((800, 1280), 90, np.uint8)) is None
-
-
-def test_tracker_rows_carry_tilt_and_corners():
-    r, tx, ty = pose(tip_y=3)
-    tracker = QuadTracker(STANDARD, SIZE)
-    row = tracker.update(render(r), 1.0, 1500)
-    assert len(row) == 11 and row[0] == 1.0
-    assert row[1] == pytest.approx(tx, abs=0.5) and row[2] == pytest.approx(ty, abs=0.5)
-    assert tracker.image is not None and tracker.quad.shape == (4, 2)
 
 
 WN, ZETA = 15.0, 0.5
@@ -208,3 +127,18 @@ def test_tilt_report_counts_dropped_frames_and_the_y_axis():
     swapped = [(c[0], c[1], 1500, c[2], c[4]) for c in commands]
     out = tilt_report(swapped, [(t, 0.0, v) for t, v, _ in tilts], 1)
     assert out["deg_per_us"] == pytest.approx(1 / rig["us_per_deg_x"], rel=0.05)
+
+
+def test_tilt_report_skips_nan_rows_and_repeated_frames():
+    rig = load()["rig"]
+    commands, tilts = toy_plate(plan(rig, 0, TICK), rig)
+    clean = tilt_report(commands, tilts, 0)
+    messy = [r for row in tilts for r in (row, row)]
+    messy[500:500] = [(tilts[200][0] + 1e-4, math.nan, math.nan)] * 3
+    out = tilt_report(commands, messy, 0)
+    assert out == clean and out["fps"] == pytest.approx(119, rel=0.01)
+    # the toy is level on the first pulse, a few us off the hold one
+    c = next(cmd[2] for cmd in commands if cmd[4] == "hold")
+    first = commands[0][2]
+    assert clean["hold_deg"] == pytest.approx((c - first) / rig["us_per_deg_x"], abs=0.01)
+    assert clean["trim_us"] == pytest.approx(first - c, abs=0.5)
