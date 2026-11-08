@@ -1,7 +1,7 @@
 import cv2
 import pytest
 
-from src.vision.tracker import BallTracker
+from src.vision.tracker import BG_MIN_SAMPLES, BallTracker
 from tests.unit.test_balls import CFG, ball, plate
 
 pytestmark = pytest.mark.unit
@@ -55,3 +55,29 @@ def test_locked_on_a_dark_ball_never_takes_a_bright_one():
     outs = [tr.update(swapped, (n + i) * DT) for i in range(CFG["lost_after_misses"])]
     assert not outs[-1].valid
     assert tr.update(swapped, 10.0).valid and tr.dark is False
+
+
+def test_resting_ball_stays_out_of_the_background_and_found_for_a_minute():
+    tr = BallTracker(CFG)
+    img = ball(plate(), 500, 400, 45)
+    period = CFG["bg_period_s"]
+    for i in range(int(2 * 60 / period) + 1):
+        out = tr.update(img, i * period / 2)
+        assert out.valid and tr.misses == 0 and out.x_px == pytest.approx(500, abs=2)
+    level = tr.background.level
+    assert level is not None and len(tr.background.samples) == CFG["bg_frames"]
+    # the plate under the ball, not the ball
+    assert level[400 // 5, 500 // 5] == pytest.approx(210, abs=5)
+
+
+def test_reset_background_starts_over_and_the_ball_is_still_tracked():
+    tr = BallTracker(CFG)
+    img = ball(plate(), 640, 40 + 45, 45)
+    period = CFG["bg_period_s"]
+    for i in range(BG_MIN_SAMPLES):
+        tr.update(plate(), i * period)
+    t = BG_MIN_SAMPLES * period
+    assert tr.background.level is not None and tr.update(img, t).valid
+    tr.reset_background()
+    assert tr.background.level is None and tr.background.samples == []
+    assert tr.update(ball(plate(), 640, 400, 45), t + period).valid

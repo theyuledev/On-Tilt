@@ -55,6 +55,8 @@ radius_tol = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected
 lost_after_misses = { value = 5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 px_per_mm = { value = 2.37, label = "measured (2026-11-07)" }
 plate_centre_px = { value = [640, 400], label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+bg_period_s = { value = 2.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+bg_frames = { value = 30, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 board_corners = { value = [7, 8], label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 board_square_mm = { value = 25.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 calib_views = { value = 20, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
