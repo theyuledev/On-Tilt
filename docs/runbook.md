@@ -103,7 +103,7 @@ times marker led on to the first camera frame that sees it. it opens the serial 
 
 1. tape the marker led (d7) where the overhead camera sees it. if the lit spot clips white the tool prints `led window near saturation (peak <n>), dim the led or tape it: ...` (l_mid and l_min would read low): dim or tape it until that line is gone
 2. `uv run python -m tools.led_latency <name> [trials] [--roi x,y,w,h]`. trials defaults to 50, `--roi` (camera pixels) replaces the auto pick of the led window
-3. a `camera: exposure ...` line at start means the exposure is not what we set, or could not be checked: fix camera_uvc or uvc-util before trusting the timings. `led not in view, contrast <n> < 30`, then `no timings, misses: 0`: move the led or pass `--roi`
+3. a `camera: ...` line at start means the exposure is not what we set, or could not be checked: fix camera_uvc or uvc-util before trusting the timings. `led not in view, contrast <n> < 30`, then `no timings, misses: 0`: move the led or pass `--roi`
 4. one line per trial, `<n> <ms> ms rtt <ms> ms <frames> fr`, or `miss`. ctrl-c stops early and keeps what it has
 5. at the end `wrote .../data/latency/<name>.csv`, then n, mean, median, p50, p95, min, max, std, mean_rtt, l_mid, l_min, spread (seconds), misses, and last `camera_latency_s = ... (p95 latency ..., n ..., misses ...)`. sanity: l_min close to l_mid, spread close to one frame period, the tool adds `irregular frame clock: spread is over 1.5 frame periods` past that
 
