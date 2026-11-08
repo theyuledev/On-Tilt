@@ -16,7 +16,10 @@ configs/settings.local.toml (gitignored) holds the rig-only bits:
 [rig]
 actuator = "real"
 serial_port = "/dev/cu.usbmodem..."
+camera_uvc = "0x....:0x...."
 ```
+
+camera_uvc: read it off `uvc-util -d`, the Vend:Prod column of the overhead cam. without it and with more than one uvc camera plugged in the exposure is not set and the app says `camera: exposure unverified: ...`. today the readback is only printed at open; once the app wiring lands, a readback that differs from what was set blocks arming, and an unverified one never does
 
 - app: `uv run python -m src.app`, page at http://127.0.0.1:8000 (PORT env or .env changes it). it prints `hand input off: ...` / `camera off: ...` when those are missing and keeps running without them
 - bench: `uv run python -m tools.bench [port]`. the optional port overrides serial_port for this run
@@ -57,8 +60,8 @@ after any flash or board swap, servo power still off: `uv run python -m tools.bo
 the overhead cam jams after repeated open/close. the app says `camera off: ...` at start when it could not open it and runs on without video.
 
 ```
-uvc-util -I 0 -s auto-exposure-mode=8
-uvc-util -I 0 -s auto-exposure-mode=1 -s exposure-time-abs=30
+uvc-util -V <camera_uvc> -s auto-exposure-mode=8
+uvc-util -V <camera_uvc> -s auto-exposure-mode=1 -s exposure-time-abs=30
 ```
 
 (30 = 3 ms, units are 100 us), then restart the app. still dead: replug the camera and try again. never set width/height on this cam, it stops sending frames.
