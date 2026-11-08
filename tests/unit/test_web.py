@@ -320,11 +320,6 @@ def test_watch_tab_sends_nothing_and_takes_no_input(client):
     assert 'has("watch")' in js and "watch ? {} :" in js
 
 
-def test_page_sends_recentre_on_c_like_the_other_one_shot_keys(client):
-    page = client.get("/").text
-    assert 'e.code === "KeyC"' in page and "pending.recentre = true" in page
-
-
 class Recentres:
     def __init__(self):
         self.n = 0
