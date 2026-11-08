@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.inputs.keyboard import KeyboardInput
+from src.inputs.shaping import top_deg
 from src.io.ports import Frame
 from src.io.settings import ROOT, load
 from src.safety import SafetyState
@@ -375,10 +376,17 @@ def test_config_gives_plate_ball_and_stale_limit_from_settings(client):
         "heartbeat_stale_s": cfg["game"]["heartbeat_stale_s"],
         "dead_zone": cfg["input"]["dead_zone"],
         "hand": False,
-        "tilt_full_deg": cfg["input"]["intent_gain_deg"],
+        "tilt_full_deg": max(top_deg(cfg)),
     }
     with_hand = TestClient(make_app(SimpleNamespace(cfg=cfg, hand=object())))
     assert with_hand.get("/config").json()["hand"] is True
+
+
+def test_config_board_full_scale_is_the_real_full_stick_tilt():
+    cfg = load()
+    cfg["rig"]["us_per_deg_x"] = cfg["rig"]["us_per_deg_y"] = 100.0
+    page = TestClient(make_app(SimpleNamespace(cfg=cfg, hand=None)))
+    assert page.get("/config").json()["tilt_full_deg"] == pytest.approx(1.5)
 
 
 def test_board_sits_in_the_hand_view_and_loads_after_race_before_app(client):

@@ -3,12 +3,13 @@ import pytest
 
 from src.inputs.hand import HandIntent
 from src.inputs.one_euro import one_euro
-from src.inputs.shaping import shape
+from src.inputs.shaping import shape, top_deg
 from src.io.settings import load
 
 pytestmark = pytest.mark.unit
 
-INPUT = load()["input"]
+CFG = load()
+INPUT = CFG["input"]
 TILT = {**INPUT, "hand_mode": "tilt", "hand_tilt_span_deg": 25.0}
 DT = 1 / 30
 SPAN = TILT["hand_tilt_span_deg"]
@@ -98,10 +99,10 @@ def test_recentre_on_a_shaky_hand_keeps_the_plate_level():
     for i, (t, reading) in enumerate(shaky_hand(243, 5.0)):
         intent = hand.update(reading, t, recentre=i == 60)
         if i >= 60:
-            cmds.append(shape(intent.x, intent.y, INPUT))
+            cmds.append(shape(intent.x, intent.y, CFG))
     assert cmds[0] == (0.0, 0.0)
     # jitter can poke past the dead zone edge now and then, the smooth edge keeps that tiny
-    assert max(np.hypot(*c) for c in cmds) < 0.05 * INPUT["intent_gain_deg"]
+    assert max(np.hypot(*c) for c in cmds) < 0.05 * min(top_deg(CFG))
 
 
 RAW_TILT = {**TILT, "hand_min_cutoff_hz": 1e9, "hand_beta": 0.0}  # filter passes through

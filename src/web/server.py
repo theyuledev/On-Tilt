@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from src.inputs import hand_view
+from src.inputs.shaping import top_deg
 from src.io.settings import ROOT
 
 STATIC = Path(__file__).parent / "static"
@@ -42,7 +43,7 @@ def make_app(loop) -> FastAPI:
             "heartbeat_stale_s": game["heartbeat_stale_s"],
             "dead_zone": inp["dead_zone"],
             "hand": loop.hand is not None,
-            "tilt_full_deg": inp["intent_gain_deg"],
+            "tilt_full_deg": max(top_deg(loop.cfg)),
         }
 
     @app.get("/race/maze")

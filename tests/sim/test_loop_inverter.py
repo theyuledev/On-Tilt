@@ -6,6 +6,7 @@ from src import safety
 from src.app import Loop
 from src.contracts import BallState
 from src.control.pulse_map import center
+from src.inputs.shaping import top_deg
 from src.io.settings import load
 
 pytestmark = pytest.mark.sim
@@ -38,7 +39,7 @@ def test_hand_step_back_to_zero_lands_exactly_on_centre(clock):
     loop = Loop(cfg)
     loop.arm()
     ticks(loop, clock, 100, key=(0.9, 0.0))
-    assert loop.last.plate_state.est_x_deg > 3
+    assert loop.last.plate_state.est_x_deg > 0.5 * top_deg(loop.cfg)[0]
     ticks(loop, clock, 200, key=(0.0, 0.0))
     rig, control = loop.cfg["rig"], loop.cfg["control"]
     assert (loop.last.servo_cmd.x_us, loop.last.servo_cmd.y_us) == center(rig)
