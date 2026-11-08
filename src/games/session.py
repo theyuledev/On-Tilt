@@ -65,15 +65,19 @@ class Game:
     def abort(self) -> None:
         self.race = race.abort(self.race)
 
-    def tick(self, rec: RunLogRecord, killing: bool, board_lost: bool) -> None:
+    def _safe(self, fn, *args, default=None):
+        # a race bug must not take the plate down with it
         if self.off:
-            return
+            return default
         try:
-            self._tick(rec, killing, board_lost)
+            return fn(*args)
         except Exception as e:
-            # a race bug must not take the plate down with it
             print(f"race off: {e!r}")
             self.off = True
+            return default
+
+    def tick(self, rec: RunLogRecord, killing: bool, board_lost: bool) -> None:
+        self._safe(self._tick, rec, killing, board_lost)
 
     def _tick(self, rec: RunLogRecord, killing: bool, board_lost: bool) -> None:
         self.last, self.killing, self.board_lost = rec, killing, board_lost
@@ -94,8 +98,9 @@ class Game:
             self.ring = rec
 
     def mode(self) -> str | None:
-        if self.off:
-            return None
+        return self._safe(self._mode)
+
+    def _mode(self) -> str | None:
         if self.race.state == "calibrating":
             return "selfcal"
         if self.race.state in ("staging", "countdown", "running"):
@@ -106,14 +111,12 @@ class Game:
         return None
 
     def view(self) -> dict:
-        if self.last is None or self.off:
+        return self._safe(self._view, default={})
+
+    def _view(self) -> dict:
+        if self.last is None:
             return {}
-        try:
-            return race.view(self.race, self.last, self.cfg["game"], self.trace, self.splits)
-        except Exception as e:
-            print(f"race off: {e!r}")
-            self.off = True
-            return {}
+        return race.view(self.race, self.last, self.cfg["game"], self.trace, self.splits)
 
     def save(self, name: str) -> None:
         if self.race.state != "finished":
