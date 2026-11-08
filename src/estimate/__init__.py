@@ -4,7 +4,7 @@ from collections import deque
 import numpy as np
 
 from src.contracts import BallState, PlateCommand
-from src.sim.ball import ROLL
+from src.control import ROLL
 
 STEP_S = 0.01
 H = np.array([1.0, 0.0])
@@ -20,6 +20,8 @@ class BallEstimator:
         self.k = ROLL * self.c["sim_g_mm_s2"]
         self.q = self.c["est_accel_noise_mm_s2"] ** 2
         self.r = self.c["est_pos_noise_mm"] ** 2
+        # the measured dead time runs command to first visible motion, so the camera is in it
+        self.dead_s = max(self.c["servo_dead_time_s"] - self.c["est_cam_latency_s"], 0.0)
         self.lost_after = cfg["vision"]["lost_after_misses"]
         self.cmds: deque[tuple[float, float, float]] = deque(maxlen=64)
         self.s = np.zeros((2, 2))
@@ -49,7 +51,8 @@ class BallEstimator:
             # one wild detection is skipped, two in a row means the ball really is there
             if self.skipped:
                 self._reinit(z, t_m)
-            self.skipped = not self.skipped
+            else:
+                self.skipped = True
             return self.predict(t_s)
         self.skipped = False
         gain = self.P[:, 0] / (self.P[0, 0] + self.r)
@@ -68,7 +71,7 @@ class BallEstimator:
     def predict(self, now: float) -> BallState:
         if self.t is None or now - self.seen_s > self.c["est_hold_s"]:
             return BallState(0.0, 0.0, 0.0, 0.0, False, now)
-        ahead = now + self.c["servo_dead_time_s"]
+        ahead = now + self.dead_s
         s, _, _ = self._step(self.s, self.P, self.theta, self.t, ahead)
         (x, vx), (y, vy) = s.tolist()
         return BallState(x, y, vx, vy, True, ahead)
@@ -84,7 +87,7 @@ class BallEstimator:
         # the tilt the servo is heading for at t_s: the newest command past its dead time
         tilt = (0.0, 0.0)
         for t, x, y in self.cmds:
-            if t > t_s - self.c["servo_dead_time_s"]:
+            if t > t_s - self.dead_s:
                 break
             tilt = (x, y)
         return np.array(tilt)

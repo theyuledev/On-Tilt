@@ -1,8 +1,7 @@
 import math
 
 from src.contracts import BallState, PlateState
-
-ROLL = 5 / 7  # solid ball rolling without slipping
+from src.control import ROLL
 
 
 def _axis(pos: float, vel: float, tilt_deg: float, dt: float, wall: float, g: float):

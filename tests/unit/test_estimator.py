@@ -4,14 +4,14 @@ import random
 import pytest
 
 from src.contracts import PlateCommand
+from src.control import ROLL
 from src.estimate import BallEstimator
-from src.sim.ball import ROLL
 
 pytestmark = pytest.mark.unit
 
 CFG = {
     "control": {
-        "servo_dead_time_s": 0.02,
+        "servo_dead_time_s": 0.046,
         "servo_tau_s": 0.035,
         "sim_g_mm_s2": 9810,
         "est_accel_noise_mm_s2": 150,
@@ -24,6 +24,7 @@ CFG = {
     "vision": {"lost_after_misses": 5},
 }
 C = CFG["control"]
+DEAD = C["servo_dead_time_s"] - C["est_cam_latency_s"]  # servo only, the camera is measured in
 FPS = 120
 FINE = 0.001
 
@@ -33,7 +34,7 @@ def tilted(deg, seconds):
     x = v = theta = 0.0
     xs, vs = [0.0], [0.0]
     for i in range(1, round(seconds / FINE) + 1):
-        if i * FINE > C["servo_dead_time_s"]:
+        if i * FINE > DEAD:
             theta += (deg - theta) * (1 - math.exp(-FINE / C["servo_tau_s"]))
         v += ROLL * C["sim_g_mm_s2"] * math.sin(math.radians(theta)) * FINE
         x += v * FINE
@@ -65,7 +66,7 @@ def test_rest_with_pixel_noise_gives_still_ball():
     for t, s in noisy_rest(est, 2.0):
         if t >= 1.0:
             v2.append(s.vx_mm_s**2 + s.vy_mm_s**2)
-            worst = max(worst, abs(s.x_mm), abs(s.y_mm))
+            worst = max(worst, abs(est.s[:, 0]).max())
     assert math.sqrt(sum(v2) / len(v2)) < 3
     assert worst < 0.3
 
@@ -79,7 +80,7 @@ def test_constant_tilt_tracks_velocity_without_bias_and_predicts_the_plate_lag()
         # the frame stamped at t shows the ball as it was one camera latency earlier
         s = est.update(t, at(xs, max(t - lat, 0)), 0.0)
         if t > 0.3:
-            ahead = t + C["servo_dead_time_s"]
+            ahead = t + DEAD
             assert abs(s.vx_mm_s - at(vs, ahead)) < 2
             assert abs(s.x_mm - at(xs, ahead)) < 1
             assert s.y_mm == pytest.approx(0, abs=0.01) and s.t_s == ahead
@@ -113,6 +114,7 @@ def test_one_wild_detection_is_skipped_two_relock():
     assert abs(skipped.x_mm) < 0.5
     relocked = est.update(t + 2 / FPS, 35.0, 0.0)
     assert relocked.x_mm == pytest.approx(35.0) and relocked.vx_mm_s == 0
+    assert abs(est.update(t + 3 / FPS, 0.0, 0.0).x_mm - 35) < 0.5
 
 
 def test_velocity_is_clamped_after_a_jump():
