@@ -23,6 +23,8 @@ TRUTH = {
     "noise_px": 0.36,
     "r_short_px": 0.5,  # the contour area reads the radius a bit small
     "servo_dead_time_s": 0.046,
+    # the open loop pulses can't absorb the servo's park offset, so this world has no band
+    "servo_dead_band_us": 0,
 }
 
 
@@ -33,7 +35,8 @@ class SimRig:
         self.truth = truth
         self.rig = {**cfg["rig"], **{k: truth[k] for k in ("trim_x_us", "trim_y_us")}}
         self.rig.update({k: truth[k] for k in ("us_per_deg_x", "us_per_deg_y")})
-        self.control = {**cfg["control"], "servo_dead_time_s": truth["servo_dead_time_s"]}
+        servo = {k: truth[k] for k in ("servo_dead_time_s", "servo_dead_band_us")}
+        self.control = {**cfg["control"], **servo}
         self.servo = SimActuator(self.rig, self.control)
         self.ball = BallState(0.0, 0.0, 0.0, 0.0, True, 0.0)
         self.t = 0.0
