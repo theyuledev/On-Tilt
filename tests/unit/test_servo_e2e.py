@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import pytest
 
+from src.control.pulse_map import center
 from src.io.ports import Frame
 from src.io.serial_link import BoardLink
 from src.io.settings import load
@@ -23,8 +24,8 @@ NOISE = (np.random.default_rng(0).random((800, 1280)) * 10).astype(np.uint8)
 class FakeServo:
     """Pure dead time, first-order lag, speed cap and a dead band around the settled target."""
 
-    def __init__(self, clock):
-        self.clock, self.log = clock, [(-1.0, 1500)]
+    def __init__(self, clock, us0):
+        self.clock, self.log = clock, [(-1.0, us0)]
         self.angle = self.t = 0.0
 
     def command(self, us):
@@ -35,7 +36,7 @@ class FakeServo:
         while self.t < t:
             dt = min(0.001, t - self.t)
             us = next(u for tc, u in reversed(self.log) if tc <= self.t - DEAD_S)
-            step = ((us - 1500) / US_PER_DEG - self.angle) * dt / TAU_S
+            step = ((us - self.log[0][1]) / US_PER_DEG - self.angle) * dt / TAU_S
             self.angle += max(-TOP_DEG_S * dt, min(TOP_DEG_S * dt, step))
             self.t += dt
         return self.angle
@@ -92,7 +93,7 @@ class ServoCam:
 def test_bench_recovers_the_fake_servo_parameters(horn0, gap, size, dot):
     rig = load()["rig"]
     clock = Clock(0.0002)
-    servo = FakeServo(clock)
+    servo = FakeServo(clock, round(center(rig)[0]))
     b = Bench(BoardLink(ServoBoard(servo)), rig)
     b.submit("l")
     b.submit("A")
