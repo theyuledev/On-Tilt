@@ -77,7 +77,8 @@ def test_page_tracks_held_keys_by_code_so_shift_cannot_stick_one(client):
 
 def test_c_key_sends_a_one_shot_recentre_like_arm_and_kill(client):
     assert "c re-centres the hand neutral" in client.get("/").text
-    assert 'if (e.code === "KeyC") { pending.recentre = true; return; }' in static(client, "app.js")
+    js = static(client, "app.js")
+    assert 'e.code === "KeyC" && !e.metaKey && !e.ctrlKey' in js and "pending.recentre = true" in js
 
 
 def test_watch_tab_sends_nothing_and_takes_no_input(client):
@@ -93,7 +94,6 @@ def test_config_gives_plate_ball_and_stale_limit_from_settings(client):
         "camera_width": cfg["rig"]["camera_width"],
         "heartbeat_stale_s": cfg["game"]["heartbeat_stale_s"],
         "dead_zone": cfg["input"]["dead_zone"],
-        "neutral_s": cfg["input"]["neutral_s"],
     }
 
 

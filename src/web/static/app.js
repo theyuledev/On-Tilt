@@ -16,7 +16,7 @@ if (watch) {
 } else {
   addEventListener("keydown", e => {
     if (e.code === "Space") { pending.kill = true; e.preventDefault(); return; }
-    if (e.code === "KeyC") { pending.recentre = true; return; }
+    if (e.code === "KeyC" && !e.metaKey && !e.ctrlKey) { pending.recentre = true; return; }
     if (keymap[e.code]) { held.add(e.code); e.preventDefault(); }
   });
   addEventListener("keyup", e => held.delete(e.code));
