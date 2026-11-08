@@ -244,3 +244,18 @@ def test_predicted_state_is_far_closer_to_the_real_ball_than_the_late_frame(star
     print(f"seen error {start_pos}: predicted {err_est:.0f} mm, late frame {err_raw:.0f} mm")
     assert with_est <= without * 1.2
     assert err_est <= err_raw / 1.4
+
+
+def test_loop_phase_margin_is_at_least_45_deg():
+    c = load()["control"]
+    # dead time is command to first visible motion, so the camera is already in it
+    delay = c["servo_dead_time_s"] + 1 / c["sim_tick_hz"]
+    margin = phase_margin_deg(
+        c["kp_deg_mm"],
+        c["kd_deg_s_mm"],
+        delay,
+        c["servo_tau_s"],
+        c["sim_g_mm_s2"],
+        ki=c["ki_deg_s_mm"],
+    )
+    assert margin >= 45

@@ -32,3 +32,17 @@ def test_delay_costs_wc_times_t_and_a_big_one_goes_unstable():
     lost = math.degrees(wc * 0.05)
     assert phase_margin_deg(KP, KD, 0.05, 0.0, G) == pytest.approx(clean - lost, abs=0.1)
     assert phase_margin_deg(KP, KD, 0.5, 0.0, G) < 0
+
+
+def test_no_integral_leaves_the_pd_margin_alone():
+    pd = phase_margin_deg(KP, KD, 0.05, 0.03, G)
+    assert phase_margin_deg(KP, KD, 0.05, 0.03, G, ki=0.0) == pd
+
+
+def test_an_integral_term_costs_a_little_lead():
+    ki = 0.02
+    wc = crossover(KP, KD)
+    lost = phase_margin_deg(KP, KD, 0.0, 0.0, G) - phase_margin_deg(KP, KD, 0.0, 0.0, G, ki=ki)
+    direct = math.degrees(math.atan(KD * wc / KP) - math.atan((KD * wc - ki / wc) / KP))
+    # ki also pulls the crossover down a little, which costs some more lead on top
+    assert direct < lost < 2 * direct
