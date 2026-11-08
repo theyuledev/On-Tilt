@@ -10,6 +10,7 @@ def ignored(path):
 def test_icloud_copies_ignored():
     assert ignored("tests/sim/test_hold 2.py")
     assert ignored("tests/test_x 3.py")
+    assert ignored("tests/unit/test_conftest_glob 12.py")
 
 
 def test_real_tests_collected():

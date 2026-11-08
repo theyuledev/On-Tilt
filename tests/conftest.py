@@ -5,7 +5,7 @@ import pytest
 from src.io import settings
 
 # icloud drops "name 2.py" copies next to files
-collect_ignore_glob = ["* [0-9].py"]
+collect_ignore_glob = ["* [0-9]*.py"]
 
 # every module level path to this mac's lens or board json
 LOCAL_JSON = [
