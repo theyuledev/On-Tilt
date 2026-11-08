@@ -1,5 +1,3 @@
-from dataclasses import replace
-
 from src import safety
 from src.bus import Bus
 from src.contracts import BallState, Intent, PlateCommand, PlateState, RunLogRecord, ServoCommand
@@ -9,7 +7,7 @@ from src.estimate import BallEstimator
 from src.inputs.keyboard import KeyboardInput
 from src.io.ports import Frame, FrameSource, InputSource, TiltActuator
 from src.io.serial_link import LinkError
-from src.modes import CLOSED_LOOP, fade_in, make_mode
+from src.modes import CLOSED_LOOP, arm_block, fade_in, fade_start, make_mode
 from src.sim.ball import roll
 from src.sim.plate import SimActuator
 from src.vision.tracker import BallPx
@@ -36,10 +34,8 @@ class Loop:
         self.band = start(cfg["rig"])
         self.actuator = actuator or SimActuator(cfg["rig"], cfg["control"])
         self.board_lost = False
-        self.holding = False
-        self.armed_s = 0.0
-        self.stale = self.page_stale = False
-        self.page_t: float | None = None
+        self.holding = self.stale = self.page_stale = False
+        self.armed_s, self.page_t = 0.0, None
         self.hand_seen = self.hand_calibrating = False
         self.mode = cfg["control"]["mode"]
         self.ball: BallState | None = None
@@ -60,24 +56,18 @@ class Loop:
 
     @property
     def arm_blocked(self) -> str | None:
-        # a wrong exposure smears the ball, so the modes steering on it wait for a fix
-        e = self.exposure
-        blocks = e and self.mode in CLOSED_LOOP and not e.startswith("exposure unverified")
-        return e if blocks else None
+        return arm_block(self.exposure, self.mode)
 
     def arm(self) -> None:
         if not self.board_lost and not self.arm_blocked:
-            if self.holding or not self.safety.armed:
-                self.armed_s = 0.0
+            self.armed_s = fade_start(self.armed_s, self.holding, self.safety.armed)
             self.step = make_mode(self.mode, self.cfg)
             self.safety.arm()
-            self.holding = False
-            self.page_t = None
+            self.holding, self.page_t = False, None
 
     def hold(self) -> None:
         # level between runs so the next arm starts from level, not the sag; never arms
-        if self.safety.armed and not self.safety.killing:
-            self.holding = True
+        self.holding = self.holding or (self.safety.armed and not self.safety.killing)
 
     def kill(self) -> None:
         self.holding = False
@@ -92,9 +82,7 @@ class Loop:
         rig = self.cfg["rig"]
         sim = isinstance(self.actuator, SimActuator) and self.frames is None
         ball = self.ball or BallState(0.0, 0.0, 0.0, 0.0, valid=sim, t_s=now)
-        if now - ball.t_s > rig["stale_intent_s"]:
-            # an old frame says nothing about where the ball is now
-            ball = replace(ball, valid=False)
+        ball = safety.aged(ball, now, rig)
         intent, stale = self._intent(now)
 
         if not self.safety.armed or self.safety.killing or stale:
@@ -123,7 +111,7 @@ class Loop:
         return rec
 
     def _intent(self, now: float) -> tuple[Intent, bool]:
-        rig = self.cfg["rig"]
+        rig, quiet_s = self.cfg["rig"], self.cfg["game"]["heartbeat_stale_s"]
         intent = self.keys.latest()
         if self.hand is not None:
             hand = self.hand.latest()
@@ -133,9 +121,7 @@ class Loop:
             # a dead hand process must not leave the page saying the hand is live
             self.hand_seen = fresh and self.hand.seen
             self.hand_calibrating = fresh and self.hand.calibrating
-        # kill lives on the page, so a page gone quiet while armed levels like a stale intent
-        page_t, quiet_s = self.page_t, self.cfg["game"]["heartbeat_stale_s"]
-        self.page_stale = self.safety.armed and page_t is not None and now - page_t > quiet_s
+        self.page_stale = safety.page_quiet(self.safety.armed, self.page_t, now, quiet_s)
         self.stale = now - intent.t_s > rig["stale_intent_s"] or self.page_stale
         return intent, self.stale
 
