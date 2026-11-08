@@ -6,6 +6,8 @@ from src.contracts import PlateState, ServoCommand
 from src.control.pulse_map import center, pulse_to_tilt
 from src.safety import limits
 
+STRAGGLERS = 2  # late replies to earlier commands that may turn up before this one's
+
 
 class LinkError(RuntimeError):
     pass
@@ -35,21 +37,26 @@ class BoardLink:
             # gone port, and termios.error is not an OSError on its own
             raise OSError(str(e)) from e
 
-    def raw(self, line: str) -> str:
-        self.port.write((line + "\n").encode())
+    def _read(self, line: str) -> str:
         reply = self.port.readline().decode().strip()
         if not reply:
             raise LinkError(f"no reply to {line!r}")
         return reply
 
+    def raw(self, line: str) -> str:
+        self.port.write((line + "\n").encode())
+        return self._read(line)
+
     def ask(self, line: str) -> list[str]:
-        reply = self.raw(line)
-        parts = reply.split()
-        if parts[0] == "ERR":
-            raise BoardRefused(f"{line!r} -> {reply!r}")
-        if parts[0] != "OK" or parts[1:2] != [line[0]]:
-            raise LinkError(f"{line!r} -> {reply!r}")
-        return parts[2:]
+        self.port.write((line + "\n").encode())
+        for _ in range(STRAGGLERS + 1):
+            reply = self._read(line)
+            parts = reply.split()
+            if parts[0] == "ERR":
+                raise BoardRefused(f"{line!r} -> {reply!r}")
+            if parts[0] == "OK" and parts[1:2] == [line[0]]:
+                return parts[2:]
+        raise LinkError(f"{line!r} -> {reply!r}")
 
     def status(self) -> dict:
         armed, loaded, since_ms, fw = self.ask("S")

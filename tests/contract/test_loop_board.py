@@ -142,6 +142,18 @@ def test_late_reply_with_the_board_still_armed_carries_on(loop, board, clock):
     assert snap["armed"] and not snap["board_lost"]
 
 
+def test_reply_landing_after_the_flush_is_skipped_and_the_host_carries_on(loop, board, clock):
+    loop.arm()
+    ticks(loop, clock, 3, key=(1.0, 0.0))
+    board.late_after_flush = True
+    ticks(loop, clock, 1, key=(1.0, 0.0))
+    assert board.sent[-1] == "S" and loop.last.armed
+    ticks(loop, clock, 1, key=(1.0, 0.0))
+    assert board.sent[-1].startswith("P") and board.armed
+    snap = loop.snapshot()
+    assert snap["armed"] and not snap["board_lost"]
+
+
 def test_late_reply_with_the_board_disarmed_disarms_without_d(loop, board, clock):
     loop.arm()
     ticks(loop, clock, 3)

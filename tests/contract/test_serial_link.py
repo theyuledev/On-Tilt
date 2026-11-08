@@ -59,6 +59,22 @@ def test_board_error_is_raised(board):
         link.ask("P 1500 1500")
 
 
+def test_ask_skips_two_stragglers_but_not_three(board):
+    link = BoardLink(board)
+    board._replies += ["OK P 1500 1500"] * 2
+    assert link.status()["fw"] == "fake"
+    board._replies += ["OK P 1500 1500"] * 3
+    with pytest.raises(LinkError, match="'S' -> 'OK P"):
+        link.status()
+
+
+def test_ask_never_skips_an_err(board):
+    link = BoardLink(board)
+    board._replies.append("ERR P disarmed")
+    with pytest.raises(LinkError, match="disarmed"):
+        link.status()
+
+
 def test_status(board, rig):
     link = BoardLink(board)
     assert link.status() == {"armed": False, "limits_loaded": False, "since_ms": 0, "fw": "fake"}
