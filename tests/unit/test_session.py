@@ -3,11 +3,12 @@ import pytest
 from src.games import ghost, session
 from src.games.progress import in_ring
 from src.games.session import Game
+from src.io.settings import load
 from tests.unit.test_race import FINISH, GAME, MAZE, RIG, fake_step, rec
 
 pytestmark = pytest.mark.unit
 
-CFG = {"game": GAME, "rig": RIG}
+CFG = {"game": {**GAME, "attract": False}, "rig": RIG}
 APPROACH = [(0.0, 50.0, 50.0), (1.0, -100.0, 0.0), (2.0, -100.0, 0.0)]
 LAP = [(3.0, -60.0, 0.0), *FINISH]
 TAIL = [(11.0, 100.0, 100.0), (12.0, 0.0, 0.0)]
@@ -101,6 +102,17 @@ def test_mode_switches_with_the_race_and_attract():
     assert g.mode() == "path"
 
 
+def test_attract_comes_from_settings_and_is_off_by_default():
+    g = Game(load(), MAZE, fake_step)
+    assert g.attract is False
+    g.tick(rec(0.0), False, False)
+    assert g.race.state == "idle"
+    assert g.mode() is None
+    on = Game({**CFG, "game": {**CFG["game"], "attract": True}}, MAZE, fake_step)
+    on.tick(rec(0.0), False, False)
+    assert on.mode() == "path"
+
+
 def test_mode_is_none_after_a_finish_or_dnf():
     g = Game(CFG, MAZE, fake_step)
     race_to_finish(g)
@@ -122,7 +134,7 @@ def test_ghost_from_records_and_from_the_settings_path(tmp_path, monkeypatch):
     g.tick(rec(0.0), False, False)
     assert g.view()["ghost_lap_s"] == 7.0
     monkeypatch.setattr(session, "ROOT", tmp_path)
-    cfg = {**CFG, "game": {**GAME, "ghost": "lap.jsonl"}}
+    cfg = {**CFG, "game": {**CFG["game"], "ghost": "lap.jsonl"}}
     assert Game(cfg, MAZE, fake_step).trace == []
     ghost.save(records(LAP), tmp_path / "lap.jsonl")
     g = Game(cfg, MAZE, fake_step)

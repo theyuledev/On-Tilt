@@ -19,7 +19,7 @@ class Game:
         self.records: list[RunLogRecord] = []
         self.last: RunLogRecord | None = None
         self.ring: RunLogRecord | None = None
-        self.attract = False
+        self.attract = cfg["game"]["attract"]
         self.killing = self.board_lost = False
         self.trace: list[list[float]] = []
         self.splits: list[float] = []
