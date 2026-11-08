@@ -1,5 +1,6 @@
 from src.contracts import BallState, Intent, PlateCommand
-from src.modes.path import target
+from src.modes.assist import goal_mm
+from src.modes.path import clip, target
 
 LEVEL = PlateCommand(tilt_x_deg=0.0, tilt_y_deg=0.0)
 
@@ -35,6 +36,15 @@ def balance(ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
     return pd_toward(ball, (0.0, 0.0), cfg)
 
 
+def assist(ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
+    if not ball.valid:
+        return LEVEL
+    c = cfg["control"]
+    goal = goal_mm(intent, cfg["rig"], c["assist_margin_mm"])
+    # a far goal is chased like a path point, else the pd overshoots into the rim
+    return pd_toward(ball, clip((ball.x_mm, ball.y_mm), goal, c["path_lookahead_mm"]), cfg)
+
+
 class PathFollower:
     """Chases the point path_lookahead_mm ahead along control.path_mm, then holds the end."""
 
@@ -54,7 +64,7 @@ class PathFollower:
         return pd_toward(ball, goal, cfg)
 
 
-MODES = {"hand": hand, "balance": balance, "path": PathFollower}
+MODES = {"hand": hand, "balance": balance, "path": PathFollower, "assist": assist}
 
 
 def make_mode(name: str, cfg: dict):
