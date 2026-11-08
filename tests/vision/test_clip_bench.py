@@ -1,5 +1,5 @@
 """Ball tracker on the recorded clips. By default only the floors and the update cost, each window
-run on its own after a short warm-up (about 15 s for the three clips). VISION_BENCH=full also runs
+run on its own after a short warm-up (about 8 s). VISION_BENCH=full also runs
 the nine ratchet windows from frame 0 against bench_baseline.json (about 3 min)."""
 
 import json
