@@ -1,6 +1,5 @@
 import csv
 import random
-import shutil
 import sys
 import time
 from typing import NamedTuple
@@ -166,7 +165,6 @@ def main() -> None:
     rig = load()["rig"]
     fps = rig["camera_fps"]
     cam = CameraSource(open_camera(rig))
-    print(f"manual exposure via uvc-util: {shutil.which('uvc-util') is not None}", flush=True)
     link = open_board(rig)
     OUT.mkdir(parents=True, exist_ok=True)
     path = OUT / f"{name}.csv"

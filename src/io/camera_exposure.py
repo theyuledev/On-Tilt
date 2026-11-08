@@ -24,28 +24,23 @@ def uvc_target(rig: dict, tool: str, run=subprocess.run) -> list[str] | str:
     return "no uvc camera listed"
 
 
-def uvc_command(rig: dict, run=subprocess.run) -> list[str] | None:
+def uvc_command(rig: dict, run=subprocess.run) -> list[str] | str:
+    """uvc-util command for the overhead cam, or why there is none."""
     tool = shutil.which("uvc-util")
     if tool is None:
-        return None
+        return "uvc-util not on PATH"
     target = uvc_target(rig, tool, run)
-    if isinstance(target, str):
-        print(f"camera: {target}")
-        return None
-    return [tool, *target]
+    return target if isinstance(target, str) else [tool, *target]
 
 
 def exposure_problem(rig: dict, run=subprocess.run) -> str | None:
     # set_exposure never sees what uvc-util said, so ask the camera what it holds
-    tool = shutil.which("uvc-util")
-    if tool is None:
-        return "exposure unverified: uvc-util not on PATH"
-    target = uvc_target(rig, tool, run)
-    if isinstance(target, str):
-        return f"exposure unverified: {target}"
+    uvc = uvc_command(rig, run)
+    if isinstance(uvc, str):
+        return f"exposure unverified: {uvc}"
     got = {}
     for name in ("exposure-time-abs", "auto-exposure-mode"):
-        r = run([tool, *target, "-g", name], capture_output=True, text=True)
+        r = run([*uvc, "-g", name], capture_output=True, text=True)
         value = None
         if r.returncode == 0:
             value = _read_int(r.stdout or "")
