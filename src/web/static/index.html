@@ -24,6 +24,8 @@
       <span id="cps" class="hud">0/4</span>
       <span id="speed" class="hud">0</span>
       <span id="banner" class="hud">arm to race</span>
+      <span id="level" class="hud" hidden>levelling</span>
+      <canvas id="pad"></canvas>
     </div>
     <div id="side"></div>
   </div>
@@ -31,7 +33,7 @@
     <button id="arm">arm</button>
     <button id="kill">kill (space)</button>
   </div>
-  <div class="row dim"><span id="tilt">tilt x 0.00°  y 0.00°</span><span>arrows / wasd to tilt</span></div>
+  <div class="row dim"><span id="tilt">tilt x 0.00°  y 0.00°</span><span>arrows / wasd to tilt</span><span>c re-centres the hand neutral</span></div>
 </main>
 <div class="view">
   <img id="cam" alt="overhead cam">
@@ -39,6 +41,7 @@
   <span id="nocam" hidden>no camera</span>
 </div>
 <script src="/static/race.js"></script>
+<script src="/static/pad.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

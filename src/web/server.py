@@ -26,12 +26,13 @@ def make_app(loop) -> FastAPI:
 
     @app.get("/config")
     def config():
-        rig, game = loop.cfg["rig"], loop.cfg["game"]
+        rig, game, inp = loop.cfg["rig"], loop.cfg["game"], loop.cfg["input"]
         return {
             "plate_inner_mm": rig["plate_inner_mm"],
             "ball_d_mm": rig["ball_d_mm"],
             "camera_width": rig["camera_width"],
             "heartbeat_stale_s": game["heartbeat_stale_s"],
+            "dead_zone": inp["dead_zone"],
         }
 
     @app.get("/race/maze")

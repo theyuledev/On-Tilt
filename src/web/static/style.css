@@ -1,4 +1,5 @@
 body { margin: 0; font: 15px system-ui, sans-serif; background: #111; color: #eee; display: grid; place-items: center; min-height: 100vh; }
+[hidden] { display: none !important; }
 main { display: grid; gap: 12px; justify-items: center; }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
 .pills { font-size: 13px; gap: 6px; }
@@ -15,12 +16,15 @@ main { display: grid; gap: 12px; justify-items: center; }
 #speed { bottom: 6px; right: 12px; }
 #speed::after { content: " mm/s"; font-size: 40%; font-weight: 400; color: #aaa; }
 #banner { inset: 0; display: grid; place-items: center; color: #ffb300; }
+#banner.lost { color: #f33; font-size: 12vmin; }
+#level { top: 62%; left: 50%; transform: translateX(-50%); color: #f33; }
+#pad { position: absolute; left: 10px; bottom: 10px; width: 20%; height: 20%; background: rgba(0, 0, 0, .5); border-radius: 6px; }
 button { font: inherit; padding: 10px 22px; border: 0; border-radius: 6px; cursor: pointer; color: #fff; }
 button:disabled { opacity: .4; cursor: default; }
 #arm { background: #2e7d32; }
 #kill { background: #c62828; font-weight: 700; font-size: 22px; padding: 14px 44px; }
 .dim { color: #aaa; gap: 24px; }
-#tilt { font-family: ui-monospace, Menlo, monospace; white-space: pre; }
+#tilt { font: 24px ui-monospace, Menlo, monospace; color: #fff; white-space: pre; }
 .view { position: fixed; left: 12px; bottom: 12px; color: #aaa; }
 #cam { display: block; width: 200px; border-radius: 4px; }
 .ring { position: absolute; box-sizing: border-box; border: 2px solid #ff3; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
