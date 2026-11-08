@@ -13,7 +13,7 @@ from src.web.server import JPEG_PERIOD_S, make_app
 
 pytestmark = pytest.mark.unit
 
-HUD_IDS = ("race", "timer", "speed", "cps", "banner", "ballpill", "kill", "seen")
+HUD_IDS = ("race", "timer", "speed", "cps", "banner", "ballpill", "kill", "seen", "pad", "level")
 PILL_IDS = ("hand", "beat", "board", "stale")
 
 
@@ -33,12 +33,31 @@ def test_page_has_the_race_hud_pills_and_kill(client):
     assert all(f'id="{i}"' in page for i in HUD_IDS + PILL_IDS)
     assert "00:00.00" in page and "no input" in page and 'id="side"' in page
     assert "/static/style.css" in page and "/static/app.js" in page and "/static/race.js" in page
+    assert "/static/pad.js" in page
 
 
 def test_page_has_a_hand_pill_keyed_on_the_snapshot_flags(client):
     assert 'id="hand"' in client.get("/").text
     js = static(client, "app.js")
     assert "hold still" in js and "s.hand_seen" in js and "s.hand_calibrating" in js
+
+
+def test_pad_draws_dead_zone_intent_dot_and_guards_the_progress_ring(client):
+    js = static(client, "pad.js")
+    assert "function drawPad(ctx, cfg, s)" in js
+    assert "cfg.dead_zone" in js and "s.intent" in js and "hold still" in js
+    assert "s.hand_progress !== undefined" in js
+    # pad.js leans on these race.js helpers
+    race = static(client, "race.js")
+    assert all(f"function {f}(" in race for f in ("fit", "circle", "polyline"))
+    assert "drawPad(padCtx, cfg, s)" in static(client, "app.js")
+
+
+def test_hand_lost_banner_needs_a_hand_seen_since_arming(client):
+    js = static(client, "app.js")
+    assert '"HAND LOST"' in js and "if (!s.armed) handWasSeen = false" in js
+    assert "s.armed && handWasSeen && !s.hand_seen" in js
+    assert '$("level").hidden = !(s.stale && s.armed)' in js
 
 
 def test_page_tracks_held_keys_by_code_so_shift_cannot_stick_one(client):
@@ -60,6 +79,8 @@ def test_config_gives_plate_ball_and_stale_limit_from_settings(client):
         "ball_d_mm": cfg["rig"]["ball_d_mm"],
         "camera_width": cfg["rig"]["camera_width"],
         "heartbeat_stale_s": cfg["game"]["heartbeat_stale_s"],
+        "dead_zone": cfg["input"]["dead_zone"],
+        "neutral_s": cfg["input"]["neutral_s"],
     }
 
 

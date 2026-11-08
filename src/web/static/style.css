@@ -15,6 +15,9 @@ main { display: grid; gap: 12px; justify-items: center; }
 #speed { bottom: 6px; right: 12px; }
 #speed::after { content: " mm/s"; font-size: 40%; font-weight: 400; color: #aaa; }
 #banner { inset: 0; display: grid; place-items: center; color: #ffb300; }
+#banner.lost { color: #f33; font-size: 12vmin; }
+#level { top: 62%; left: 50%; transform: translateX(-50%); color: #f33; }
+#pad { position: absolute; left: 10px; bottom: 10px; width: 20%; height: 20%; background: rgba(0, 0, 0, .5); border-radius: 6px; }
 button { font: inherit; padding: 10px 22px; border: 0; border-radius: 6px; cursor: pointer; color: #fff; }
 button:disabled { opacity: .4; cursor: default; }
 #arm { background: #2e7d32; }

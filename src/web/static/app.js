@@ -3,9 +3,10 @@ const held = new Set();
 const keymap = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1],
                  KeyA: [-1, 0], KeyD: [1, 0], KeyW: [0, 1], KeyS: [0, -1] };
 let pending = {};
-let ws, cfg, maze, lastT, lastSeen;
+let ws, cfg, maze, lastT, lastSeen, handWasSeen = false;
 const $ = id => document.getElementById(id);
 const cam = $("cam"), nocam = $("nocam"), ctx = $("race").getContext("2d");
+const padCtx = $("pad").getContext("2d");
 const nextCam = () => { cam.src = "/camera.jpg?" + performance.now(); };
 
 if (watch) {
@@ -52,10 +53,14 @@ function show(s) {
   const b = s.ball, p = s.plate_state;
   pill("ballpill", "ball: " + (b.valid ? "tracked" : "lost"), b.valid ? "on" : "warn");
   $("speed").textContent = b.valid ? Math.round(Math.hypot(b.vx_mm_s, b.vy_mm_s)) : 0;
-  $("banner").textContent = s.armed ? "" : "arm to race";
+  // the banner only shouts when a hand that was steering this arm drops out
+  if (!s.armed) handWasSeen = false; else if (s.hand_seen) handWasSeen = true;
+  const lost = s.armed && handWasSeen && !s.hand_seen;
+  $("banner").textContent = !s.armed ? "arm to race" : lost ? "HAND LOST" : "";
+  $("banner").classList.toggle("lost", lost);
   pill("armed", s.killing ? "killing" : s.armed ? "armed" : "disarmed",
        s.killing ? "warn" : s.armed ? "on" : "");
-  $("stale").hidden = !(s.stale && s.armed);
+  $("stale").hidden = $("level").hidden = !(s.stale && s.armed);
   $("board").hidden = !s.board_lost;
   pill("hand", "hand: " + (!s.hand_seen ? "none" : s.hand_calibrating ? "hold still" : "live"),
        !s.hand_seen ? "" : s.hand_calibrating ? "warn" : "on");
@@ -63,6 +68,7 @@ function show(s) {
   $("tilt").textContent = `tilt x ${p.sent_x_deg.toFixed(2)}°  y ${p.sent_y_deg.toFixed(2)}°`;
   ring(s.ball_px);
   draw(ctx, cfg, maze, s);
+  drawPad(padCtx, cfg, s);
 }
 
 function connect() {
