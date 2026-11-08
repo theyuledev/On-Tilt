@@ -65,6 +65,9 @@ def test_banner_line_comes_from_guide_and_starts_on_connecting(client):
     assert 'pill("link", "offline", "warn"); banner(null, false, false);' in js
     css = static(client, "style.css")
     assert '#banner[data-tone="stop"] { color: #f33; font-size: 12vmin; }' in css
+    # plain hints sit small at the bottom so they never cover the ball
+    hint = '#banner[data-tone=""] { place-items: end center; padding-bottom: 12px; '
+    assert hint + "font-size: 3vmin; color: #aaa; }" in css
 
 
 def test_hud_is_keyed_on_the_race_view(client):

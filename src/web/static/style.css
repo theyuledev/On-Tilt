@@ -18,6 +18,7 @@ main { display: grid; gap: 12px; justify-items: center; }
 #speed::after { content: " mm/s"; font-size: 40%; font-weight: 400; color: #aaa; }
 #banner { inset: 0; display: grid; place-items: center; }
 #banner[data-tone="warn"] { color: #ffb300; }
+#banner[data-tone=""] { place-items: end center; padding-bottom: 12px; font-size: 3vmin; color: #aaa; }
 #banner[data-tone="stop"] { color: #f33; font-size: 12vmin; }
 #level { top: 62%; left: 50%; transform: translateX(-50%); color: #f33; }
 #pad { position: absolute; left: 10px; bottom: 10px; width: 20%; height: 20%; background: rgba(0, 0, 0, .5); border-radius: 6px; }
