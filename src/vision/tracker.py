@@ -9,6 +9,14 @@ from src.vision.balls import Box, Candidate, downsample, find_balls, plate_level
 BG_MIN_SAMPLES = 5
 
 
+def cut_by(c: Candidate, box: Box, w: int, h: int) -> bool:
+    """Blob reaches a side of the box that isn't the frame edge: a hand coming in or a ball
+    half outside, not the ball."""
+    x0, y0, x1, y1 = box
+    lo = (x0 > 0 and c.x_px - c.r_px <= x0) or (y0 > 0 and c.y_px - c.r_px <= y0)
+    return lo or (x1 < w and c.x_px + c.r_px >= x1) or (y1 < h and c.y_px + c.r_px >= y1)
+
+
 class BallPx(NamedTuple):
     x_px: float
     y_px: float
@@ -73,7 +81,9 @@ class BallTracker:
         t0, x0, y0 = self.track[0]
         if t1 <= t0:
             return x1, y1
-        k = (t_s - t1) / (t1 - t0)
+        # read stamps jitter and the mac stalls: floor the baseline, cap the look-ahead
+        dt = min(t_s - t1, self.cfg["predict_dt_max_s"])
+        k = dt / max(t1 - t0, self.cfg["predict_dt_min_s"])
         return x1 + (x1 - x0) * k, y1 + (y1 - y0) * k
 
     def update(self, image: np.ndarray, t_s: float) -> BallPx:
@@ -120,6 +130,8 @@ class BallTracker:
         box = (int(max(px - d, 0)), int(max(py - d, 0)), int(px + d), int(py + d))
         for b in (box, None):
             found = [c for c in round_blobs(gray, near, self.dark, b, level) if c.r_px >= lo]
+            if b is not None:
+                found = [c for c in found if not cut_by(c, b, w, h)]
             if found:
                 return min(found, key=lambda c: (c.x_px - px) ** 2 + (c.y_px - py) ** 2)
         return None
