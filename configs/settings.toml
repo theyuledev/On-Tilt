@@ -45,6 +45,7 @@ d_max_deg = { value = 3.0, label = "uncalibrated default (NOT TESTED, expected p
 
 [game]
 heartbeat_stale_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+ghost = ""
 
 [vision]
 min_ball_r_px = { value = 10, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
