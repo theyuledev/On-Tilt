@@ -89,3 +89,25 @@ def test_clip_runs_the_hook_per_read_with_the_frame_time(tmp_path):
     assert len(frames) == 5
     assert calls == [f.t_s for f in frames]
     assert src.latest() == frames[-1].t_s
+
+
+def test_a_hook_that_starts_raising_keeps_the_last_good_result(tmp_path, capsys):
+    path = tmp_path / "clip.avi"
+    write_clip(path)
+    calls = []
+
+    def flaky(image, t):
+        calls.append(t)
+        if len(calls) > 1:
+            raise ValueError("hook bug")
+        return t
+
+    src = ClipSource(path, process=flaky)
+    first = src.read()
+    while src.read() is not None:
+        assert src.latest() == first.t_s
+    src.close()
+
+    assert len(calls) == 5
+    assert src.latest() == first.t_s
+    assert capsys.readouterr().err.count("ValueError: hook bug") == 1

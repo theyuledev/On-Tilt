@@ -15,11 +15,11 @@ class Hooked:
         try:
             return self._process(image, t)
         except Exception:
-            # a broken hook must not stop the frames; say why once and keep going
+            # a broken hook must not stop the frames; say why once and keep the last good result
             if not self._warned:
                 self._warned = True
                 traceback.print_exc()
-            return None
+            return self._result
 
     def latest(self):
         return self._result
