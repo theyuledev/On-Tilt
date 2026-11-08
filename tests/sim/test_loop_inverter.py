@@ -2,6 +2,7 @@ import time
 
 import pytest
 
+from src import safety
 from src.app import Loop
 from src.contracts import BallState
 from src.control.pulse_map import center
@@ -23,6 +24,12 @@ def ticks(loop, clock, n, key=None, dt=0.01):
         if key:
             loop.keys.set(*key)
         loop.tick(clock[0], dt)
+
+
+def hold_ball_at(loop, clock, x, n, key=(0.0, 0.0), dt=0.01):
+    for _ in range(n):
+        loop.ball = BallState(x, 0.0, 0.0, 0.0, valid=True, t_s=clock[0] + dt)
+        ticks(loop, clock, 1, key=key, dt=dt)
 
 
 def test_hand_step_back_to_zero_lands_exactly_on_centre(clock):
@@ -55,16 +62,34 @@ def test_a_kill_that_ends_inside_one_tick_still_leaves_on_the_level_pulse(clock)
     cfg["control"]["inverter_on"] = True
     loop = Loop(cfg)
     loop.arm()
-
-    def hold_ball_at(x, n, dt=0.01):
-        for _ in range(n):
-            loop.ball = BallState(x, 0.0, 0.0, 0.0, valid=True, t_s=clock[0] + dt)
-            ticks(loop, clock, 1, key=(0.0, 0.0), dt=dt)
-
-    hold_ball_at(60.0, 30)
-    hold_ball_at(6.0, 30)
+    hold_ball_at(loop, clock, 60.0, 30)
+    hold_ball_at(loop, clock, 6.0, 30)
     assert loop.band[0].committed != center(cfg["rig"])[0]
     loop.kill()
-    hold_ball_at(6.0, 1, dt=0.05)
+    hold_ball_at(loop, clock, 6.0, 1, dt=0.05)
     assert not loop.safety.armed
     assert (loop.last.servo_cmd.x_us, loop.last.servo_cmd.y_us) == center(cfg["rig"])
+
+
+def test_a_stale_intent_ramps_on_exactly_what_safety_put_out(clock, monkeypatch):
+    cfg = load()
+    cfg["control"]["mode"] = "balance"
+    cfg["control"]["inverter_on"] = True
+    loop = Loop(cfg)
+    loop.arm()
+    hold_ball_at(loop, clock, 60.0, 30)
+    hold_ball_at(loop, clock, 6.0, 30)
+    assert loop.band[0].committed != center(cfg["rig"])[0] and loop.band[0].direction != 0
+
+    approved = []
+    real = safety.step
+
+    def spy(*args):
+        approved.append(real(*args))
+        return approved[-1]
+
+    monkeypatch.setattr(safety, "step", spy)
+    clock[0] += cfg["rig"]["stale_intent_s"]  # no key since, so the intent is stale from here
+    for _ in range(10):
+        hold_ball_at(loop, clock, 6.0, 1, key=None)
+        assert loop.stale and loop.last.servo_cmd == approved[-1]
