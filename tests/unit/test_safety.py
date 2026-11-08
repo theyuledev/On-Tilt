@@ -1,7 +1,9 @@
 import pytest
 
 from src.contracts import ServoCommand
-from src.safety import SafetyState, step
+from src.io.settings import load
+from src.safety import SafetyState, limits, step
+from tests.contract.fake_board import ENVELOPE
 
 pytestmark = pytest.mark.unit
 
@@ -76,3 +78,38 @@ def test_kill_ramps_to_level_then_disarms():
     run(s, ServoCommand(1650, 1650), 300)
     assert not s.armed
     assert step(s, ServoCommand(1650, 1650), False, 0.01, RIG) is None
+
+
+def test_kill_holds_the_level_pulse_40ms_before_disarming():
+    s = armed()
+    run(s, ServoCommand(1650, 1650), 50)
+    s.kill()
+    run(s, ServoCommand(1650, 1650), 148)
+    assert step(s, ServoCommand(1650, 1650), False, 0.01, RIG) == ServoCommand(1501, 1501)
+    level = []
+    while (out := step(s, ServoCommand(1650, 1650), False, 0.01, RIG)) is not None:
+        level.append(out)
+    assert level == [ServoCommand(1500, 1500)] * 4
+    assert not s.armed and s.level_s == 0
+
+
+def test_arm_during_kill_ramp_is_ignored():
+    s = armed()
+    run(s, ServoCommand(1650, 1650), 50)
+    s.kill()
+    run(s, ServoCommand(1650, 1650), 10)
+    s.arm()
+    assert s.killing
+    assert step(s, ServoCommand(1650, 1650), False, 0.01, RIG) == ServoCommand(1639, 1639)
+    run(s, ServoCommand(1650, 1650), 300)
+    assert not s.armed and not s.killing
+    s.arm()
+    assert s.armed
+
+
+@pytest.mark.parametrize("startup_flag", [False, True])
+def test_settings_limits_stay_inside_the_firmware_envelope(startup_flag):
+    rig = {**load()["rig"], "startup_flag": startup_flag}
+    lo, hi = ENVELOPE
+    for edge in limits(rig):
+        assert lo <= edge <= hi

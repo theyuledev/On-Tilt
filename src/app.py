@@ -38,6 +38,7 @@ class Loop:
         self.safety = safety.SafetyState()
         self.actuator = actuator or SimActuator(cfg["rig"], cfg["control"])
         self.board_lost = False
+        self.stale = False
         self.mode = cfg["control"]["mode"]
         self.ball: BallState | None = None
         self.last: RunLogRecord | None = None
@@ -62,7 +63,7 @@ class Loop:
             hand = self.hand.latest()
             if hand.valid and now - hand.t_s <= rig["stale_intent_s"]:
                 intent = hand
-        stale = now - intent.t_s > rig["stale_intent_s"]
+        stale = self.stale = now - intent.t_s > rig["stale_intent_s"]
 
         plate_cmd = MODES[self.mode](ball, intent, self.cfg)
         target = tilt_to_pulse(plate_cmd, rig)
@@ -92,8 +93,14 @@ class Loop:
         sent = safety.step(self.safety, target, stale, dt, self.cfg["rig"])
         try:
             return sent, self.actuator.send(sent, now)
-        except (LinkError, OSError, ValueError) as e:
-            # board times out on its own and levels the plate
+        except LinkError as e:
+            # board refused or went quiet and levels itself, so disarm and let the page re-arm
+            print(f"board disarmed: {e}")
+            self.actuator.armed = False
+            self.safety = safety.SafetyState()
+            return None, LEVEL
+        except (OSError, ValueError) as e:
+            # port gone or garbled, nothing sane to send any more
             print(f"board lost: {e}")
             self.board_lost = True
             self.safety = safety.SafetyState()
@@ -107,6 +114,7 @@ class Loop:
     def snapshot(self) -> dict:
         snap = self.last.to_dict() if self.last else {}
         snap["killing"] = self.safety.killing
+        snap["stale"] = self.stale
         snap["board_lost"] = self.board_lost
         snap["camera_lost"] = self.camera_lost
         return snap
@@ -122,8 +130,18 @@ async def run(loop: Loop) -> None:
         last = now
 
 
+def stop_on_error(ticker: asyncio.Task, server) -> None:
+    # a dead loop must not leave the page looking alive
+    if not ticker.cancelled() and ticker.exception() is not None:
+        print(f"loop died: {ticker.exception()!r}")
+        server.should_exit = True
+
+
 def main() -> None:
     cfg = load()
+    mode = cfg["control"]["mode"]
+    if mode not in MODES:
+        raise SystemExit(f"control.mode {mode!r} is not one of {sorted(MODES)}")
     try:
         hand = HandInput(cfg["input"]["hand_port"])
     except OSError as e:
@@ -145,6 +163,7 @@ def main() -> None:
 
     async def go():
         ticker = asyncio.create_task(run(loop))
+        ticker.add_done_callback(lambda t: stop_on_error(t, server))
         print(f"http://127.0.0.1:{port}")
         await server.serve()
         ticker.cancel()

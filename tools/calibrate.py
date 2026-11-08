@@ -114,7 +114,7 @@ def plate(vision: dict, next_jpg, out: Path) -> dict:
 def main() -> None:
     step = sys.argv[1] if len(sys.argv) > 1 else ""
     vision = load()["vision"]
-    url = f"http://127.0.0.1:{env('PORT', '8000')}/camera.jpg"
+    url = f"http://127.0.0.1:{env('PORT', '8000')}/camera.jpg?full=1"
     if step == "plate":
         plate(vision, lambda: grab(url), CALIB_PATH)
     elif step == "lens-set":

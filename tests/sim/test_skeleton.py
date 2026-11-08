@@ -1,9 +1,11 @@
+import asyncio
 import time
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 
-from src.app import Loop
+from src.app import Loop, run, stop_on_error
 from src.io.settings import load
 from src.web.server import make_app
 
@@ -42,12 +44,15 @@ def test_key_tilts_sim_plate_through_safety_then_kill_levels_and_disarms(clock):
     assert loop.last.plate_state.sent_x_deg == 0
 
 
-def test_no_input_keeps_plate_level(clock):
+def test_no_input_keeps_plate_level_and_shows_stale(clock):
     loop = Loop(load())
     loop.arm()
     ticks(loop, clock, 100)
     assert loop.last.plate_state.sent_x_deg == 0
     assert loop.last.plate_state.sent_y_deg == 0
+    assert loop.snapshot()["stale"]
+    ticks(loop, clock, 1, key=(0.5, 0.0))
+    assert not loop.snapshot()["stale"]
 
 
 def test_browser_page_and_socket():
@@ -70,3 +75,18 @@ def test_sim_ball_starts_centred_and_rolls_downhill(clock):
     ticks(loop, clock, 100, key=(1.0, 0.0))
     assert loop.ball.x_mm > 0 and loop.ball.y_mm == 0
     assert loop.last.ball.x_mm > 0
+
+
+def test_tick_error_stops_the_server_instead_of_dying_quietly():
+    loop = Loop(load())
+    loop.mode = "nope"
+    server = SimpleNamespace(should_exit=False)
+
+    async def go():
+        ticker = asyncio.create_task(run(loop))
+        ticker.add_done_callback(lambda t: stop_on_error(t, server))
+        await ticker
+
+    with pytest.raises(KeyError):
+        asyncio.run(go())
+    assert server.should_exit

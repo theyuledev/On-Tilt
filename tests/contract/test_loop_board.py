@@ -79,7 +79,7 @@ def test_kill_ramps_to_level_then_disarms(loop, board, clock):
     loop.kill()
     ticks(loop, clock, 300, key=(1.0, 0.0))
     after = board.sent[n:]
-    assert after[-1] == "D" and after[-2] == f"P {cx} {cy}"
+    assert after[-1] == "D" and after[-5:-1] == [f"P {cx} {cy}"] * 4
     xs = [int(s.split()[1]) for s in after[:-1]]
     assert len(xs) > 1 and xs == sorted(xs, reverse=True)
     assert not board.armed and not loop.last.armed
@@ -91,7 +91,58 @@ def test_no_sim_ball_on_the_real_board(loop, clock):
     assert loop.ball is None and not loop.last.ball.valid
 
 
-@pytest.mark.parametrize("fail", [go_silent, unplug, garble])
+def test_board_error_disarms_and_lets_the_page_arm_again(loop, board, clock):
+    loop.arm()
+    ticks(loop, clock, 3)
+    board.armed = False  # board stalled 250 ms, self levelled and dropped out
+    ticks(loop, clock, 1)
+    assert board.sent[-1].startswith("P")
+    snap = loop.snapshot()
+    assert not snap["armed"] and not snap["board_lost"] and not loop.safety.armed
+
+    n = len(board.sent)
+    ticks(loop, clock, 3)
+    assert board.sent[n:] == []
+    loop.arm()
+    ticks(loop, clock, 3)
+    assert [s[0] for s in board.sent[n:]] == ["L", "A", "P", "P", "P"]
+    assert board.armed and loop.snapshot()["armed"]
+
+
+def test_silent_board_disarms_instead_of_latching_lost(loop, board, clock):
+    loop.arm()
+    ticks(loop, clock, 3)
+    go_silent(board)
+    ticks(loop, clock, 1)
+    snap = loop.snapshot()
+    assert not snap["armed"] and not snap["board_lost"]
+
+
+def test_late_reply_does_not_lock_out_the_next_arm(loop, board, clock):
+    loop.arm()
+    ticks(loop, clock, 3)
+    board.late = True
+    ticks(loop, clock, 1)
+    assert not loop.snapshot()["armed"] and board._replies  # the P reply landed after the timeout
+
+    board.armed = False  # 250 ms of silence, board self levelled
+    n = len(board.sent)
+    loop.arm()
+    ticks(loop, clock, 3)
+    assert [s[0] for s in board.sent[n:]] == ["L", "A", "P", "P", "P"]
+    assert board.armed and loop.snapshot()["armed"]
+
+
+def test_unplugged_at_arm_latches_board_lost_instead_of_raising(loop, board, clock):
+    board.unplugged = True
+    loop.arm()
+    ticks(loop, clock, 2)
+    snap = loop.snapshot()
+    assert snap["board_lost"] and not snap["armed"]
+    assert board.sent == []
+
+
+@pytest.mark.parametrize("fail", [unplug, garble])
 def test_dead_link_marks_board_lost_and_stops_sending(loop, board, clock, fail):
     loop.arm()
     ticks(loop, clock, 3)
