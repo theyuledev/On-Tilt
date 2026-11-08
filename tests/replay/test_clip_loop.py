@@ -125,8 +125,7 @@ def test_some_frames_lose_the_ball_while_armed(clips):
     if not clips:
         pytest.skip("no ball clips on this machine")
     lost = {s: sum(r.armed and not o.ball.valid for _, o, r, _ in t) for s, (_, t) in clips.items()}
-    print(lost)
-    assert sum(lost.values()), "lost ball -> level never ran on a real frame"
+    assert sum(lost.values()), f"lost ball -> level never ran on a real frame: {lost}"
 
 
 @pytest.mark.parametrize("stem", STEMS)
