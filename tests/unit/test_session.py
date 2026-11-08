@@ -18,12 +18,12 @@ def records(path):
     return [rec(t, x, y) for t, x, y in path]
 
 
-def race_to_finish(g, exit_t=4.0):
+def race_to_finish(g, exit_t=4.0, path=FINISH):
     g.tick(rec(0.0), False, False)
     g.start()
     g.tick(rec(3.0), False, False)
     g.tick(rec(exit_t, -60.0), False, False)
-    for t, x, y in FINISH:
+    for t, x, y in path:
         g.tick(rec(t, x, y), False, False)
 
 
@@ -82,6 +82,28 @@ def test_save_writes_the_run_only_when_finished(tmp_path, monkeypatch):
     g.save("abc")
     path = tmp_path / "data" / "runs" / "abc-7000.jsonl"
     assert ghost.load(path) == g.records
+
+
+def test_save_makes_the_first_or_a_faster_run_the_ghost(tmp_path, monkeypatch):
+    monkeypatch.setattr(session, "ROOT", tmp_path)
+    g = Game(CFG, MAZE, fake_step)
+    race_to_finish(g)
+    g.save("LUCAS")
+    v = g.view()
+    assert g.trace and v["ghost_lap_s"] == v["elapsed_s"] == 6.0
+    race_to_finish(g, exit_t=3.5)
+    g.save("LUCAS")
+    assert g.view()["ghost_lap_s"] == 6.0
+    # faster lap but a worse score than the ghost's 7.0
+    off = [(8.0, -50.0, -40.0), (8.5, 0.0, 0.0), (9.0, 100.0, 0.0), (9.5, 100.0, 100.0)]
+    race_to_finish(g, path=off)
+    g.save("AMY")
+    assert g.view()["score"]["time_s"] == 7.5
+    assert g.view()["ghost_lap_s"] == 5.5
+    race_to_finish(g, path=[(5.0, 0.0, 0.0), (6.0, 100.0, 0.0), (7.0, 100.0, 100.0)])
+    g.save("LUCAS")
+    assert g.view()["ghost_lap_s"] == 3.0
+    assert len(list((tmp_path / "data" / "runs").iterdir())) == 4
 
 
 def test_mode_switches_with_the_race_and_attract():

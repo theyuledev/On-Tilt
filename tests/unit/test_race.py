@@ -2,7 +2,7 @@ from dataclasses import dataclass, replace
 
 import pytest
 
-from src.games import race
+from src.games import ghost, race
 from src.games.progress import Progress, in_ring
 from tests.unit.test_contracts import make_record
 
@@ -222,6 +222,18 @@ def test_ghost_follows_the_clock_and_loops_when_idle():
     assert v["ghost_mm"] == (-10.0, 0.0)
     assert v["ghost_lap_s"] == 2.0
     assert race.view(race.Race(), rec(3.0), GAME, [], [])["ghost_mm"] is None
+
+
+def test_ghost_loops_after_a_finish_unless_you_beat_it():
+    r = drive(running(), FINISH)
+    fast = [[0.0, -60.0, 0.0], [2.0, 40.0, 0.0]]
+    assert race.view(r, rec(11.0), GAME, fast, [])["ghost_mm"] == (-10.0, 0.0)
+    assert race.view(r, rec(11.5), GAME, fast, [])["ghost_mm"] == (15.0, 0.0)
+    slow = [[0.0, -60.0, 0.0], [10.0, 40.0, 0.0]]
+    frozen = ghost.at(slow, race.elapsed(r, rec(11.0)))
+    assert race.view(r, rec(11.0), GAME, slow, [])["ghost_mm"] == frozen
+    assert race.view(r, rec(13.0), GAME, slow, [])["ghost_mm"] == frozen
+    assert race.view(countdown(), rec(1.0), GAME, slow, [])["ghost_mm"] is None
 
 
 def test_delta_is_my_split_minus_the_ghost_split():
