@@ -1,4 +1,5 @@
 import csv
+import math
 import sys
 import time
 from pathlib import Path
@@ -131,6 +132,18 @@ def annotate(tracker: QuadTracker, path: Path) -> None:
     cv2.imwrite(str(path), img)
 
 
+def annotate_pair(tracker: PairTracker, path: Path) -> None:
+    """The frame the notes were picked on, both circled, so you can see what got tracked."""
+    (x1, y1), (x2, y2) = (tuple(map(round, p)) for p in tracker.seed)
+    img = cv2.cvtColor(tracker.image, cv2.COLOR_GRAY2BGR)
+    cv2.line(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+    for p in ((x1, y1), (x2, y2)):
+        cv2.circle(img, p, 25, (0, 0, 255), 2)
+    cv2.imwrite(str(path), img)
+    span = math.dist((x1, y1), (x2, y2))
+    print(f"pair at ({x1},{y1})/({x2},{y2}), {span:.0f} px apart, see {path}", flush=True)
+
+
 def main() -> None:
     cfg = load()
     rig = cfg["rig"]
@@ -161,6 +174,8 @@ def main() -> None:
         return
     commands, rows = out
     print(f"wrote {save(name, commands, rows, kind)} ({len(rows)} frames)", flush=True)
+    if kind == "ang" and tracker.seed:
+        annotate_pair(tracker, OUT / f"{name}.jpg")
     if len(rows) < 10:
         print("too few frames, target not found")
         return

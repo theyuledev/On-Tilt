@@ -19,28 +19,31 @@ def unwrap(angle: float, prev: float) -> float:
     return angle
 
 
-def _blobs(gray: np.ndarray, min_area: int = 200):
-    """(labels, label ids, boxes, centroids) of the bright square-ish blobs."""
-    thr = (np.percentile(gray, 50) + np.percentile(gray, 99.9)) / 2
-    n, labels, stats, cents = cv2.connectedComponentsWithStats((gray > thr).astype(np.uint8))
-    if n < 2:
-        return labels, np.empty(0, int), np.empty((0, 4), int), np.empty((0, 2))
-    stats, cents = stats[1:], cents[1:]
-    w, h, area = (stats[:, k] for k in (cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT, cv2.CC_STAT_AREA))
-    ok = (area >= min_area) & (area > 0.5 * w * h) & (np.minimum(w, h) > 0.5 * np.maximum(w, h))
-    return labels, np.flatnonzero(ok) + 1, stats[ok, :4], cents[ok]
+def bright_level(gray: np.ndarray) -> float:
+    return (np.percentile(gray, 50) + np.percentile(gray, 99.9)) / 2
 
 
-def bright_blobs(gray: np.ndarray, min_area: int = 200) -> np.ndarray:
-    return _blobs(gray, min_area)[3]
+def moved_pair(first, gray, spacing: tuple[float, float] = (40, 250), min_area: int = 50):
+    """The two biggest bright patches a horn apart that moved since the rest frame."""
+    # the breadboard shifts a px or two when its leds blink and a bent note shows as two
+    # patches, so pair by span and take the most area, no shape tests
+    diff = cv2.GaussianBlur(cv2.absdiff(first, gray), (7, 7), 0)
+    noise = 1.4826 * np.median(np.abs(diff - np.median(diff)))
+    moved = (diff > max(20, 5 * noise)) & (gray > bright_level(gray))
+    n, _, stats, cents = cv2.connectedComponentsWithStats(moved.astype(np.uint8))
+    area = stats[:, cv2.CC_STAT_AREA]
+    ids = [i for i in range(1, n) if area[i] >= min_area]
+    best = None
+    for i, j in itertools.combinations(ids, 2):
+        if spacing[0] <= math.dist(cents[i], cents[j]) <= spacing[1]:
+            if best is None or area[i] + area[j] > area[best[0]] + area[best[1]]:
+                best = (i, j)
+    return None if best is None else (tuple(cents[best[0]]), tuple(cents[best[1]]))
 
 
-def dark_dot(gray: np.ndarray, labels: np.ndarray, label: int, box) -> Point | None:
+def dark_dot(crop: np.ndarray, note: np.ndarray) -> Point | None:
     """Centre of the dark dot inside one note, or None if the note is plain."""
-    x, y, w, h = box
-    crop = gray[y : y + h, x : x + w]
     # the dot is a hole in the note, so fill the note's hull before looking inside it
-    note = (labels[y : y + h, x : x + w] == label).astype(np.uint8)
     inside = np.zeros_like(note)
     cv2.fillConvexPoly(inside, cv2.convexHull(cv2.findNonZero(note)), 1)
     inside = cv2.erode(inside, np.ones((5, 5), np.uint8))
@@ -48,63 +51,48 @@ def dark_dot(gray: np.ndarray, labels: np.ndarray, label: int, box) -> Point | N
     m = cv2.moments(dark.astype(np.uint8), binaryImage=True)
     if m["m00"] == 0:
         return None
-    return x + m["m10"] / m["m00"], y + m["m01"] / m["m00"]
+    return m["m10"] / m["m00"], m["m01"] / m["m00"]
 
 
-def pick_pair(before, after, min_move: float = 2.0, spacing: tuple[float, float] = (40, 250)):
-    # the notes on the horn are the blobs that moved. the breadboard shifts a bit when
-    # its leds blink and a bent note shows as two blobs, so only pair blobs a horn apart
-    if len(before) == 0 or len(after) < 2:
-        return None
-    moved = np.linalg.norm(after[:, None] - before[None], axis=2).min(1)
-    best = None
-    for i, j in itertools.combinations(np.flatnonzero(moved >= min_move), 2):
-        if spacing[0] <= math.dist(after[i], after[j]) <= spacing[1]:
-            if best is None or moved[i] + moved[j] > moved[best[0]] + moved[best[1]]:
-                best = (i, j)
-    return None if best is None else tuple(map(tuple, after[list(best)]))
-
-
-def track_pair(gray: np.ndarray, pair, prev: float | None = None, max_jump: float | None = None):
-    if max_jump is None:
-        max_jump = 0.6 * math.dist(*pair)
-    labels, ids, boxes, blobs = _blobs(gray)
-    pts = []
-    for p in pair:
-        if len(blobs) == 0:
+def note_centre(gray: np.ndarray, p: Point, h: int, thr: float) -> Point | None:
+    """Mean-shift centroid of the bright pixels within h px of p, on the note's dot if any."""
+    for _ in range(2):
+        x0, y0 = max(0, int(round(p[0])) - h), max(0, int(round(p[1])) - h)
+        crop = gray[y0 : y0 + 2 * h, x0 : x0 + 2 * h]
+        note = (crop > thr).astype(np.uint8)
+        m = cv2.moments(note, binaryImage=True)
+        if m["m00"] < 30:
             return None
-        d = np.linalg.norm(blobs - p, axis=1)
-        if d.min() > max_jump:
-            return None
-        j = d.argmin()
-        pts.append(dark_dot(gray, labels, ids[j], boxes[j]) or tuple(blobs[j]))
-    (x1, y1), (x2, y2) = pts
-    if pts[0] == pts[1]:
-        return None
-    angle = math.degrees(math.atan2(y2 - y1, x2 - x1))
-    if prev is not None:
-        angle = unwrap(angle, prev)
-    return angle, pts[0], pts[1]
+        p = (x0 + m["m10"] / m["m00"], y0 + m["m01"] / m["m00"])
+    dot = dark_dot(crop, note)
+    return p if dot is None else (x0 + dot[0], y0 + dot[1])
 
 
 class PairTracker:
-    """Picks the horn's notes by what moved during the find nudge, then follows them.
-    Rows are (t, angle_deg)."""
+    """Picks the horn's notes by what moved during the find nudge, then follows each with a
+    window centroid. Rows are (t, angle_deg)."""
 
     def __init__(self, top: int):
         self.top = top
-        self.first = self.pair = self.prev = None
+        self.first = self.image = self.seed = self.pair = self.prev = None
 
     def update(self, gray: np.ndarray, t: float, us: int):
         if self.first is None:
             self.first = gray
         elif self.pair is None:
             if us >= self.top - 10:
-                self.pair = pick_pair(bright_blobs(self.first), bright_blobs(gray))
+                self.pair = moved_pair(self.first, gray)
+                if self.pair:
+                    self.seed, self.image = self.pair, gray
         else:
-            found = track_pair(gray, self.pair, self.prev)
-            if found:
-                self.prev, *self.pair = found
+            h = int(np.clip(0.35 * math.dist(*self.pair), 20, 60))
+            thr = bright_level(gray)
+            pts = [note_centre(gray, p, h, thr) for p in self.pair]
+            if None not in pts:
+                self.pair = pts
+                (x1, y1), (x2, y2) = pts
+                angle = math.degrees(math.atan2(y2 - y1, x2 - x1))
+                self.prev = angle if self.prev is None else unwrap(angle, self.prev)
                 return (t, self.prev)
         return None
 
