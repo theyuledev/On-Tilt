@@ -24,10 +24,12 @@ def test_step_response_recovers_the_sim_servo_numbers():
 
     fit = step_response(t, [s.sent_x_deg for s in states], [s.est_x_deg for s in states])
 
-    assert fit.dead_s == pytest.approx(control["servo_dead_time_s"], abs=0.01)
-    assert fit.tau_s == pytest.approx(control["servo_tau_s"], rel=0.2)
+    # one tick: the sim retargets on whole ticks, so its motion starts on one
+    assert fit.dead_s == pytest.approx(control["servo_dead_time_s"], abs=dt)
+    # the rate cap holds the first ticks of a 3 deg step and delays the 63 pct point
+    assert fit.tau_s == pytest.approx(control["servo_tau_s"], rel=0.15)
     top = control["servo_top_speed_us_s"] / rig["us_per_deg_x"]
-    assert fit.top_speed_deg_s == pytest.approx(top, rel=0.15)
+    assert fit.top_speed_deg_s == pytest.approx(top, rel=0.1)
 
 
 def test_step_response_that_never_moves_has_no_times():

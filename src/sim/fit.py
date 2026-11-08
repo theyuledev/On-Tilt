@@ -33,6 +33,11 @@ def _first_past(values, floor: float, start: int = 0) -> int | None:
     return int(hits[0]) + start if hits.size else None
 
 
+def _cross(t, v, level: float, i: int) -> float:
+    # where v crosses level between samples i - 1 and i, linear
+    return float(np.interp(level, v[i - 1 : i + 1], t[i - 1 : i + 1]))
+
+
 def step_response(t, sent, seen) -> StepFit:
     t, sent, seen = (np.asarray(a, dtype=float) for a in (t, sent, seen))
     steps = np.flatnonzero(sent != sent[0])
@@ -46,14 +51,15 @@ def step_response(t, sent, seen) -> StepFit:
     move = _first_past(seen - pre, floor, k)
     if move is None:
         return StepFit(math.inf, math.inf, top)
+    t_on = _cross(t, np.abs(seen - pre), floor, move)
+    dead = float(t_on - t[k])
     final = float(np.median(seen[-max(len(seen) // 5, 1) :]))
     frac = (seen - pre) / (final - pre)
     cross = np.flatnonzero(frac[move:] >= TAU_FRAC)
     if cross.size == 0:
-        return StepFit(float(t[move] - t[k]), math.inf, top)
-    i = int(cross[0]) + move
-    t_cross = np.interp(TAU_FRAC, frac[i - 1 : i + 1], t[i - 1 : i + 1])
-    return StepFit(float(t[move] - t[k]), float(t_cross - t[move]), top)
+        return StepFit(dead, math.inf, top)
+    t63 = _cross(t, frac, TAU_FRAC, int(cross[0]) + move)
+    return StepFit(dead, t63 - t_on, top)
 
 
 def ball_accel(t, x, tilt_deg: float) -> AccelFit:
