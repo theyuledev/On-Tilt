@@ -5,9 +5,13 @@ import numpy as np
 import pytest
 
 from src.io.settings import load
+from src.vision import pipeline
+from src.vision.calib import undistort
 from src.vision.markers import relative_tilt
 from src.vision.pipeline import Pipeline
 from src.vision.plate_frame import plate_to_px
+from src.vision.px_to_mm import ball_state, to_mm
+from src.vision.tracker import BallTracker
 from tests.unit.test_plate_pose import STANDARD, T, pose, rot
 from tests.vision.test_markers import BASE, PLATE, R_BASE, T_BASE, render, truth
 
@@ -17,6 +21,8 @@ CFG = load()
 R_BALL = CFG["rig"]["ball_d_mm"] / 2
 BALL_MM = (40.0, -20.0)
 SHADE = 25
+FLOOR = 40
+HALF = CFG["rig"]["plate_inner_mm"] / 2
 
 
 def pipe(boards=(PLATE, BASE)):
@@ -99,3 +105,56 @@ def test_board_ids_off_the_settings_print_once(capsys):
     pipe((PLATE, {4: BASE[4], 6: BASE[5]}))
     out = capsys.readouterr().out.splitlines()
     assert len(out) == 1 and "base" in out[0] and "[4, 6]" in out[0]
+
+
+def floor_past_left_edge(frame, r, t, width_mm=60.0):
+    """Dark floor from the plate's -x edge out to width_mm, through the lens like the prints."""
+    ys, xs = np.mgrid[: frame.shape[0], : frame.shape[1]]
+    rays = undistort(STANDARD, np.c_[xs.ravel(), ys.ravel()]).reshape(-1, 1, 2)
+    uv = cv2.perspectiveTransform(rays, np.linalg.inv(np.c_[r[:, :2], t])).reshape(xs.shape + (2,))
+    out = -uv[..., 0] - HALF
+    frame[(out > 0) & (out < width_mm)] = FLOOR
+    return frame
+
+
+def test_ball_against_the_edge_stays_found_with_floor_past_it():
+    r, _, _ = pose(4.0, -3.0)
+    xy = (-HALF + R_BALL, 0.0)
+    frame = render([(PLATE, r, T), (BASE, R_BASE, T_BASE)])
+    frame = with_ball(floor_past_left_edge(frame, r, T), r, T, xy)
+    assert not BallTracker(CFG["vision"]).update(frame, 0.0).valid
+    o = pipe().step(frame, 0.0)
+    assert o.ball.valid and (o.ball.x_mm, o.ball.y_mm) == pytest.approx(xy, abs=1.5)
+
+
+@pytest.mark.parametrize("lens, boards", [(None, (PLATE, BASE)), (STANDARD, None)])
+def test_no_lens_or_no_board_file_is_the_ball_only_path(monkeypatch, tmp_path, lens, boards):
+    monkeypatch.setattr(pipeline, "CALIB_PATH", tmp_path / "calib.json")
+    monkeypatch.setattr(pipeline, "BOARD_PATH", tmp_path / "board.json")
+    frame, _, _ = scene()
+    o = Pipeline(CFG, lens=lens, boards=boards).step(frame, 0.0)
+    px = BallTracker(CFG["vision"]).update(frame, 0.0)
+    assert o.ball_px == px and o.ball == ball_state(px, [], CFG["vision"])
+    assert math.isnan(o.tilt_x_deg) and math.isnan(o.tilt_y_deg)
+    assert not o.occluded and o.plate_corners_px is None
+
+
+def _throw(*_):
+    raise cv2.error("degenerate")
+
+
+@pytest.mark.parametrize(
+    "name, fake",
+    [
+        ("board_pose", _throw),
+        ("board_pose", lambda *_: (np.full(3, np.nan), np.full(3, np.nan))),
+        ("ball_on_plate", lambda *_: (math.inf, math.nan)),
+    ],
+)
+def test_a_degenerate_solve_falls_back_to_the_flat_route(monkeypatch, name, fake):
+    monkeypatch.setattr(pipeline, name, fake)
+    frame, _, _ = scene()
+    o = pipe().step(frame, 0.0)
+    assert o.occluded and math.isnan(o.tilt_x_deg) and o.plate_corners_px is None
+    assert o.ball.valid
+    assert (o.ball.x_mm, o.ball.y_mm) == pytest.approx(to_mm(o.ball_px, CFG["vision"]))

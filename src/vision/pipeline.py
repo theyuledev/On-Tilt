@@ -25,6 +25,28 @@ class Observation(NamedTuple):
     plate_corners_px: np.ndarray | None = None
 
 
+EDGE_PTS = 8  # per plate edge, so the outline bends with the lens
+
+
+def floor_white(gray: np.ndarray, outline: np.ndarray) -> np.ndarray:
+    """White outside the outline. White is never darker than the plate, so the floor can't
+    join a dark ball at the edge."""
+    floor = np.full_like(gray, 255)
+    cv2.fillPoly(floor, [outline.round().astype(np.int32)], 0)
+    return cv2.max(gray, floor)
+
+
+def _pose(corners, board, lens, guess, n):
+    """board_pose, or None when the solve throws or comes back non-finite."""
+    try:
+        pose = board_pose(corners, board, lens, guess, n)
+    except cv2.error:
+        return None
+    if pose is None or not all(np.isfinite(v).all() for v in pose):
+        return None
+    return pose
+
+
 def _check_ids(boards, cfg: dict) -> None:
     for name, board in zip(("plate", "base"), boards, strict=True):
         want = sorted(cfg[f"{name}_marker_ids"])
@@ -39,7 +61,10 @@ class Pipeline:
     def __init__(self, cfg: dict, lens: dict | None = None, boards=None):
         self.cfg = cfg["vision"]
         self.r_ball = cfg["rig"]["ball_d_mm"] / 2
-        self.corners_mm = square(cfg["rig"]["plate_inner_mm"])[:, :2]
+        c = self.corners_mm = square(cfg["rig"]["plate_inner_mm"])[:, :2]
+        self.outline_mm = np.concatenate(
+            [np.linspace(c[i], c[(i + 1) % 4], EDGE_PTS, endpoint=False) for i in range(4)]
+        )
         self.tracker = BallTracker(self.cfg)
         self.history: list[BallState] = []
         self.last: Observation | None = None
@@ -60,8 +85,8 @@ class Pipeline:
     def _solve(self, gray: np.ndarray) -> None:
         corners = find(self.det, gray)
         n = self.cfg["marker_min_count"]
-        self.plate_pose = board_pose(corners, self.boards[0], self.lens, self.plate_pose, n)
-        base = board_pose(corners, self.boards[1], self.lens, self.base_pose, n)
+        self.plate_pose = _pose(corners, self.boards[0], self.lens, self.plate_pose, n)
+        base = _pose(corners, self.boards[1], self.lens, self.base_pose, n)
         self.base_pose = self.base_pose if base is None else base
 
     def _tilt(self) -> tuple[float, float]:
@@ -74,21 +99,25 @@ class Pipeline:
             return self.last
         t0 = time.perf_counter()
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
-        tilt, quad = (math.nan, math.nan), None
         if self.det is not None:
             self._solve(gray)
-            if self.plate_pose is not None:
-                tilt = self._tilt()
-                quad = plate_to_px(self.corners_mm, self.lens, *self.plate_pose)
-        ball_px = self.tracker.update(gray, t_read)
+        seen, quad = gray, None
+        if self.plate_pose is not None:
+            quad = plate_to_px(self.corners_mm, self.lens, *self.plate_pose)
+            # a ball against the edge reaches furthest out at its centre's height
+            rim = plate_to_px(self.outline_mm, self.lens, *self.plate_pose, z_mm=self.r_ball)
+            seen = floor_white(gray, rim)
+        ball_px = self.tracker.update(seen, t_read)
         if ball_px.valid and self.last is not None and not self.last.ball_px.valid:
             self.history = []  # relock: the velocity must not bridge the gap
-        if self.plate_pose is None:
-            x, y = to_mm(ball_px, self.cfg)
-        else:
-            x, y = ball_on_plate(ball_px[:2], self.lens, *self.plate_pose, self.r_ball)
-        ball = with_velocity(x, y, ball_px, self.history, self.cfg)
+        xy = None
+        if self.plate_pose is not None:
+            xy = ball_on_plate(ball_px[:2], self.lens, *self.plate_pose, self.r_ball)
+        if xy is None or not np.isfinite(xy).all():
+            self.plate_pose, quad, xy = None, None, to_mm(ball_px, self.cfg)
+        ball = with_velocity(*xy, ball_px, self.history, self.cfg)
         self.history = [*self.history, ball][-self.cfg["velocity_span_frames"] :]
+        tilt = (math.nan, math.nan) if self.plate_pose is None else self._tilt()
         ms = (time.perf_counter() - t0) * 1e3
         occluded = self.det is not None and self.plate_pose is None
         self.last = Observation(ball, ball_px, *tilt, occluded, t_read, ms, quad)

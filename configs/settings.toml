@@ -67,8 +67,8 @@ board_square_mm = { value = 25.0, label = "uncalibrated default (NOT TESTED, exp
 calib_views = { value = 20, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 calib_timeout_s = { value = 180, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 marker_dict = "DICT_4X4_50"
-plate_marker_ids = { value = [0, 1, 2, 3], label = "measured (2026-11-07)" }
-base_marker_ids = { value = [4, 5], label = "measured (2026-11-07)" }
+plate_marker_ids = { value = [0, 1, 2, 3], label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+base_marker_ids = { value = [4, 5], label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 marker_size_mm = { value = 50, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 marker_min_count = { value = 2, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 marker_refine_win_px = { value = 5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
