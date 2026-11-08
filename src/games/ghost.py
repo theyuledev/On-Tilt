@@ -15,10 +15,10 @@ def trace(records: Sequence[RunLogRecord]) -> list[list[float]]:
 
 
 def at(points: list[list[float]], t: float) -> tuple[float, float] | None:
-    if not points or t < points[0][0] or t > points[-1][0]:
+    if not points or t < points[0][0]:
         return None
     i = bisect_right(points, t, key=lambda p: p[0])
-    if i == len(points):
+    if i == len(points):  # finished early, sits at the end
         return points[-1][1], points[-1][2]
     a, b = points[i - 1], points[i]
     f = (t - a[0]) / (b[0] - a[0])

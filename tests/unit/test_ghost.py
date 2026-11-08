@@ -48,8 +48,8 @@ def test_at_interpolates_between_points():
     assert ghost.at(tr, 2.0) == (4.0, 10.0)
 
 
-def test_at_is_none_outside_the_trace():
+def test_at_is_none_before_the_start_and_holds_the_end():
     tr = [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]
     assert ghost.at(tr, -0.1) is None
-    assert ghost.at(tr, 1.1) is None
+    assert ghost.at(tr, 1.1) == (1.0, 1.0)
     assert ghost.at([], 0.0) is None
