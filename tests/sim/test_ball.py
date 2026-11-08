@@ -22,8 +22,9 @@ def run(tilt_x, tilt_y, seconds, ball=START):
     return states
 
 
-def test_positive_tilt_rolls_toward_plus_at_five_sevenths_g():
-    a = 5 / 7 * load()["control"]["sim_g_mm_s2"] * math.sin(math.radians(5.0))
+def test_positive_tilt_rolls_toward_plus_at_five_sevenths_g_less_friction():
+    c = load()["control"]
+    a = 5 / 7 * c["sim_g_mm_s2"] * math.sin(math.radians(5.0)) - c["sim_friction_mm_s2"]
 
     px = run(5.0, 0.0, 0.2)[-1]
     py = run(0.0, 5.0, 0.2)[-1]
@@ -34,6 +35,35 @@ def test_positive_tilt_rolls_toward_plus_at_five_sevenths_g():
 
     back = run(-5.0, -5.0, 0.2)[-1]
     assert back.x_mm < 0 and back.y_mm < 0
+
+
+def test_coasting_ball_on_a_level_plate_stops_after_v_squared_over_two_f():
+    f = load()["control"]["sim_friction_mm_s2"]
+    v = 80 / math.sqrt(2)
+    states = run(0.0, 0.0, 2 * 80 / f, ball=BallState(0.0, 0.0, v, v, valid=True, t_s=0.0))
+
+    end = states[-1]
+    assert math.hypot(end.x_mm, end.y_mm) == pytest.approx(80**2 / (2 * f), abs=0.1)
+    assert (end.vx_mm_s, end.vy_mm_s) == (0, 0)
+    assert all(s.vx_mm_s >= 0 and s.vy_mm_s >= 0 for s in states)
+
+
+def test_tilt_under_friction_leaves_a_resting_ball_where_it_is():
+    c = load()["control"]
+    deg = math.degrees(math.asin(0.9 * c["sim_friction_mm_s2"] / (5 / 7 * c["sim_g_mm_s2"])))
+
+    for tilt in ((deg, 0.0), (0.0, -deg), (deg / math.sqrt(2), deg / math.sqrt(2))):
+        end = run(*tilt, 1.0)[-1]
+        assert (end.x_mm, end.y_mm, end.vx_mm_s, end.vy_mm_s) == (0, 0, 0, 0)
+
+
+def test_friction_never_flips_a_slow_ball_within_a_step():
+    cfg = load()
+    slow = BallState(0.0, 0.0, 1.0, -1.0, valid=True, t_s=0.0)
+
+    end = roll(slow, PlateState(0.0, 0.0, 0.0, 0.0), 0.1, cfg["rig"], cfg["control"])
+
+    assert (end.vx_mm_s, end.vy_mm_s) == (0, 0)
 
 
 def test_ball_stops_at_rim_and_never_leaves():

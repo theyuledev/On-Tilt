@@ -60,7 +60,8 @@ def test_ball_accel_matches_a_rolling_ball_under_one_degree():
 
     fit = ball_accel(t, x, 1.0)
 
-    expect = 5 / 7 * control["sim_g_mm_s2"] * math.sin(math.radians(1.0))
+    tilt = 5 / 7 * control["sim_g_mm_s2"] * math.sin(math.radians(1.0))
+    expect = tilt - control["sim_friction_mm_s2"]
     assert fit.a_per_deg == pytest.approx(expect, rel=0.03)
     # time to roll the 0.3 mm motion floor from rest
     assert fit.first_motion_s == pytest.approx(math.sqrt(2 * 0.3 / expect), abs=dt)
