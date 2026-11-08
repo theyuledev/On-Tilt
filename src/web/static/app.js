@@ -30,7 +30,7 @@ if (watch) {
   addEventListener("blur", () => held.clear());
   $("arm").onclick = e => { pending.arm = true; e.currentTarget.blur(); };
   $("kill").onclick = e => { pending.kill = true; e.currentTarget.blur(); };
-  $("racebtn").onclick = () => { pending.race = raceCmd(); };
+  $("racebtn").onclick = e => { pending.race = raceCmd(); e.currentTarget.blur(); };
 }
 cam.onload = () => { cam.hidden = false; nocam.hidden = true; nextCam(); };
 cam.onerror = () => {

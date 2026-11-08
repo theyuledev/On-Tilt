@@ -140,6 +140,7 @@ def test_space_or_enter_never_clicks_a_focused_arm_button(client):
     assert 'if (e.code === "Space") { pending.kill = true; return; }' in js
     for b in ("arm", "kill"):
         assert f'$("{b}").onclick = e => {{ pending.{b} = true; e.currentTarget.blur(); }}' in js
+    assert '$("racebtn").onclick = e => { pending.race = raceCmd(); e.currentTarget.blur(); }' in js
 
 
 def test_watch_tab_sends_nothing_and_takes_no_input(client):
