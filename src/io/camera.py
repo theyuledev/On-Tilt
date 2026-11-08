@@ -6,6 +6,7 @@ from pathlib import Path
 
 import cv2
 
+from src.io.camera_hook import Hooked
 from src.io.ports import Frame
 
 WARMUP_READS = 30
@@ -89,16 +90,25 @@ def open_camera(rig: dict, video_capture=cv2.VideoCapture, run=subprocess.run):
     raise RuntimeError(f"camera gives no frames after {OPEN_TRIES} opens")
 
 
-class CameraSource:
-    """Grabs on its own thread and keeps only the newest frame."""
+class CameraSource(Hooked):
+    """Grabs on its own thread and keeps only the newest frame. The hook runs on a second
+    thread over the newest frame and skips the ones that land while it is busy."""
 
-    def __init__(self, capture):
+    def __init__(self, capture, process=None):
+        super().__init__(process)
         self._cap = capture
-        self._lock = threading.Lock()
+        self._lock = threading.Condition()
         self._frame: Frame | None = None
+        self._newest: Frame | None = None
+        self.gap_s = 0.0
+        self.hook_s = 0.0
         self.running = True
         self._thread = threading.Thread(target=self._grab, daemon=True)
         self._thread.start()
+        self._hook = None
+        if process is not None:
+            self._hook = threading.Thread(target=self._hook_loop, daemon=True)
+            self._hook.start()
 
     def _grab(self) -> None:
         while self.running:
@@ -106,9 +116,30 @@ class CameraSource:
             if not ok:
                 self.running = False
                 break
-            frame = Frame(image, time.monotonic())
+            t = time.monotonic()
             with self._lock:
-                self._frame = frame
+                if self._newest is not None:
+                    self.gap_s = t - self._newest.t_s
+                self._frame = self._newest = Frame(image, t)
+                self._lock.notify()
+        with self._lock:
+            self._lock.notify()
+
+    def _hook_loop(self) -> None:
+        done = None
+        while True:
+            with self._lock:
+                while self._newest is done:
+                    if not self.running:
+                        return
+                    self._lock.wait()
+                frame = self._newest
+            start = time.monotonic()
+            result = self._run(frame.image, frame.t_s)
+            with self._lock:
+                self._result = result
+                self.hook_s = time.monotonic() - start
+            done = frame
 
     def read(self) -> Frame | None:
         with self._lock:
@@ -117,14 +148,19 @@ class CameraSource:
 
     def close(self) -> None:
         self.running = False
+        with self._lock:
+            self._lock.notify()
         self._thread.join()
+        if self._hook is not None:
+            self._hook.join()
         self._cap.release()
 
 
-class ClipSource:
+class ClipSource(Hooked):
     """Replays a clip. Uses the capture times from <clip>.csv when the recorder wrote one."""
 
-    def __init__(self, path, start: int = 0):
+    def __init__(self, path, start: int = 0, process=None):
+        super().__init__(process)
         path = Path(path)
         self._cap = cv2.VideoCapture(str(path))
         if not self._cap.isOpened():
@@ -144,6 +180,7 @@ class ClipSource:
         else:
             t = self._cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
         self._i += 1
+        self._result = self._run(image, t)
         return Frame(image, t)
 
     def close(self) -> None:
