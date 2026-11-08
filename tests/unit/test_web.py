@@ -122,7 +122,7 @@ def test_race_js_draws_the_ghost_under_a_white_player(client):
 def test_page_has_a_strip_loaded_after_race_and_before_app(client):
     page = client.get("/").text
     assert 'id="strip"' in page
-    at = [page.index(f"/static/{name}.js") for name in ("race", "strip", "app")]
+    at = [page.index(f"/static/{name}.js") for name in ("race", "pad", "strip", "app")]
     assert at == sorted(at)
     assert "strip(s);" in static(client, "app.js")
 
