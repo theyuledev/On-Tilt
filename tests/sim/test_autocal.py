@@ -26,10 +26,15 @@ def value(out: str, key: str) -> str:
     return re.search(rf"^{key} = {{ value = (\S+?),", out, re.M).group(1)
 
 
-def ends_level_then_disarms(link: SimLink, start: int, level=(1515, 1475)) -> None:
-    tail = link.sent[start:]
-    assert tail[-1] == "D"
-    assert all(line == "P {} {}".format(*level) for line in tail[:-1] if line.startswith("P"))
+def stops_at_level(link: SimLink, amps=(60,), level=(1515, 1475)) -> None:
+    # every pulse is level or a schedule pulse, the first one after the stop is level, then D
+    x, y = level
+    ok = {level} | {p for a in amps for s in (a, -a) for p in ((x + s, y), (x, y + s))}
+    sent = [tuple(int(v) for v in line.split()[1:]) for line in link.sent if line[0] == "P"]
+    last = max(i for i, p in enumerate(sent) if p != level)
+    assert all(p in ok for p in sent[: last + 1])
+    assert sent[last + 1 :] and all(p == level for p in sent[last + 1 :])
+    assert link.sent[-1] == "D"
 
 
 @pytest.mark.parametrize("d_mm", [61.8, 38.0, 13.0])
@@ -46,7 +51,8 @@ def test_recovers_yaw_mirror_scale_and_gain(d_mm):
     assert (float(cx), float(cy)) == pytest.approx((700, 380), abs=1)
     assert "mirror: yes" in out
     assert link.sent.index("A") < min(i for i, s in enumerate(link.sent) if s.startswith("P"))
-    ends_level_then_disarms(link, len(link.sent) - 5)
+    a1, a2 = (int(a) for a in re.search(r"pulses (\d+) and (\d+) us", out).groups())
+    stops_at_level(link, (a1, a2))
 
 
 def test_second_amplitude_shrinks_on_a_soft_plate():
@@ -70,8 +76,7 @@ def test_a_wrong_stored_trim_rolls_the_ball_off_and_stops_safely():
     cfg, world, link, bench = setup(trims=(0, 0))
     with pytest.raises(autocal.Abort, match="rim"):
         autocal.run(bench, world, cfg, world.clock, world.advance, lambda _: "")
-    tilted = [i for i, s in enumerate(link.sent) if s.startswith("P") and s != "P 1500 1500"]
-    ends_level_then_disarms(link, tilted[-1] + 1, level=(1500, 1500))
+    stops_at_level(link, level=(1500, 1500))
 
 
 def interrupt_at(world, after_s: float, hit=None):
@@ -89,8 +94,7 @@ def test_ctrl_c_mid_pulse_levels_then_disarms():
     cfg, world, link, bench = setup()
     with pytest.raises(KeyboardInterrupt):
         autocal.run(bench, world, cfg, world.clock, interrupt_at(world, 1.4), lambda _: "")
-    tilted = [i for i, s in enumerate(link.sent) if s.startswith("P") and s != "P 1515 1475"]
-    ends_level_then_disarms(link, tilted[-1] + 1)
+    stops_at_level(link)
 
 
 def test_lost_ball_levels_then_disarms():
@@ -101,8 +105,31 @@ def test_lost_ball_levels_then_disarms():
 
     with pytest.raises(autocal.Abort, match="lost"):
         autocal.run(bench, world, cfg, world.clock, interrupt_at(world, 1.4, hide), lambda _: "")
-    tilted = [i for i, s in enumerate(link.sent) if s.startswith("P") and s != "P 1515 1475"]
-    ends_level_then_disarms(link, tilted[-1] + 1)
+    stops_at_level(link)
+
+
+def test_a_refused_pulse_stops_the_run():
+    cfg, world, link, bench = setup()
+    answer = link.raw
+
+    def refuse_once(line):
+        if line[0] == "P" and world.t >= 1.3 and not link.refused:
+            link.refused = True
+            link.sent.append(line)
+            return "ERR ?"
+        return answer(line)
+
+    link.refused, link.raw = False, refuse_once
+    with pytest.raises(autocal.Abort, match="ERR"):
+        autocal.run(bench, world, cfg, world.clock, world.advance, lambda _: "")
+    stops_at_level(link)
+
+
+def test_a_missed_heartbeat_disarms_the_board():
+    cfg, world, link, bench = setup()
+    bench.tick = lambda dt: None
+    with pytest.raises(autocal.Abort, match="disarmed"):
+        autocal.run(bench, world, cfg, world.clock, world.advance, lambda _: "")
 
 
 def test_sim_entry_runs_end_to_end(monkeypatch, capsys):

@@ -69,6 +69,9 @@ class SimRig:
         return Observation(b, px, math.nan, math.nan, False, self.t, 0.0)
 
 
+TIMEOUT_S = 0.25  # firmware/tilt TIMEOUT_MS: silent this long while armed and the board disarms
+
+
 class SimLink:
     """The board's A/P/D/L/S lines, driving a SimRig."""
 
@@ -77,9 +80,13 @@ class SimLink:
         self.armed = False
         self.limits: list[int] | None = None
         self.sent: list[str] = []
+        self.t_last = world.t
 
     def raw(self, line: str) -> str:
         self.sent.append(line)
+        if self.armed and self.world.t - self.t_last > TIMEOUT_S:
+            self.armed = False
+        self.t_last = self.world.t
         cmd, *args = line.split()
         args = [int(a) for a in args]
         if cmd == "L":
