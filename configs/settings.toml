@@ -34,13 +34,13 @@ hand_port = { value = 9001, label = "uncalibrated default (NOT TESTED, expected 
 [control]
 mode = "hand"
 sim_tick_hz = { value = 100, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-servo_dead_time_s = { value = 0.02, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+servo_dead_time_s = { value = 0.046, label = "measured (2026-11-07)" }
 servo_tau_s = { value = 0.035, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-servo_top_speed_us_s = { value = 2875, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-servo_dead_band_us = { value = 5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+servo_top_speed_us_s = { value = 1430, label = "measured (2026-11-07)" }
+servo_dead_band_us = { value = 20, label = "measured (2026-11-07)" }
 sim_g_mm_s2 = { value = 9810, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-kp_deg_mm = { value = 0.07, label = "sim-tuned (PR #39)" }
-kd_deg_s_mm = { value = 0.04, label = "sim-tuned (PR #39)" }
+kp_deg_mm = { value = 0.05, label = "sim-tuned (PR #71)" }
+kd_deg_s_mm = { value = 0.0375, label = "sim-tuned (PR #71)" }
 d_max_deg = { value = 3.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 
 [game]
