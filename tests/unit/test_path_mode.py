@@ -17,6 +17,7 @@ CFG = {
         "path_mm": SQ,
         "path_lookahead_mm": 40,
         "path_capture_mm": 15,
+        "unstick_gain": 0.0,
     }
 }
 NO_INTENT = Intent(0.0, 0.0, valid=False, t_s=0.0)

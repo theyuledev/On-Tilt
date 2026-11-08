@@ -40,3 +40,17 @@ def test_assist_parks_the_ball_at_the_corner_goal_then_brings_it_home(clock):
     for ball in drive(loop, clock, (0.0, 0.0), 3.0):
         assert abs(ball.x_mm) < edge and abs(ball.y_mm) < edge
     assert math.hypot(ball.x_mm, ball.y_mm) < 20
+
+
+@pytest.mark.parametrize("friction", [0, 45, 70])
+@pytest.mark.parametrize("ball_d", [61.8, 38, 13])
+def test_assist_keeps_clear_of_the_rim_with_the_friction_lean(clock, ball_d, friction):
+    cfg = load()
+    cfg["control"].update(mode="assist")
+    cfg["control"].update(rolling_friction_x_mm_s2=friction, rolling_friction_y_mm_s2=friction)
+    cfg["rig"]["ball_d_mm"] = ball_d
+    edge = (cfg["rig"]["plate_inner_mm"] - ball_d) / 2
+    loop = Loop(cfg)
+    loop.arm()
+    balls = [b for i in ((1.0, 1.0), (-1.0, 0.0), (0.0, 0.0)) for b in drive(loop, clock, i, 3.0)]
+    assert min(edge - max(abs(b.x_mm), abs(b.y_mm)) for b in balls) > 15

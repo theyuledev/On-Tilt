@@ -4,13 +4,12 @@ from src.contracts import BallState, PlateState
 from src.control import ROLL
 
 
-def _rub(vx: float, vy: float, f: float, dt: float) -> tuple[float, float]:
-    # rolling friction takes f * dt off the speed, never past zero, so a ball sticks under it
+def _rub(vx: float, vy: float, fx: float, fy: float, dt: float) -> tuple[float, float]:
+    # rolling friction along the velocity, f per axis, never past zero, so a ball sticks under it
     speed = math.hypot(vx, vy)
-    if speed <= f * dt:
+    if speed == 0:
         return 0.0, 0.0
-    k = 1 - f * dt / speed
-    return vx * k, vy * k
+    return vx * max(1 - fx * dt / speed, 0.0), vy * max(1 - fy * dt / speed, 0.0)
 
 
 def _wall(pos: float, vel: float, wall: float) -> tuple[float, float]:
@@ -25,7 +24,8 @@ def roll(ball: BallState, plate: PlateState, now: float, rig: dict, control: dic
     k = ROLL * control["sim_g_mm_s2"] * dt
     vx = ball.vx_mm_s + k * math.sin(math.radians(plate.est_x_deg))
     vy = ball.vy_mm_s + k * math.sin(math.radians(plate.est_y_deg))
-    vx, vy = _rub(vx, vy, control["sim_friction_mm_s2"], dt)
+    fx, fy = control["rolling_friction_x_mm_s2"], control["rolling_friction_y_mm_s2"]
+    vx, vy = _rub(vx, vy, fx, fy, dt)
     x, vx = _wall(ball.x_mm + vx * dt, vx, wall)
     y, vy = _wall(ball.y_mm + vy * dt, vy, wall)
     return BallState(x_mm=x, y_mm=y, vx_mm_s=vx, vy_mm_s=vy, valid=True, t_s=now)

@@ -14,6 +14,7 @@ CFG = {
         "i_max_deg": 1.0,
         "i_err_max_mm": 30,
         "vel_ema_s": 0.0,
+        "unstick_gain": 0.0,
     }
 }
 NO_INTENT = Intent(0.0, 0.0, valid=False, t_s=0.0)

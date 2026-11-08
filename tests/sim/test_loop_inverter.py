@@ -62,6 +62,8 @@ def test_a_kill_that_ends_inside_one_tick_still_leaves_on_the_level_pulse(clock)
     cfg = load()
     cfg["control"]["mode"] = "balance"
     cfg["control"]["inverter_on"] = True
+    # keeps the held pulse inside one kill ramp step of level
+    cfg["control"]["unstick_gain"] = 0.0
     loop = Loop(cfg)
     loop.arm()
     hold_ball_at(loop, clock, 60.0, 30)

@@ -22,6 +22,7 @@ pytestmark = pytest.mark.sim
 NO_INTENT = Intent(0.0, 0.0, valid=False, t_s=0.0)
 STARTS = [(80, 0, 0, 0), (0, -80, 0, 0), (-60, 60, 0, 0), (50, 50, -100, 100), (100, -100, 0, 0)]
 TRIM_DEG = 1.0
+FRICTION_KEYS = ("rolling_friction_x_mm_s2", "rolling_friction_y_mm_s2")
 NOISE_MM = 0.15
 # 1:1 px to mm so the tracker's own frame difference gives the velocity
 PX = {"plate_centre_px": (0.0, 0.0), "px_per_mm": 1.0, "plate_yaw_deg": 0.0}
@@ -44,8 +45,11 @@ def config(horn, scale):
     return {**cfg, "rig": rig, "control": c}
 
 
-def run(cfg, start_pos, seconds=35.0):
+def run(cfg, start_pos, seconds=35.0, friction=None):
     rig, c = cfg["rig"], cfg["control"]
+    # the sim ball can rub differently from what the controller leans against
+    fric = {} if friction is None else dict.fromkeys(FRICTION_KEYS, friction)
+    sim_c = {**c, **fric}
     dt = 1 / c["sim_tick_hz"]
     plate, mode = SimActuator(rig, c), make_mode("balance", cfg)
     guard = safety.SafetyState()
@@ -65,7 +69,7 @@ def run(cfg, start_pos, seconds=35.0):
             band, sent = invert(band, sent, False, cfg)
         state = plate.send(sent, now)
         x_deg, y_deg = state.est_x_deg + TRIM_DEG, state.est_y_deg + TRIM_DEG
-        ball = roll(ball, replace(state, est_x_deg=x_deg, est_y_deg=y_deg), now, rig, c)
+        ball = roll(ball, replace(state, est_x_deg=x_deg, est_y_deg=y_deg), now, rig, sim_c)
         balls.append(ball)
     return balls
 
@@ -83,21 +87,22 @@ def settle_s(balls, within_mm=20.0):
 
 
 @cache
-def measure(horn, scale):
+def measure(horn, scale, friction=None):
     cfg = config(horn, scale)
-    holds = [run(cfg, s) for s in STARTS]
+    holds = [run(cfg, s, friction=friction) for s in STARTS]
     return {
         "after_5_s": max(worst(b, 5) for b in holds),
         "after_15_s": max(worst(b, 15) for b in holds),
-        "settle_60_s": settle_s(run(cfg, (RELEASE_MM, 0, 0, 0), seconds=5.0)),
+        "settle_60_s": settle_s(run(cfg, (RELEASE_MM, 0, 0, 0), seconds=5.0, friction=friction)),
     }
 
 
-CASES = [(h, s) for h in (False, True) for s in (1.0, 0.7)]
+# None is the settings friction, 0 a frictionless ball the controller still leans for
+CASES = [(h, s, f) for h in (False, True) for s in (1.0, 0.7) for f in (None, 0)]
 
 
 def name(case):
-    return f"{'horn' if case[0] else 'bench'}-{case[1]}x"
+    return f"{'horn' if case[0] else 'bench'}-{case[1]}x" + ("" if case[2] is None else "-f0")
 
 
 @pytest.mark.parametrize("case", CASES, ids=name)

@@ -1,5 +1,5 @@
 from src.contracts import BallState, Intent, PlateCommand
-from src.control.pid import Integral, integrate, pid, smooth
+from src.control.pid import Integral, integrate, pid, smooth, unstick
 from src.inputs.shaping import shape
 from src.modes.assist import goal_mm
 from src.modes.path import clip, target
@@ -16,10 +16,9 @@ def hand(ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
 def pd_toward(ball: BallState, goal: tuple[float, float], cfg: dict) -> PlateCommand:
     """Tilt that pulls the ball to goal and brakes its motion."""
     c = cfg["control"]
-    return PlateCommand(
-        pid(ball.x_mm - goal[0], ball.vx_mm_s, 0.0, c),
-        pid(ball.y_mm - goal[1], ball.vy_mm_s, 0.0, c),
-    )
+    ex, ey = ball.x_mm - goal[0], ball.y_mm - goal[1]
+    kx, ky = unstick(ex, ey, ball.vx_mm_s, ball.vy_mm_s, c)
+    return PlateCommand(pid(ex, ball.vx_mm_s, 0.0, c) + kx, pid(ey, ball.vy_mm_s, 0.0, c) + ky)
 
 
 class Balance:
@@ -38,9 +37,10 @@ class Balance:
         prev = self.vel or raw
         vx, vy = (smooth(p, v, dt, c["vel_ema_s"]) for p, v in zip(prev, raw, strict=True))
         self.vel = (vx, vy)
+        kx, ky = unstick(ball.x_mm, ball.y_mm, vx, vy, c)
         return PlateCommand(
-            tilt_x_deg=pid(ball.x_mm, vx, self.acc.x, c),
-            tilt_y_deg=pid(ball.y_mm, vy, self.acc.y, c),
+            tilt_x_deg=pid(ball.x_mm, vx, self.acc.x, c) + kx,
+            tilt_y_deg=pid(ball.y_mm, vy, self.acc.y, c) + ky,
         )
 
 

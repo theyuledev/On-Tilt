@@ -42,7 +42,8 @@ servo_tau_s = { value = 0.035, label = "uncalibrated default (NOT TESTED, expect
 servo_top_speed_us_s = { value = 1430, label = "measured (2026-11-07)" }
 servo_dead_band_us = { value = 20, label = "measured (2026-11-07)" }
 sim_g_mm_s2 = { value = 9810, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-sim_friction_mm_s2 = { value = 45, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+rolling_friction_x_mm_s2 = { value = 47, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+rolling_friction_y_mm_s2 = { value = 39, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 kp_deg_mm = { value = 0.05, label = "sim-tuned (PR #71)" }
 kd_deg_s_mm = { value = 0.0375, label = "sim-tuned (PR #71)" }
 d_max_deg = { value = 3.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
@@ -55,13 +56,17 @@ est_pos_noise_mm = { value = 0.15, label = "uncalibrated default (NOT TESTED, ex
 est_gate_mm = { value = 30, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 est_hold_s = { value = 0.2, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 est_v_max_mm_s = { value = 1500, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-ki_deg_s_mm = { value = 0.02, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+ki_deg_s_mm = { value = 0.04, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 i_max_deg = { value = 1.5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-i_err_max_mm = { value = 30, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+i_err_max_mm = { value = 60, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 db_comp_us = { value = 14, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 db_flip_us = { value = 2, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 inverter_on = { value = false, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 vel_ema_s = { value = 0.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+unstick_gain = { value = 1.2, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+unstick_in_mm = { value = 1, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+unstick_full_mm = { value = 10, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+unstick_v_mm_s = { value = 80, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 
 [game]
 heartbeat_stale_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
