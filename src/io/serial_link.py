@@ -11,6 +11,10 @@ class LinkError(RuntimeError):
     pass
 
 
+class BoardRefused(LinkError):
+    """The board answered ERR, so its state is known."""
+
+
 def limits_line(rig: dict) -> str:
     cx, cy = center(rig)
     x_lo, x_hi, y_lo, y_hi = (round(v) for v in limits(rig))
@@ -41,6 +45,8 @@ class BoardLink:
     def ask(self, line: str) -> list[str]:
         reply = self.raw(line)
         parts = reply.split()
+        if parts[0] == "ERR":
+            raise BoardRefused(f"{line!r} -> {reply!r}")
         if parts[0] != "OK" or parts[1:2] != [line[0]]:
             raise LinkError(f"{line!r} -> {reply!r}")
         return parts[2:]
@@ -83,9 +89,10 @@ class SerialActuator:
             self._arm()
         try:
             x, y = (int(v) for v in self.link.ask(f"P {cmd.x_us} {cmd.y_us}"))
-        except LinkError:
-            # late reply: the board most likely took the pulse and is still armed, so ask it
-            if not self.still_armed():
+        except LinkError as e:
+            # only a timeout leaves the board in doubt; an ERR is its own word, during its
+            # self ramp it still says armed=1 so asking S there would keep us going
+            if isinstance(e, BoardRefused) or not self.still_armed():
                 raise
             return self.state
         tilt = pulse_to_tilt(ServoCommand(x_us=x, y_us=y), self.rig)

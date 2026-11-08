@@ -5,7 +5,7 @@ import serial
 
 from src.app import Loop
 from src.control.pulse_map import center
-from src.io.serial_link import BoardLink, SerialActuator
+from src.io.serial_link import BoardLink, BoardRefused, SerialActuator
 from src.io.settings import load
 from src.sim.plate import SimActuator
 from tests.contract.fake_board import FakeBoard
@@ -107,7 +107,7 @@ def test_board_error_disarms_and_lets_the_page_arm_again(loop, board, clock):
     ticks(loop, clock, 3)
     board.armed = False  # board stalled 250 ms, self levelled and dropped out
     ticks(loop, clock, 1)
-    assert board.sent[-2].startswith("P") and board.sent[-1] == "S"
+    assert board.sent[-1].startswith("P") and "S" not in board.sent
     snap = loop.snapshot()
     assert not snap["armed"] and not snap["board_lost"] and not loop.safety.armed
 
@@ -169,19 +169,45 @@ def test_late_reply_then_status_fails_hard_marks_board_lost(loop, board, clock):
     assert board.sent[n:] == []
 
 
+def test_err_during_the_board_ramp_disarms_without_asking_or_sending_d(loop, board, clock):
+    loop.arm()
+    ticks(loop, clock, 3, key=(1.0, 0.0))
+    board.ramping = True  # a stall tripped the firmware ramp, it still reports armed
+    ticks(loop, clock, 1, key=(1.0, 0.0))
+    assert board.sent[-1].startswith("P") and "S" not in board.sent
+    snap = loop.snapshot()
+    assert not snap["armed"] and not snap["board_lost"]
+    loop.kill()
+    ticks(loop, clock, 5, key=(1.0, 0.0))
+    assert "D" not in board.sent and board.sent[-1].startswith("P")
+
+
 def test_arm_during_the_board_ramp_fails_quietly_then_works(loop, board, clock):
-    board.ramping_for = 2
+    board.armed = board.ramping = True  # stalled earlier, firmware is levelling on its own
     loop.arm()
     ticks(loop, clock, 2)
     assert [s[0] for s in board.sent] == ["L"]
     snap = loop.snapshot()
     assert not snap["armed"] and not snap["board_lost"]
-    loop.arm()
-    ticks(loop, clock, 1)
-    assert [s[0] for s in board.sent] == ["L", "L"] and not loop.snapshot()["armed"]
+    board.ramping = board.armed = False  # ramp done, pulses stopped
     loop.arm()
     ticks(loop, clock, 3)
-    assert [s[0] for s in board.sent[2:]] == ["L", "A", "P", "P", "P"] and board.armed
+    assert [s[0] for s in board.sent[1:]] == ["L", "A", "P", "P", "P"] and board.armed
+
+
+def test_fake_board_refuses_l_a_p_while_ramping_and_still_says_armed():
+    board = FakeBoard()
+    board.armed = board.ramping = True
+    link = BoardLink(board)
+    assert link.status()["armed"]
+    refused = [
+        ("L 1350 1650 1350 1650 1500 1500", "armed"),
+        ("A", "ramping"),
+        ("P 1500 1500", "disarmed"),
+    ]
+    for line, why in refused:
+        with pytest.raises(BoardRefused, match=why):
+            link.ask(line)
 
 
 def test_stray_reply_in_the_buffer_does_not_block_arming(loop, board, clock):
