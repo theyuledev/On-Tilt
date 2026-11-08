@@ -6,7 +6,6 @@ import pytest
 
 from src.io.settings import load
 from src.vision import pipeline
-from src.vision.calib import undistort
 from src.vision.markers import relative_tilt
 from src.vision.pipeline import Pipeline
 from src.vision.plate_frame import plate_to_px
@@ -21,8 +20,6 @@ CFG = load()
 R_BALL = CFG["rig"]["ball_d_mm"] / 2
 BALL_MM = (40.0, -20.0)
 SHADE = 25
-FLOOR = 40
-HALF = CFG["rig"]["plate_inner_mm"] / 2
 
 
 def pipe(boards=(PLATE, BASE)):
@@ -105,37 +102,6 @@ def test_board_ids_off_the_settings_print_once(capsys):
     pipe((PLATE, {4: BASE[4], 6: BASE[5]}))
     out = capsys.readouterr().out.splitlines()
     assert len(out) == 1 and "base" in out[0] and "[4, 6]" in out[0]
-
-
-def test_hidden_markers_keep_the_last_floor_white():
-    frame, r, _ = scene()
-    p = pipe()
-    seen = []
-    update = p.tracker.update
-    p.tracker.update = lambda img, t: seen.append(img) or update(img, t)
-    p.step(frame, 0.0)
-    o = p.step(erase(frame.copy(), PLATE, r, T), 0.01)
-    painted = (seen[0] == 255) & (frame < 255)
-    assert o.occluded and painted.mean() > 0.3 and (seen[1][painted] == 255).all()
-
-def floor_past_left_edge(frame, r, t, width_mm=60.0):
-    """Dark floor from the plate's -x edge out to width_mm, through the lens like the prints."""
-    ys, xs = np.mgrid[: frame.shape[0], : frame.shape[1]]
-    rays = undistort(STANDARD, np.c_[xs.ravel(), ys.ravel()]).reshape(-1, 1, 2)
-    uv = cv2.perspectiveTransform(rays, np.linalg.inv(np.c_[r[:, :2], t])).reshape(xs.shape + (2,))
-    out = -uv[..., 0] - HALF
-    frame[(out > 0) & (out < width_mm)] = FLOOR
-    return frame
-
-
-def test_ball_against_the_edge_stays_found_with_floor_past_it():
-    r, _, _ = pose(4.0, -3.0)
-    xy = (-HALF + R_BALL, 0.0)
-    frame = render([(PLATE, r, T), (BASE, R_BASE, T_BASE)])
-    frame = with_ball(floor_past_left_edge(frame, r, T), r, T, xy)
-    assert not BallTracker(CFG["vision"]).update(frame, 0.0).valid
-    o = pipe().step(frame, 0.0)
-    assert o.ball.valid and (o.ball.x_mm, o.ball.y_mm) == pytest.approx(xy, abs=1.5)
 
 
 @pytest.mark.parametrize("lens, boards", [(None, (PLATE, BASE)), (STANDARD, None)])

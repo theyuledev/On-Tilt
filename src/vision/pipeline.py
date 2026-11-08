@@ -25,17 +25,6 @@ class Observation(NamedTuple):
     plate_corners_px: np.ndarray | None = None
 
 
-EDGE_PTS = 8  # per plate edge, so the outline bends with the lens
-
-
-def floor_white(gray: np.ndarray, outline: np.ndarray) -> np.ndarray:
-    """White outside the outline. White is never darker than the plate, so the floor can't
-    join a dark ball at the edge."""
-    floor = np.full_like(gray, 255)
-    cv2.fillPoly(floor, [outline.round().astype(np.int32)], 0)
-    return cv2.max(gray, floor)
-
-
 def _pose(corners, board, lens, guess, n):
     """board_pose, or None when the solve throws or comes back non-finite."""
     try:
@@ -61,10 +50,7 @@ class Pipeline:
     def __init__(self, cfg: dict, lens: dict | None = None, boards=None):
         self.cfg = cfg["vision"]
         self.r_ball = cfg["rig"]["ball_d_mm"] / 2
-        c = self.corners_mm = square(cfg["rig"]["plate_inner_mm"])[:, :2]
-        self.outline_mm = np.concatenate(
-            [np.linspace(c[i], c[(i + 1) % 4], EDGE_PTS, endpoint=False) for i in range(4)]
-        )
+        self.corners_mm = square(cfg["rig"]["plate_inner_mm"])[:, :2]
         self.tracker = BallTracker(self.cfg)
         self.history: list[BallState] = []
         self.last: Observation | None = None
@@ -78,7 +64,6 @@ class Pipeline:
             _check_ids(boards, self.cfg)
         self.plate_pose = None  # last frame's (rvec, tvec), the next solve's guess
         self.base_pose = None  # kept once seen: the table does not move
-        self.rim = None  # kept while the markers are hidden: the background must not see the floor
 
     def latest(self) -> Observation | None:
         return self.last
@@ -102,14 +87,10 @@ class Pipeline:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
         if self.det is not None:
             self._solve(gray)
-        seen, quad = gray, None
+        quad = None
         if self.plate_pose is not None:
             quad = plate_to_px(self.corners_mm, self.lens, *self.plate_pose)
-            # a ball against the edge reaches furthest out at its centre's height
-            self.rim = plate_to_px(self.outline_mm, self.lens, *self.plate_pose, z_mm=self.r_ball)
-        if self.rim is not None:
-            seen = floor_white(gray, self.rim)
-        ball_px = self.tracker.update(seen, t_read)
+        ball_px = self.tracker.update(gray, t_read)
         if ball_px.valid and self.last is not None and not self.last.ball_px.valid:
             self.history = []  # relock: the velocity must not bridge the gap
         xy = None
