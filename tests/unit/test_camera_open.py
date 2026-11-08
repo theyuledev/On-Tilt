@@ -5,24 +5,34 @@ import cv2
 import numpy as np
 import pytest
 
-from src.io.camera import open_camera, set_exposure
+from src.io.camera import open_camera, revive_camera, set_exposure
 
 pytestmark = pytest.mark.unit
 
-RIG = {"camera_width": 1280, "camera_height": 800, "camera_fps": 120, "camera_exposure_ms": 3.0}
+CAM = {"camera_width": 1280, "camera_height": 800, "camera_fps": 120, "camera_exposure_ms": 3.0}
+UVC = "0x1234:0x5678"
+RIG = {**CAM, "camera_uvc": UVC}
 TOOL = "/x/uvc-util"
-MODE8 = [TOOL, "-I", "0", "-s", "auto-exposure-mode=8"]
-MODE1 = [TOOL, "-I", "0", "-s", "auto-exposure-mode=1"]
-EXPOSURE = [TOOL, "-I", "0", "-s", "auto-exposure-mode=1", "-s", "exposure-time-abs=30"]
-READBACK = [[TOOL, "-I", "0", "-g", name] for name in ("exposure-time-abs", "auto-exposure-mode")]
+MODE8 = [TOOL, "-V", UVC, "-s", "auto-exposure-mode=8"]
+MODE1 = [TOOL, "-V", UVC, "-s", "auto-exposure-mode=1"]
+EXPOSURE = [TOOL, "-V", UVC, "-s", "auto-exposure-mode=1", "-s", "exposure-time-abs=30"]
+READBACK = [[TOOL, "-V", UVC, "-g", name] for name in ("exposure-time-abs", "auto-exposure-mode")]
+TWO_CAMS = """Index        Vend:Prod      LocationId   UVC Version  Device name
+------------ -------------- ------------ ------------ ----------------
+           0 0x046d:0x082d  0x14200000         1.00   HD Pro Webcam C920
+           1 0x1234:0x5678  0x14100000         1.00   USB Camera
+"""
+SEVERAL = "camera: several uvc cameras plugged in, set camera_uvc in configs/settings.local.toml\n"
 
 
-def fake_run(exposure="exposure-time-abs = 30"):
+def fake_run(exposure="exposure-time-abs = 30", listing=""):
     ran = []
 
     def run(cmd, **kw):
         ran.append(cmd)
         out = exposure if cmd[-1] == "exposure-time-abs" else "auto-exposure-mode = 1"
+        if cmd[-1] == "-d":
+            out = listing
         return SimpleNamespace(returncode=0, stdout=out, stderr="")
 
     return run, ran
@@ -84,6 +94,22 @@ def test_exposure_goes_manual_in_100us_steps(monkeypatch):
     assert ran == [EXPOSURE]
     monkeypatch.setattr(shutil, "which", lambda name: None)
     assert not set_exposure(RIG, ran.append) and len(ran) == 1
+
+
+def test_two_uvc_cameras_without_camera_uvc_skip_and_say_so(monkeypatch, capsys):
+    monkeypatch.setattr(shutil, "which", lambda name: TOOL)
+    run, ran = fake_run(listing=TWO_CAMS)
+    assert not set_exposure(CAM, run)
+    assert not revive_camera(CAM, run)
+    assert ran == [[TOOL, "-d"], [TOOL, "-d"]]
+    assert capsys.readouterr().out == SEVERAL * 2
+
+
+def test_one_uvc_camera_is_used_by_its_index(monkeypatch):
+    monkeypatch.setattr(shutil, "which", lambda name: TOOL)
+    run, ran = fake_run(listing=TWO_CAMS.splitlines()[2])
+    assert set_exposure(CAM, run)
+    assert ran == [[TOOL, "-d"], [TOOL, "-I", "0", *EXPOSURE[3:]]]
 
 
 def test_reopens_once_when_the_stream_dies_after_warm_up(monkeypatch):

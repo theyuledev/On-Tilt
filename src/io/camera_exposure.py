@@ -11,14 +11,41 @@ def _read_int(out: str) -> int | None:
     return int(nums[-1]) if nums else None
 
 
+def uvc_target(rig: dict, tool: str, run=subprocess.run) -> list[str] | str:
+    """uvc-util args that select the overhead cam, or why there are none."""
+    if rig.get("camera_uvc"):
+        return ["-V", rig["camera_uvc"]]
+    out = run([tool, "-d"], capture_output=True, text=True).stdout or ""
+    rows = [w[0] for w in map(str.split, out.splitlines()) if w and w[0].isdigit()]
+    if len(rows) == 1:
+        return ["-I", rows[0]]
+    if rows:
+        return "several uvc cameras plugged in, set camera_uvc in configs/settings.local.toml"
+    return "no uvc camera listed"
+
+
+def uvc_command(rig: dict, run=subprocess.run) -> list[str] | None:
+    tool = shutil.which("uvc-util")
+    if tool is None:
+        return None
+    target = uvc_target(rig, tool, run)
+    if isinstance(target, str):
+        print(f"camera: {target}")
+        return None
+    return [tool, *target]
+
+
 def exposure_problem(rig: dict, run=subprocess.run) -> str | None:
     # set_exposure never sees what uvc-util said, so ask the camera what it holds
     tool = shutil.which("uvc-util")
     if tool is None:
         return "exposure unverified: uvc-util not on PATH"
+    target = uvc_target(rig, tool, run)
+    if isinstance(target, str):
+        return f"exposure unverified: {target}"
     got = {}
     for name in ("exposure-time-abs", "auto-exposure-mode"):
-        r = run([tool, "-I", "0", "-g", name], capture_output=True, text=True)
+        r = run([tool, *target, "-g", name], capture_output=True, text=True)
         value = None
         if r.returncode == 0:
             value = _read_int(r.stdout or "")

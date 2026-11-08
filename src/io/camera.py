@@ -1,4 +1,3 @@
-import shutil
 import subprocess
 import threading
 import time
@@ -6,7 +5,7 @@ from pathlib import Path
 
 import cv2
 
-from src.io.camera_exposure import exposure_problem
+from src.io.camera_exposure import exposure_problem, uvc_command
 from src.io.camera_hook import Hooked
 from src.io.ports import Frame
 
@@ -41,23 +40,23 @@ def overhead_shape(rig: dict) -> tuple[int, int]:
 
 
 def set_exposure(rig: dict, run=subprocess.run) -> bool:
-    tool = shutil.which("uvc-util")
-    if tool is None:
+    uvc = uvc_command(rig, run)
+    if uvc is None:
         return False
     # the cam is back on auto exposure after every replug; units are 100 us
     steps = round(rig["camera_exposure_ms"] * 10)
-    run([tool, "-I", "0", "-s", "auto-exposure-mode=1", "-s", f"exposure-time-abs={steps}"])
+    run([*uvc, "-s", "auto-exposure-mode=1", "-s", f"exposure-time-abs={steps}"])
     return True
 
 
-def revive_camera(run=subprocess.run) -> bool:
-    tool = shutil.which("uvc-util")
-    if tool is None:
+def revive_camera(rig: dict, run=subprocess.run) -> bool:
+    uvc = uvc_command(rig, run)
+    if uvc is None:
         return False
     # a jammed stream comes back after a round trip through auto exposure; it has to
     # go both ways or a cam already sitting in auto sees nothing
-    run([tool, "-I", "0", "-s", "auto-exposure-mode=8"])
-    run([tool, "-I", "0", "-s", "auto-exposure-mode=1"])
+    run([*uvc, "-s", "auto-exposure-mode=8"])
+    run([*uvc, "-s", "auto-exposure-mode=1"])
     return True
 
 
@@ -82,7 +81,7 @@ def open_camera(rig: dict, video_capture=cv2.VideoCapture, run=subprocess.run):
     index = find_camera(lambda s: s == want, f"{want[1]}x{want[0]} frames", video_capture)
     for attempt in range(OPEN_TRIES):
         if attempt:
-            revive_camera(run)
+            revive_camera(rig, run)
         cap = _open_fast(index, rig, video_capture)
         if _stream_alive(cap):
             set_exposure(rig, run)
