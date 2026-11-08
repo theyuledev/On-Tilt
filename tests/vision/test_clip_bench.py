@@ -1,6 +1,6 @@
-"""Ball tracker on the recorded clips. By default only the floors and the update cost, each window
-run on its own after a short warm-up (about 8 s). VISION_BENCH=full also runs
-the nine ratchet windows from frame 0 against bench_baseline.json (about 3 min)."""
+"""Ball tracker on the recorded clips. By default only the floors, each window run on its own
+after a short warm-up (about 8 s). VISION_BENCH=full also times the update and runs the nine
+ratchet windows from frame 0 against bench_baseline.json (about 3 min)."""
 
 import json
 import os
@@ -29,6 +29,9 @@ FLOORS: dict[tuple[str, Window], float] = {
 }
 # frames before a floor window: 10 s at 120 fps, enough for the background's 5 samples
 WARMUP = 1200
+full_only = pytest.mark.skipif(
+    os.environ.get("VISION_BENCH") != "full", reason="set VISION_BENCH=full"
+)
 
 if not any((CLIPS / f"{stem}.avi").exists() for stem in BASELINE):
     pytest.skip(f"no clips in {CLIPS}", allow_module_level=True)
@@ -57,8 +60,6 @@ def floors():
 
 @pytest.fixture(scope="module")
 def runs():
-    if os.environ.get("VISION_BENCH") != "full":
-        pytest.skip("set VISION_BENCH=full")
     out = {}
     for stem, windows in BASELINE.items():
         path = CLIPS / f"{stem}.avi"
@@ -74,6 +75,7 @@ def test_visible_ball_is_held(floors, stem, window, floor):
     assert rate >= floor, f"{stem} {window}: hit {rate:.3f} < {floor}"
 
 
+@full_only
 def test_update_cost(floors):
     locked = [ms for r in floors.values() for ms in r.locked_ms]
     search = [ms for r in floors.values() for ms in r.search_ms]
@@ -85,6 +87,7 @@ def test_update_cost(floors):
     assert pct(search, 99) <= 19.0, "a full frame search while lost returns within two frames"
 
 
+@full_only
 @pytest.mark.parametrize(("stem", "key"), [(s, k) for s in BASELINE for k in BASELINE[s]])
 def test_hit_rate_holds_the_baseline(runs, stem, key):
     rate = hit_rate(pick(runs, stem, stem).windows[parse_window(key)])
