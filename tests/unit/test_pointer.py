@@ -18,6 +18,10 @@ def rig():
     return load()["rig"]
 
 
+def background():
+    return 40 + (np.random.default_rng(0).random((800, 1280)) * 10).astype(np.uint8)
+
+
 def square(mx, my, hc, tilt):
     """Maps a local (u, v) in [-1, 1] to the pixel of a turned square centred at (mx, my)."""
     c, s = math.cos(math.radians(tilt)), math.sin(math.radians(tilt))
@@ -26,8 +30,7 @@ def square(mx, my, hc, tilt):
 
 def frame(angle_deg, radius=100, size=60, dot=8, extra=(), shift=(0, 0), tilt=0, split=False):
     """Two notes on a horn: squares turned by tilt, with a dark dot; split cuts each in two."""
-    img = np.full((800, 1280), 40, np.uint8)
-    img += (np.random.default_rng(0).random(img.shape) * 10).astype(np.uint8)
+    img = background()
     th = math.radians(angle_deg)
     for sign in (1, -1):
         cx, cy = 640 + sign * radius * math.cos(th), 400 + sign * radius * math.sin(th)
@@ -100,10 +103,10 @@ def test_tracker_handles_turned_and_bent_notes(kw):
         assert angle(tracker, frame(a, **kw)) == pytest.approx(a, abs=0.7)
 
 
-def test_tracker_keeps_the_lock_through_a_frame_without_notes():
+def test_tracker_keeps_the_lock_through_a_noisy_frame_without_notes():
     tracker = seeded()
     pair = tracker.pair
-    assert angle(tracker, np.full((800, 1280), 40, np.uint8)) is None and tracker.pair == pair
+    assert angle(tracker, background()) is None and tracker.pair == pair
     assert angle(tracker, frame(8)) == pytest.approx(8, abs=0.5)
 
 

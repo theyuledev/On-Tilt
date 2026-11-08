@@ -155,6 +155,13 @@ def test_step_response_matches_the_analytic_curve():
     assert step_response(t, np.zeros_like(t), 0.0, 1.0, 0.01) is None
 
 
+def test_step_response_gives_up_on_a_sparse_step_nothing_crosses():
+    # the last third sits exactly on the noise band so no sample is above it
+    t = np.array([-0.05, 0.05, 0.1, 0.15])
+    y = np.array([0.0, 0.06, 0.06, 0.06])
+    assert step_response(t, y, 0.0, 1.0, 0.02) is None
+
+
 def test_tilt_report_recovers_the_toy_plate():
     rig = load()["rig"]
     commands, tilts = toy_plate(plan(rig, 0, TICK), rig)

@@ -91,8 +91,9 @@ def phase_mask(t: np.ndarray, tc: np.ndarray, phase: np.ndarray, name: str) -> n
     return (t >= tc[sel[0]]) & (t < end)
 
 
-def _first(cond: np.ndarray) -> int:
-    return int(np.flatnonzero(cond)[0])
+def _first(cond: np.ndarray) -> int | None:
+    hit = np.flatnonzero(cond)
+    return int(hit[0]) if len(hit) else None
 
 
 def step_response(t, y, t0: float, t1: float, noise: float) -> dict | None:
@@ -107,12 +108,16 @@ def step_response(t, y, t0: float, t1: float, noise: float) -> dict | None:
     if abs(final) < 3 * noise:
         return None
     d, f = dev * np.sign(final), abs(final)
-    i20, i80 = _first(d > 0.2 * f), _first(d > 0.8 * f)
+    # sparse rows can pass the final test with no sample actually crossing
+    levels = (3 * noise, 0.1 * f, 0.2 * f, 0.8 * f, 0.9 * f)
+    i3, i10, i20, i80, i90 = (_first(d > k) for k in levels)
+    if None in (i3, i10, i20, i80, i90):
+        return None
     out = np.flatnonzero(np.abs(d - f) > max(0.05 * f, 3 * noise))
     settled = out[-1] + 1 if len(out) else 0
     return {
-        "delay": tw[_first(d > 3 * noise)] - t0,
-        "rise": tw[_first(d > 0.9 * f)] - tw[_first(d > 0.1 * f)],
+        "delay": tw[i3] - t0,
+        "rise": tw[i90] - tw[i10],
         "settle": tw[settled] - t0 if settled < len(tw) else None,
         "overshoot": max(0.0, (d.max() - f) / f * 100),
         "speed": np.polyfit(tw[i20 : i80 + 1], d[i20 : i80 + 1], 1)[0] if i80 > i20 else None,

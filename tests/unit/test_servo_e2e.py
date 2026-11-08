@@ -64,7 +64,8 @@ def horn(img, shaft, deg, gap, size, dot):
             for x, y in ((-h, -h), (h, -h), (h, h), (-h, h))
         ]
         cv2.fillConvexPoly(img, np.round(corners).astype(np.int32), 240)
-        cv2.circle(img, (round(cx), round(cy)), dot // 2, 30, -1)
+        # sub pixel centre, a real camera never snaps the dot to a whole pixel
+        cv2.circle(img, (round(16 * cx), round(16 * cy)), 16 * (dot // 2), 30, -1, shift=4)
 
 
 class ServoCam:
@@ -87,7 +88,7 @@ class ServoCam:
         return Frame(img, t)
 
 
-@pytest.mark.parametrize("horn0,gap,size,dot", [(40, 88, 60, 16), (85, 45, 40, 10)])
+@pytest.mark.parametrize("horn0,gap,size,dot", [(40, 88, 60, 16), (85, 60, 40, 10)])
 def test_bench_recovers_the_fake_servo_parameters(horn0, gap, size, dot):
     rig = load()["rig"]
     clock = Clock(0.0002)

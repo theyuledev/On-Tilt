@@ -78,7 +78,7 @@ class PairTracker:
 
     def __init__(self, top: int):
         self.top = top
-        self.first = self.image = self.seed = self.pair = self.prev = None
+        self.first = self.image = self.seed = self.pair = self.prev = self.thr = None
 
     def update(self, gray: np.ndarray, t: float, us: int):
         if self.first is None:
@@ -87,11 +87,11 @@ class PairTracker:
             if us >= self.top - 10:
                 self.pair = moved_pair(self.first, gray)
                 if self.pair:
-                    self.seed, self.image = self.pair, gray
+                    # the bright level is frozen here so a frame without notes stays empty
+                    self.seed, self.image, self.thr = self.pair, gray, bright_level(gray)
         else:
             h = int(np.clip(0.35 * math.dist(*self.pair), 20, 60))
-            thr = bright_level(gray)
-            pts = [note_centre(gray, p, h, thr) for p in self.pair]
+            pts = [note_centre(gray, p, h, self.thr) for p in self.pair]
             if None not in pts:
                 self.pair = pts
                 (x1, y1), (x2, y2) = pts
