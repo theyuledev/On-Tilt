@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 from src.io.settings import load
-from src.vision.balls import find_balls
+from src.vision.balls import downsample, find_balls
 
 pytestmark = pytest.mark.unit
 
@@ -89,3 +89,12 @@ def test_small_glare_spot_is_not_a_ball():
 def test_dark_ball_wins_over_bright_one():
     img = ball(ball(plate(level=120), 400, 400, 40, shade=240), 800, 400, 40)
     only(find_balls(img, CFG), 800, 400, 40)
+
+
+def test_ball_at_the_plate_edge_is_only_found_against_the_background():
+    # the table strip is narrower than the plate closing, so it gets the plate's level and
+    # swallows a ball touching the edge; the real background keeps the two apart
+    r = 45
+    img = ball(plate(), 640, 40 + r, r)
+    assert find_balls(img, CFG) == []
+    only(find_balls(img, CFG, downsample(plate(), CFG)), 640, 40 + r, r)

@@ -21,24 +21,43 @@ def _square(side: float) -> np.ndarray:
     return np.ones((int(side) | 1,) * 2, np.uint8)
 
 
-def threshold(gray: np.ndarray, cfg: dict, dark: bool) -> np.ndarray:
-    """Per-pixel cut-off from the plate around it, with blobs up to the biggest ball wiped out."""
+def step(cfg: dict) -> int:
+    return max(1, int(cfg["min_ball_r_px"]) // 2)
+
+
+def downsample(gray: np.ndarray, cfg: dict) -> np.ndarray:
+    """A pixel per half of the smallest ball: the grid the level and the background live on."""
     h, w = gray.shape
-    step = max(1, int(cfg["min_ball_r_px"]) // 2)
-    small = cv2.resize(gray, (w // step, h // step), interpolation=cv2.INTER_LINEAR)
-    square = _square(2 * cfg["max_ball_r_px"] / step + 3)
+    s = step(cfg)
+    return cv2.resize(gray, (w // s, h // s), interpolation=cv2.INTER_LINEAR)
+
+
+def plate_level(small: np.ndarray, cfg: dict, dark: bool) -> np.ndarray:
+    """The plate around each pixel, with blobs up to the biggest ball wiped out. Wrong next to
+    the plate edge, where the floor and a hand get the plate's value too."""
+    square = _square(2 * cfg["max_ball_r_px"] / step(cfg) + 3)
     bg = cv2.morphologyEx(small, cv2.MORPH_CLOSE, square)
     if not dark:
         # done after the close so dark balls and lines don't break up the plate
         bg = cv2.morphologyEx(bg, cv2.MORPH_OPEN, square)
+    return bg
+
+
+def threshold(gray: np.ndarray, cfg: dict, dark: bool, background=None) -> np.ndarray:
+    """Per-pixel cut-off from the downsampled background when given, else from the plate level."""
+    if background is None:
+        background = plate_level(downsample(gray, cfg), cfg, dark)
     c = cfg["min_contrast"]
-    level = cv2.convertScaleAbs(bg, alpha=1 - c if dark else 1 + c)
+    level = cv2.convertScaleAbs(background, alpha=1 - c if dark else 1 + c)
+    h, w = gray.shape
     return cv2.resize(level, (w, h), interpolation=cv2.INTER_LINEAR)
 
 
-def contrast_mask(gray: np.ndarray, cfg: dict, dark: bool, box: Box | None = None) -> np.ndarray:
+def contrast_mask(
+    gray: np.ndarray, cfg: dict, dark: bool, box: Box | None = None, background=None
+) -> np.ndarray:
     """Pixels that stand out from the plate around them, inside box (x0, y0, x1, y1)."""
-    level = threshold(gray, cfg, dark)
+    level = threshold(gray, cfg, dark, background)
     x0, y0, x1, y1 = box or (0, 0, gray.shape[1], gray.shape[0])
     mask = cv2.compare(gray[y0:y1, x0:x1], level[y0:y1, x0:x1], cv2.CMP_LT if dark else cv2.CMP_GT)
     # plug small glints, drop strokes too thin to hold the smallest ball, then patch notches
@@ -49,11 +68,13 @@ def contrast_mask(gray: np.ndarray, cfg: dict, dark: bool, box: Box | None = Non
     return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, _square(r_min))
 
 
-def round_blobs(gray: np.ndarray, cfg: dict, dark: bool, box: Box | None = None) -> list[Candidate]:
+def round_blobs(
+    gray: np.ndarray, cfg: dict, dark: bool, box: Box | None = None, background=None
+) -> list[Candidate]:
     """Centre and radius come from the blob's area, so a stub of line stuck to it barely
     moves them. score is how much of its enclosing circle the blob fills."""
     r_min, r_max = cfg["min_ball_r_px"], cfg["max_ball_r_px"]
-    mask = contrast_mask(gray, cfg, dark, box)
+    mask = contrast_mask(gray, cfg, dark, box, background)
     offset = box[:2] if box else (0, 0)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE, offset=offset)
     found = []
@@ -68,6 +89,7 @@ def round_blobs(gray: np.ndarray, cfg: dict, dark: bool, box: Box | None = None)
     return sorted(found, key=lambda c: -c.score)
 
 
-def find_balls(gray: np.ndarray, cfg: dict) -> list[Candidate]:
-    """Dark balls, best first. Bright ones only when there's no dark one."""
-    return round_blobs(gray, cfg, True) or round_blobs(gray, cfg, False)
+def find_balls(gray: np.ndarray, cfg: dict, background=None) -> list[Candidate]:
+    """Dark balls, best first. Bright ones only when there's no dark one, and never against the
+    background: whatever dark sat in it for long leaves a hole the bare plate shines through."""
+    return round_blobs(gray, cfg, True, None, background) or round_blobs(gray, cfg, False)
