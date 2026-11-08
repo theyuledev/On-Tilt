@@ -55,3 +55,10 @@ button:disabled { opacity: .4; cursor: default; }
 @keyframes pop { from { scale: 1.4; } }
 @keyframes brief { 70% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes blink { 50% { opacity: .2; } }
+#results { display: grid; gap: 8px; justify-items: start; font-variant-numeric: tabular-nums; }
+#restime { font-size: 48px; }
+#resdelta { font-size: 32px; font-weight: 700; }
+#resghost { padding: 2px 9px; border-radius: 99px; background: #CC79A7; color: #111; font-weight: 700; }
+#resname { font: inherit; width: 10ch; padding: 6px 10px; border: 1px solid #555; border-radius: 4px; background: #222; color: #fff; }
+#resname:disabled { opacity: .5; }
+#results .hint { color: #aaa; }

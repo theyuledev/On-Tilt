@@ -18,6 +18,7 @@ HUD_IDS = ("race", "timer", "speed", "cps", "banner", "ballpill", "kill", "seen"
 PILL_IDS = ("hand", "beat", "board", "stale")
 RACE_IDS = ("racebtn", "count", "delta", "pen", "result")
 RACE_FIELDS = ("state", "elapsed_s", "reached", "delta_s", "penalty_s", "reason", "ghost_lap_s")
+RESULT_IDS = ("restime", "respen", "resdelta", "resghost", "resname", "ressaved", "resbeat")
 
 
 @pytest.fixture
@@ -111,6 +112,61 @@ def test_ws_race_key_without_a_game_keeps_the_socket_open():
     assert calls == ["kill"]
 
 
+def test_ws_save_hands_the_game_a_cleaned_name():
+    saved = []
+    loop = SimpleNamespace(cfg=load(), game=SimpleNamespace(save=saved.append), snapshot=lambda: {})
+    names = ("../../x y!", "?/.\\*", "   ", "averyverylongname", "abcdefg hij", 42)
+    with TestClient(make_app(loop)).websocket_connect("/ws") as sock:
+        for name in names:
+            sock.send_json({"save": name})
+            sock.receive_json()
+    assert saved == ["x y", "averyver", "abcdefg", "42"]
+
+
+def test_ws_save_without_a_game_is_ignored_and_the_socket_stays_open():
+    loop = SimpleNamespace(cfg=load(), snapshot=lambda: {"ok": 1})
+    with TestClient(make_app(loop)).websocket_connect("/ws") as sock:
+        for msg in ({"save": "x"}, {}):
+            sock.send_json(msg)
+            assert sock.receive_json() == {"ok": 1}
+
+
+def test_page_has_a_results_panel_loaded_after_hud_and_before_app(client):
+    page = client.get("/").text
+    assert all(f'id="{i}"' in page for i in RESULT_IDS)
+    assert page.index('id="side"') < page.index('id="results" hidden')
+    assert '<input id="resname" maxlength="8"' in page
+    at = [page.index(f"/static/{f}.js") for f in ("hud", "results", "app")]
+    assert at == sorted(at)
+    assert "hud(s, maze);\n  results(s);" in static(client, "app.js")
+
+
+def test_results_panel_shows_the_finished_race_and_saves_a_judge_name(client):
+    js = static(client, "results.js")
+    assert all(f"r.{f}" in js for f in ("state", "score", "delta_s", "ghost_lap_s"))
+    assert 'r.state === "finished" && !!r.score' in js and "RES_DELAY_MS = 1000;" in js
+    assert "fmtLap(r.score.time_s)" in js and "signed(d)" in js and "d < 0 ? AHEAD : BEHIND" in js
+    assert "JUDGE ${resSaves + 1}" in js and "pending.save = name;" in js
+    page = client.get("/").text
+    assert ">NEW GHOST<" in page and ">race again: R<" in page and ">beat it<" in page
+    assert ">saved<" in page and "#resghost {" in static(client, "style.css")
+    assert "#CC79A7" in static(client, "style.css")
+
+
+def test_name_field_only_takes_keys_while_disarmed(client):
+    js = static(client, "results.js")
+    assert "resName.disabled = !!s.armed ||" in js and "if (resName.disabled) resName.blur();" in js
+
+
+def test_typing_in_a_field_skips_the_window_keys_but_still_lets_go_of_tilt(client):
+    js = static(client, "app.js")
+    down = js[js.index('addEventListener("keydown"') : js.index('addEventListener("keyup"')]
+    assert down.index("if (typing(e)) return;") < down.index("clickKeys.has(e.code)")
+    up = js[js.index('addEventListener("keyup"') :].split("\n")[0]
+    assert up.index("!typing(e)") < up.index("clickKeys.has(e.code)")
+    assert up.endswith("e.preventDefault(); held.delete(e.code); });")
+
+
 def test_page_has_a_hand_pill_keyed_on_the_snapshot_flags(client):
     assert 'id="hand"' in client.get("/").text
     js = static(client, "app.js")
@@ -152,8 +208,8 @@ def test_space_or_enter_never_clicks_a_focused_arm_button(client):
     js = static(client, "app.js")
     assert 'clickKeys = new Set(["Space", "Enter", "NumpadEnter"])' in js
     # space clicks a focused button on keyup, so both key events swallow it
-    assert js.count("if (clickKeys.has(e.code)) e.preventDefault();") == 2
-    assert 'addEventListener("keyup", e => { if (clickKeys.has(e.code)) e.preventDefault();' in js
+    assert js.count("clickKeys.has(e.code)) e.preventDefault();") == 2
+    assert 'addEventListener("keyup", e => { if (!typing(e) && clickKeys.has(e.code))' in js
     assert 'if (e.code === "Space") { pending.kill = true; return; }' in js
     for b in ("arm", "kill"):
         assert f'$("{b}").onclick = e => {{ pending.{b} = true; e.currentTarget.blur(); }}' in js

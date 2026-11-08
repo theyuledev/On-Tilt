@@ -31,7 +31,18 @@
       <span id="level" class="hud" hidden>levelling</span>
       <canvas id="pad"></canvas>
     </div>
-    <div id="side"></div>
+    <div id="side">
+      <div id="results" hidden>
+        <b id="restime"></b>
+        <span id="respen"></span>
+        <span id="resdelta"></span>
+        <span id="resghost" hidden>NEW GHOST</span>
+        <input id="resname" maxlength="8" autocomplete="off" spellcheck="false" aria-label="name">
+        <span id="ressaved" hidden>saved</span>
+        <span class="hint">race again: R</span>
+        <span id="resbeat" class="hint" hidden>beat it</span>
+      </div>
+    </div>
     <canvas id="strip"></canvas>
   </div>
   <div class="row">
@@ -51,6 +62,7 @@
 <script src="/static/pad.js"></script>
 <script src="/static/strip.js"></script>
 <script src="/static/hud.js"></script>
+<script src="/static/results.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
