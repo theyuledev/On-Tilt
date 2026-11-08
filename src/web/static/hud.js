@@ -2,7 +2,7 @@
 const AHEAD = "#56B4E9";
 const BEHIND = "#E69F00";
 const SPLIT_MS = 2500;  // length of the .split animation in style.css
-const LIVE = ["countdown", "running"];
+const LIVE = ["calibrating", "staging", "countdown", "running"];
 let prev = null, splitAt = -Infinity;
 
 function restart(el, cls) {
