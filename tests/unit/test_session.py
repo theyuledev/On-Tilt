@@ -1,6 +1,7 @@
 import pytest
 
 from src.games import ghost, session
+from src.games.progress import in_ring
 from src.games.session import Game
 from tests.unit.test_race import FINISH, GAME, MAZE, RIG, fake_step, rec
 
@@ -48,11 +49,27 @@ def test_tick_keeps_records_from_the_ring_exit():
     assert g.race.state == "idle"
     race_to_finish(g)
     assert g.race.state == "finished"
-    assert [r.t_s for r in g.records] == [4.0, *(t for t, _, _ in FINISH)]
+    assert [r.t_s for r in g.records] == [3.0, 4.0, *(t for t, _, _ in FINISH)]
+    assert in_ring(g.records[0].ball, MAZE.start, GAME["checkpoint_r_mm"])
+    assert g.records[1].t_s == g.race.t0_s
     g.tick(rec(11.0), False, False)
-    assert len(g.records) == 6
+    assert len(g.records) == 7
     g.start()
     assert g.records == [] and g.race.state == "countdown"
+
+
+def test_saved_race_cuts_at_the_first_exit_even_if_the_ball_comes_back():
+    g = Game(CFG, MAZE, fake_step)
+    g.tick(rec(0.0), False, False)
+    g.start()
+    for t, x in [(1.0, -100.0), (3.0, -100.0), (4.0, -60.0), (4.5, -100.0), (4.8, -60.0)]:
+        g.tick(rec(t, x), False, False)
+    for t, x, y in FINISH:
+        g.tick(rec(t, x, y), False, False)
+    assert g.race.state == "finished"
+    lap = ghost.lap(g.records, MAZE, GAME, RIG, fake_step)
+    assert lap == g.records[1:]
+    assert lap[0].t_s == g.race.t0_s == 4.0
 
 
 def test_save_writes_the_run_only_when_finished(tmp_path, monkeypatch):

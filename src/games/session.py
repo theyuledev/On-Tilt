@@ -18,6 +18,7 @@ class Game:
         self.race = race.Race()
         self.records: list[RunLogRecord] = []
         self.last: RunLogRecord | None = None
+        self.ring: RunLogRecord | None = None
         self.attract = False
         self.killing = self.board_lost = False
         self.trace: list[list[float]] = []
@@ -46,7 +47,7 @@ class Game:
         was = self.race
         self.race = race.start(was, self.last, self.killing, self.board_lost, self.maze, game)
         if self.race.state == "countdown" and was.state != "countdown":
-            self.records = []
+            self.records, self.ring = [], None
 
     def abort(self) -> None:
         self.race = race.abort(self.race)
@@ -57,8 +58,15 @@ class Game:
         self.race = race.advance(
             was, rec, killing, board_lost, self.maze, self.cfg["game"], self.cfg["rig"], self.step
         )
-        if was.state == "running" and self.race.t0_s is not None:
-            self.records.append(rec)
+        now = self.race
+        if was.state == "running" and now.t0_s is not None:
+            if was.t0_s is None:
+                # keep the last in-ring record so a saved race cuts like a run log
+                self.records = [self.ring, rec] if self.ring is not None else [rec]
+            else:
+                self.records.append(rec)
+        elif now.state in ("countdown", "running") and rec.ball.valid:
+            self.ring = rec
 
     def mode(self) -> str:
         if self.race.state in ("countdown", "running"):
