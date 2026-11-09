@@ -107,7 +107,8 @@ def test_small_ball_tangent_to_any_stroke_is_too_ragged(w, below):
 
 
 def track_over_verticals(w, r):
-    """Ball rolls across three vertical strokes on a learned board. Returns per-frame (out, x)."""
+    """Ball rolls across three vertical strokes on a learned board. Returns per-frame
+    (out, x, misses): misses is 0 only on a real hit, since out.valid stays true while coasting."""
     xs = (400, 640, 880)
 
     def lines(im):
@@ -121,13 +122,14 @@ def track_over_verticals(w, r):
     run = []
     for i in range(n):
         x = round(250 + (1030 - 250) * i / (n - 1))
-        run.append((tr.update(ball(lines(plate()), x, Y, r, shade=SHADE), t0 + i * DT), x))
+        out = tr.update(ball(lines(plate()), x, Y, r, shade=SHADE), t0 + i * DT)
+        run.append((out, x, tr.misses))
     return run
 
 
 def lock_losses(run):
     was, losses = False, 0
-    for out, _ in run:
+    for out, _, _ in run:
         losses += was and not out.valid
         was = out.valid
     return losses
@@ -136,8 +138,9 @@ def lock_losses(run):
 @pytest.mark.parametrize("r", BIG)
 def test_tracked_ball_stays_locked_across_11px_strokes(r):
     run = track_over_verticals(11, r)
-    for out, x in run:
-        assert out.valid and out.x_px == pytest.approx(x, abs=r / 2)
+    for out, x, misses in run:
+        # a hit every frame, not a coast through the stroke
+        assert out.valid and misses == 0 and out.x_px == pytest.approx(x, abs=r / 2)
 
 
 @pytest.mark.parametrize("r", BIG)
