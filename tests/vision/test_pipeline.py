@@ -1,3 +1,4 @@
+import json
 import math
 
 import pytest
@@ -5,6 +6,7 @@ import pytest
 from src.io.settings import load
 from src.vision.pipeline import Pipeline
 from tests.unit.test_balls import ball, plate
+from tests.unit.test_px_to_mm import CALIB
 
 pytestmark = pytest.mark.unit
 
@@ -58,3 +60,11 @@ def test_tilt_is_nan_and_nothing_occluded_without_markers():
     assert math.isnan(o.tilt_x_deg) and math.isnan(o.tilt_y_deg)
     assert o.occluded is False
     assert o.ms > 0
+
+
+def test_use_calib_reads_the_ball_through_the_saved_calibration(tmp_path):
+    (tmp_path / "calib.local.json").write_text(json.dumps(CALIB))
+    on = {"use_calib": True, "calib_centre_mm": [10.0, 0.0], "calib_yaw_deg": 90.0}
+    o = run(Pipeline({**CFG, "vision": {**VIS, **on}}), rolling(1))[0]
+    # the flat route reads this ball at (0, 0)
+    assert (o.ball.x_mm, o.ball.y_mm) == pytest.approx((0.0, -10.0), abs=1.0)

@@ -93,6 +93,9 @@ predict_dt_max_s = { value = 0.017, label = "uncalibrated default (NOT TESTED, e
 px_per_mm = { value = 2.37, label = "measured (2026-11-07)" }
 plate_centre_px = { value = [640, 400], label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 plate_yaw_deg = { value = 0.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+use_calib = false
+calib_centre_mm = { value = [0.0, 0.0], label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+calib_yaw_deg = { value = 0.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 velocity_span_frames = { value = 4, label = "sim-tuned (PR #79)" }
 bg_period_s = { value = 2.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 bg_frames = { value = 30, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
