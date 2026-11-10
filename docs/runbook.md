@@ -26,7 +26,7 @@ camera_uvc: read it off `uvc-util -d`, the Vend:Prod column of the overhead cam.
 
 ## arm / kill
 
-page: `arm` button arms, `kill (space)` button or the space key kills. arrows / wasd steer the plate while armed. the pill says disarmed / armed / killing, `board lost` shows up when the port is gone.
+page: `ARM` button arms, `KILL` button or the space key kills. arrows / wasd steer the plate while armed. the chip over the timer says disarmed / armed / killing, the board light and the line under the board say `board lost` when the port is gone.
 
 bench, typed at the `>` prompt:
 
@@ -90,7 +90,7 @@ the numbers go into configs/settings.toml [rig] in their own PR: trim_x_us, trim
 
 no ball on the plate. app on the real board (see start), bench not running. startup_flag = true in configs/settings.toml [rig] caps the app's limits at startup_range_us around center (limit_x_us / limit_y_us if smaller), and the board gets the same ones in its `L`.
 
-1. page: `arm`, hold an arrow so the plate tilts, click `kill (space)`. the app ramps to level at kill_ramp_us_s, holds it 40 ms, then sends `D`. the pill goes killing, then disarmed. no app log line on a clean kill
+1. page: `arm`, hold an arrow so the plate tilts, click `KILL`. the app ramps to level at kill_ramp_us_s, holds it 40 ms, then sends `D`. the chip goes killing, then disarmed. no app log line on a clean kill
 2. `arm`, click the page background so no button keeps focus, tilt, space key. same path as the button, same result
 3. `arm`, tilt, then from another terminal `pkill -9 -f 'python.* -m src.app'`. the page goes `offline`. the board hears nothing for 250 ms, ramps to level at 300 us/s, holds level 40 ms and stops pulses. ctrl-c in the app does not ramp (only the bench's does), it just stops sending once the server shuts down, so the pkill is the clean timeout check. restart the app before the next arm
 4. usb pull while armed: the app prints `board lost: ...`, the page shows `board lost`. the board runs off that usb, so pulses stop at once with no ramp and the plate stays or sags where it was, nothing should bind. replug, ctrl-c the app, the board boots disarmed: in the bench `S` answers `OK S 0 0 ...` like the reset drill, then restart the app
