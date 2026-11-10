@@ -49,6 +49,15 @@ class PlateState:
 
 
 @dataclass(frozen=True, slots=True)
+class Choices:
+    # what the player picks on the page; None leaves that one as it is
+    mode: str | None = None  # hand, balance or path
+    steer: str | None = None  # hand or keys
+    hand_mode: str | None = None  # tilt or palm
+    guard: bool | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class RunLogRecord:
     t_s: float
     mode: str
