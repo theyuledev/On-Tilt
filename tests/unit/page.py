@@ -85,7 +85,7 @@ parse(fs.readFileSync(path.join(dir, job.page), "utf8"));
 const box = vm.createContext({
   document: { getElementById: id => els[id] ?? null, createElement: el, body: el("body") },
   location: { search: job.query || "", host: "page" },
-  URLSearchParams, console, devicePixelRatio: 1,
+  URLSearchParams, console, devicePixelRatio: 1, Path2D: class {},
   performance: { now: () => clock },
   requestAnimationFrame: fn => { rafs.push(fn); },
   setTimeout: () => 0, clearTimeout: () => {}, setInterval: () => 0,

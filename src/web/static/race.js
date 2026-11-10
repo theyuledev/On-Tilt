@@ -70,9 +70,9 @@ function plate(ctx, h) {
   ctx.stroke();
 }
 
-function walls(ctx, maze, color = MARKER) {
+function walls(ctx, maze, color = MARKER, width = 3.2) {
   ctx.lineJoin = ctx.lineCap = "round";
-  ctx.lineWidth = 3.2;
+  ctx.lineWidth = width;
   ctx.strokeStyle = color;
   maze.walls.forEach((w) => polyline(ctx, w));
 }
@@ -143,6 +143,7 @@ function draw(ctx, cfg, maze, s, look) {
   guardLine(ctx, s, h);
   if (maze) {
     if (maze.walls) (look.tall ? tallWalls : walls)(ctx, maze);
+    ends(ctx, maze, h, r);
     route(ctx, maze);
     gates(ctx, maze, r, s.race);
   }

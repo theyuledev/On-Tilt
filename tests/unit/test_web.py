@@ -67,7 +67,32 @@ def test_page_has_the_view_tag_the_board_map_and_loads_the_camera_before_the_vie
     assert at == sorted(at)
     assert "drawView(ctx, cfg, maze, s);" in static(client, "app.js")
     lean = "transform-origin: 50% 58%; transform: perspective(1000px) rotateX(34deg) scale(1.32);"
-    assert f"#race.follow {{ {lean} }}" in static(client, "style.css")
+    css = static(client, "style.css")
+    assert f"#race.follow {{ {lean} }}" in css
+    # the map boxes what that scale leaves in view
+    assert "const FOLLOW_SCALE = 1.32;" in static(client, "follow.js")
+    # the plain top-down board has no tag on it
+    assert 'top-down" hidden></button>' in page
+    assert "#viewtag { position: absolute; left: 22px; bottom: 20px;" in css
+
+
+def test_pops_are_sized_off_the_board_panel_wrap_and_stack_clear_of_each_other(client):
+    css = static(client, "style.css")
+    assert "container-type: inline-size;" in css.split(".arena {")[1].split("}")[0]
+    hud = css.split("\n.hud {")[1].split("}")[0]
+    assert "font: 400 24px var(--px); font-size: clamp(12px, 4cqw, 24px);" in hud
+    assert "max-width: 90%;" in hud and "white-space: pre-wrap;" in hud
+    order = ("split", "pen", "result", "count", "level")
+    tops = [int(re.search(rf"^#{i} {{ top: (\d+)%;", css, re.M)[1]) for i in order]
+    assert tops == [14, 24, 34, 50, 72]
+    assert "#side:has(#balance:not([hidden])) { gap: 16px; }" in css
+
+
+def test_page_scripts_never_define_the_same_name_twice(client):
+    names = []
+    for src in re.findall(r'<script src="/static/([\w.]+)"', client.get("/").text):
+        names += re.findall(r"^(?:function|const|let) (\w+)", static(client, src), re.M)
+    assert len(names) > 100 and sorted(names) == sorted(set(names))
 
 
 def test_play_and_settings_pages_link_to_each_other(client):
@@ -435,10 +460,11 @@ def test_page_still_connects_and_draws_the_plate_without_a_maze(client):
 
 def test_race_js_draws_walls_under_the_race_line_only_when_the_maze_has_them(client):
     js = static(client, "race.js")
-    assert "function walls(ctx, maze, color = MARKER)" in js
+    assert "function walls(ctx, maze, color = MARKER, width = 3.2)" in js
     assert "maze.walls.forEach((w) => polyline(ctx, w))" in js
     guarded = js.index("if (maze.walls) (look.tall ? tallWalls : walls)(ctx, maze);")
-    assert guarded < js.index("    route(ctx, maze);")
+    # the S and the E are marker too: over the walls, under the race line
+    assert guarded < js.index("    ends(ctx, maze, h, r);") < js.index("    route(ctx, maze);")
 
 
 def test_race_js_draws_the_plate_in_mm_with_a_ball_trail(client):
