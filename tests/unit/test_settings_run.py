@@ -58,6 +58,11 @@ def test_every_setting_gets_a_field_named_and_united_from_its_key(served):
     assert names["vision.velocity_span_frames"] == ("VELOCITY SPAN FRAMES", "")
     assert names["input.hand_min_cutoff_hz"] == ("HAND MIN CUTOFF", "Hz")
     assert got["control.kp_deg_mm"]["value"] == "0.05"
+    # a whole float keeps its point, a whole number and a list stay as they are
+    assert served["sections"]["rig"]["camera_exposure_ms"] == 3
+    assert got["rig.camera_exposure_ms"]["value"] == "3.0"
+    assert got["rig.center_x_us"]["value"] == "1500"
+    assert got["vision.plate_centre_px"]["value"] == "[640,400]"
     assert got["vision.plate_centre_px"]["value"] == "[640,400]"
     assert got["rig.actuator"]["value"] == "sim"
     assert got["game.attract"]["attrs"]["aria-checked"] == "false"

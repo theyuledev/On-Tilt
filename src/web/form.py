@@ -24,10 +24,15 @@ ONE_OF = {
 def view(loop) -> dict:
     """The running value of every setting in the files, by section, and what locks them."""
     saved, cfg = settings.load(), loop.cfg
+    sections = {s: {k: cfg[s].get(k, v) for k, v in sec.items()} for s, sec in saved.items()}
     return {
         "armed": loop.safety.armed,
         "locked": list(LOCKED),
-        "sections": {s: {k: cfg[s].get(k, v) for k, v in sec.items()} for s, sec in saved.items()},
+        "sections": sections,
+        # json drops the point of a whole float, the page writes these with it
+        "floats": [
+            f"{s}.{k}" for s, sec in sections.items() for k, v in sec.items() if type(v) is float
+        ],
         "mazes": sorted(p.stem for p in maze.MAZES.glob("*.toml")),
         "choices": asdict(switches.view(loop)),
         "target": held(loop.cfg)["src"],
