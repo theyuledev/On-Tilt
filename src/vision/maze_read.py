@@ -8,6 +8,9 @@ import numpy as np
 
 from src.vision.maze_path import clearance, shortest_path
 
+# how marker strokes read off a frame: stroke width, board and ink levels, letter size
+STROKES = {"stroke_mm": 3.0, "board": 0.85, "dark": 0.6, "letter_mm": (7.0, 20.0)}
+
 
 @dataclass(frozen=True, slots=True)
 class MazeRead:
