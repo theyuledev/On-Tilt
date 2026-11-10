@@ -377,6 +377,8 @@ def test_config_gives_plate_ball_and_stale_limit_from_settings(client):
         "dead_zone": cfg["input"]["dead_zone"],
         "hand": False,
         "tilt_full_deg": cfg["input"]["intent_gain_deg"],
+        "px_per_mm": cfg["vision"]["px_per_mm"],
+        "camera_fps": cfg["rig"]["camera_fps"],
     }
     with_hand = TestClient(make_app(SimpleNamespace(cfg=cfg, hand=object())))
     assert with_hand.get("/config").json()["hand"] is True

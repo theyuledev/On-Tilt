@@ -41,6 +41,8 @@ def make_app(loop) -> FastAPI:
             "dead_zone": inp["dead_zone"],
             "hand": loop.hand is not None,
             "tilt_full_deg": inp["intent_gain_deg"],
+            "px_per_mm": loop.cfg["vision"]["px_per_mm"],
+            "camera_fps": rig["camera_fps"],
         }
 
     @app.get("/race/maze")
