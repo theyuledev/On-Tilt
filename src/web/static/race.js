@@ -205,6 +205,7 @@ function draw(ctx, cfg, maze, s) {
     gates(ctx, maze, r, s.race);
   }
   if (g) ghost(ctx, g, r, s.t_s);
+  if (s.choices.mode === "balance") reticle(ctx, s.target, r);
   tail(ctx, trail, s.t_s, TRAIL_S, r / 2, BALL, 0.25);
   // the player's ball goes on last so nothing drawn later can cover it
   if (s.ball.valid) ball(ctx, [s.ball.x_mm, s.ball.y_mm], r, h);

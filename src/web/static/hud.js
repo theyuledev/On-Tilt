@@ -101,11 +101,14 @@ function lamps(n, reached) {
 }
 
 function readouts(s, r, maze) {
-  const free = s.race === undefined, done = !!r && r.state === "finished";
+  const balance = s.choices.mode === "balance", free = !balance && s.race === undefined;
+  const done = !!r && r.state === "finished";
   const counting = !!r && !PRE.includes(r.state) && r.state !== "idle";
   const t = done && r.score ? r.score.time_s : counting ? Math.max(0, r.elapsed_s ?? 0) : 0;
-  $("scores").hidden = $("gates").hidden = free;
+  $("scores").hidden = $("gates").hidden = balance || free;
   $("nomaze").hidden = !free;
+  $("balance").hidden = !balance;
+  if (balance) return balanceReadouts(s);
   $("timelabel").textContent = free ? "NOW PLAYING" : done ? "FINISH TIME" : "TIME";
   $("timer").className = free ? "free" : counting ? "" : "idle";
   $("timer").textContent = free ? "FREE PLAY" : fmtLap(t);

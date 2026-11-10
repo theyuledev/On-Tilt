@@ -118,6 +118,11 @@ const acts = {
   up: ([code, on]) => key("keyup", code, on),
   click: at => { const e = find(at); if (!e.disabled) e.onclick({ currentTarget: e }); },
   type: ([id, text]) => { els[id].value = text; },
+  // a click at u, v (0..1) across an element
+  tap: ([id, u, v]) => {
+    const e = els[id];
+    e.onclick({ currentTarget: e, offsetX: u * e.clientWidth, offsetY: v * e.clientHeight });
+  },
 };
 const view = e => ({
   text: e.textContent, cls: e.className, hidden: e.hidden, disabled: e.disabled, value: e.value,

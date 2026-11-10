@@ -61,7 +61,7 @@ def test_both_fonts_are_served_from_static_and_nothing_loads_from_the_network(cl
 
 def test_choice_controls_start_disabled_until_the_first_snapshot(client):
     page = client.get("/").text
-    assert 'id="choices" class="locked"' in page and page.count("data-pick=") == 7
+    assert 'id="choices" class="locked"' in page and page.count("data-pick=") == 10
     for at in [m.start() for m in re.finditer("data-pick=", page)] + [page.index('id="guard"')]:
         tag = page[page.rindex("<button", 0, at) : page.index(">", at)]
         assert tag.endswith(" disabled")

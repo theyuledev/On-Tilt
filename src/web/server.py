@@ -1,3 +1,4 @@
+import asyncio
 import math
 import re
 import time
@@ -11,6 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from src import switches
 from src.games import maze
 from src.inputs import hand_view
+from src.modes import spot
+from src.vision.cross import cross_mm
 
 STATIC = Path(__file__).parent / "static"
 JPEG_SCALE = 0.5  # 1280x800 camera -> 640x400 on the page
@@ -21,6 +24,13 @@ NAME_MAX = 8  # same as the name field maxlength, the name ends up in a file nam
 
 def clean_name(raw) -> str:
     return re.sub(r"[^A-Za-z0-9 _-]", "", str(raw)).strip()[:NAME_MAX].strip()
+
+
+def retarget(loop, want) -> None:
+    # the X is looked for on the newest overhead frame; no camera means no X
+    frame = getattr(loop, "frame", None)
+    look = want == "marker" and frame is not None
+    spot.aim(loop.cfg, want, cross_mm(frame.image, loop.cfg["vision"]) if look else None)
 
 
 def make_app(loop) -> FastAPI:
@@ -103,6 +113,9 @@ def make_app(loop) -> FastAPI:
                             loop.keys.set(x, y)
                     if "set" in msg:
                         switches.choose(loop, switches.parse(msg["set"]))
+                    if "target" in msg:
+                        # finding the X takes a while, the plate must not wait for it
+                        await asyncio.to_thread(retarget, loop, msg["target"])
                     if msg.get("arm") and not msg.get("kill"):
                         loop.arm()
                     game = getattr(loop, "game", None)

@@ -78,6 +78,10 @@
       <div id="ghostrow" class="score"><span id="ghostsay">VS GHOST</span><span id="delta" class="num">--</span></div>
     </div>
     <div id="gates"><span class="dim">GATES</span><div id="cps"></div></div>
+    <div id="balance" class="field" hidden>
+      <div class="score live"><span>BALL SPEED MM/S</span><span id="speed" class="num">0</span></div>
+      <div class="score live"><span>PLATE TILT</span><span id="tiltnow" class="num">0.00°</span></div>
+    </div>
     <div id="nomaze" class="panel" hidden>
       <b>NOTHING TO RACE YET</b>
       <span class="dim">Draw walls, an S and an E on the board with a marker. Once the board is read, the path, gates and timer show up here.</span>
@@ -98,7 +102,15 @@
           <button type="button" data-pick="path" aria-pressed="false" disabled>PATH</button>
         </div>
       </div>
-      <div class="field">
+      <div id="targetfield" class="field" hidden>
+        <span class="dim">TARGET</span>
+        <div id="targets" class="seg three" role="group" aria-label="Balance target">
+          <button type="button" data-pick="centre" aria-pressed="false" disabled>CENTRE</button>
+          <button type="button" data-pick="mouse" aria-pressed="false" disabled>MOUSE</button>
+          <button type="button" data-pick="marker" aria-pressed="false" disabled>MARKER X</button>
+        </div>
+      </div>
+      <div id="steerfield" class="field">
         <span class="dim">STEER WITH</span>
         <div id="steers" class="seg two" role="group" aria-label="Steer with">
           <button type="button" data-pick="hand" aria-pressed="false" disabled><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 13 V6 M10.5 12 V4 M14 12 V5 M17.5 13 V8 M7 13 L4.5 11 M4.5 11 C3 12 5 17 8 20 H15 C17 18 17.5 16 17.5 13"></path></svg>HAND</button>
@@ -114,7 +126,7 @@
         </div>
       </div>
       <div class="between">
-        <span>EDGE GUARD <span class="dim">invisible walls</span></span>
+        <span>EDGE GUARD <span id="guardsay" class="dim">invisible walls</span></span>
         <button type="button" id="guard" class="switch" role="switch" aria-checked="false" aria-label="Edge guard" disabled><span></span></button>
       </div>
     </div>
@@ -132,6 +144,7 @@
 <script src="/static/results.js"></script>
 <script src="/static/guide.js"></script>
 <script src="/static/board.js"></script>
+<script src="/static/target.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

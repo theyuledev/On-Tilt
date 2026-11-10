@@ -71,6 +71,7 @@ main { flex: 1; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24
 .score .num { font: 400 18px var(--px); line-height: 1; color: var(--edge); }
 .score.hi, .score.ahead, .score.behind { color: var(--ground); }
 .score.hi .num, .score.ahead .num, .score.behind .num { color: inherit; }
+.score.live .num { color: var(--text); }
 .score.hi { background: var(--pink); }
 .score.ahead { background: var(--cyan); }
 .score.behind { background: var(--behind); }
@@ -101,7 +102,7 @@ main { flex: 1; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24
 .sub { display: flex; align-items: center; gap: 12px; padding-left: 14px; }
 .sub > .dim { white-space: nowrap; }
 .elbow { width: 20px; height: 28px; flex: none; }
-.locked .field > .seg, .locked .sub { opacity: 0.4; }
+.locked #modes, .locked #steers, .locked .sub { opacity: 0.4; }
 #choices:not(.locked) .seg button:disabled { opacity: 0.4; }
 .switch { display: flex; align-items: center; justify-content: flex-start; width: 76px; height: 44px; box-sizing: border-box; padding: 5px; border: 0; border-radius: 999px; background: var(--line); cursor: pointer; }
 .switch span { width: 34px; height: 34px; border-radius: 50%; background: var(--muted); }
