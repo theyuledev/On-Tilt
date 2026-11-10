@@ -105,9 +105,10 @@ def test_hud_is_keyed_on_the_race_view(client):
 
 
 def test_race_js_lights_reached_gates_and_pulses_the_next(client):
-    js = static(client, "race.js")
-    assert "function gates(ctx, maze, ballR, race)" in js and "gates(ctx, maze, r, s.race)" in js
+    js = static(client, "gates.js")
+    assert "function gates(ctx, maze, ballR, race)" in js
     assert "race.reached" in js and "GATE_PULSE_MS" in js and "GATE_FLASH_MS" in js
+    assert "gates(ctx, maze, r, s.race)" in static(client, "race.js")
 
 
 def test_r_key_and_race_button_send_a_one_shot_start_or_abort(client):
