@@ -1,0 +1,308 @@
+import shutil
+
+import pytest
+
+from tests.unit.page import race, run, snap
+
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.skipif(shutil.which("node") is None, reason="needs node"),
+]
+
+OPEN = ("open", None)
+GHOST = {"ghost_lap_s": 31.5}
+SCORE = {"time_s": 31.19, "penalty_s": 2.0, "checkpoints": 4}
+DONE = race("finished", elapsed_s=29.19, reached=4, delta_s=-0.31, score=SCORE, **GHOST)
+
+
+def show(*snaps, **kw):
+    return run([OPEN, *[("snap", s) for s in snaps]], **kw)["page"]
+
+
+def lamps(page):
+    return [(k["text"], k["cls"]) for k in page["cps"]["kids"]]
+
+
+def pressed(page, group):
+    return [k["attrs"]["aria-pressed"] for k in page[group]["kids"]]
+
+
+def test_ready_page_shows_a_dim_timer_the_first_gate_next_and_the_ball_in_mm():
+    ball = {
+        "x_mm": -112.54,
+        "y_mm": 112.46,
+        "vx_mm_s": 0.0,
+        "vy_mm_s": 0.0,
+        "valid": True,
+        "t_s": 1,
+    }
+    p = show(snap(ball=ball, race=race("idle", **GHOST)))
+    assert (p["timelabel"]["text"], p["timer"]["text"], p["timer"]["cls"]) == (
+        "TIME",
+        "00:00.00",
+        "idle",
+    )
+    assert (p["best"]["text"], p["ghostsay"]["text"], p["delta"]["text"]) == (
+        "00:31.50",
+        "VS GHOST",
+        "--",
+    )
+    assert lamps(p) == [("1", "lamp next"), ("2", "lamp"), ("3", "lamp"), ("F", "lamp")]
+    assert (p["ballx"]["text"], p["bally"]["text"]) == ("X-112.5", "Y+112.5")
+    assert (p["tiltx"]["text"], p["tilty"]["text"]) == ("X +0.00°", "Y +0.00°")
+    assert p["scale"]["text"] == "1 px = 0.42 mm · 120 fps"
+    assert p["sub"]["text"] == "COURSE LOADED · 4 GATES"
+    assert (p["armed"]["text"], p["armed"]["cls"].strip()) == ("DISARMED", "chip")
+    assert (p["banner"]["text"], p["banner"]["data"]["tone"]) == ("click arm to start", "")
+    assert (
+        p["racebtn"]["text"] == "RACE" and not p["arm"]["disabled"] and not p["racebtn"]["disabled"]
+    )
+    assert not p["scores"]["hidden"] and not p["gates"]["hidden"] and p["nomaze"]["hidden"]
+
+
+def test_lights_follow_the_snapshot():
+    p = show(snap())
+    got = {
+        i: (p[i]["text"], p[i]["cls"].strip())
+        for i in ("link", "board", "camlight", "ballpill", "hand")
+    }
+    assert got == {
+        "link": ("LINK", "light on"),
+        "board": ("BOARD", "light on"),
+        "camlight": ("NO CAM", "light"),
+        "ballpill": ("BALL", "light on"),
+        "hand": ("NO HAND", "light"),
+    }
+    assert p["stale"]["hidden"] and p["level"]["hidden"]
+    lost = {"valid": False, "x_mm": 0, "y_mm": 0, "vx_mm_s": 0, "vy_mm_s": 0, "t_s": 0}
+    p = show(snap(armed=True, stale=True, board_lost=True, camera_lost=True, hand_seen=True,
+                  hand_calibrating=False, ball=lost))  # fmt: skip
+    got = {i: (p[i]["text"], p[i]["cls"]) for i in ("board", "camlight", "ballpill", "hand")}
+    assert got == {
+        "board": ("BOARD LOST", "light warn"),
+        "camlight": ("CAM LOST", "light warn"),
+        "ballpill": ("NO BALL", "light warn"),
+        "hand": ("HAND", "light on"),
+    }
+    assert not p["stale"]["hidden"] and not p["level"]["hidden"]
+    assert (p["ballx"]["text"], p["bally"]["text"]) == ("X--.-", "Y--.-")
+    assert show(snap(hand_seen=True, hand_calibrating=True))["hand"]["text"] == "HOLD STILL"
+
+
+def test_a_maze_with_walls_is_named_by_its_strokes_and_no_maze_says_so():
+    walls = [[[0, 0], [10, 0]], [[0, 5], [10, 5]]]
+    maze = {"points": [[0, 0], [10, 0]], "checkpoints": [1], "start": [0, 0], "walls": walls}
+    assert show(snap(), race_maze=maze)["sub"]["text"] == "MAZE READ FROM BOARD · 2 STROKES"
+    assert show(snap(race=...), race_maze=None)["sub"]["text"] == "NO MAZE ON THE BOARD"
+
+
+def test_racing_lights_reached_gates_runs_the_timer_and_says_who_is_ahead():
+    live = {"elapsed_s": 14.2, "reached": 2, **GHOST}
+    p = show(snap(armed=True, race=race("running", delta_s=-0.42, **live)))
+    assert (p["timer"]["text"], p["timer"]["cls"]) == ("00:14.20", "")
+    assert lamps(p) == [("1", "lamp hit"), ("2", "lamp hit"), ("3", "lamp next"), ("F", "lamp")]
+    assert (p["ghostsay"]["text"], p["delta"]["text"]) == ("AHEAD OF GHOST", "-0.42")
+    assert p["ghostrow"]["cls"] == "score ahead"
+    assert (p["armed"]["text"], p["armed"]["cls"]) == ("ARMED", "chip on")
+    assert p["racebtn"]["text"] == "ABORT" and p["arm"]["disabled"]
+    assert p["banner"]["text"] == "gate 3 is next"
+    p = show(snap(armed=True, race=race("running", delta_s=0.8, **live)))
+    assert (p["ghostsay"]["text"], p["delta"]["text"]) == ("BEHIND GHOST", "+0.80")
+    assert p["ghostrow"]["cls"] == "score behind"
+    p = show(snap(armed=True, race=race("running", elapsed_s=3.0, reached=1)))
+    assert (p["best"]["text"], p["ghostsay"]["text"], p["delta"]["text"]) == (
+        "--:--.--",
+        "FIRST LAP",
+        "--",
+    )
+
+
+def test_no_race_text_while_staging_and_the_timer_stays_dim():
+    p = show(
+        snap(armed=True, race=race("running", elapsed_s=3.0, reached=1)),
+        snap(armed=True, race=race("staging")),
+    )
+    assert [p[i]["text"] for i in ("count", "split", "pen")] == ["", "", ""]
+    assert p["result"]["hidden"] and (p["timer"]["text"], p["timer"]["cls"]) == ("00:00.00", "idle")
+    assert lamps(p)[0] == ("1", "lamp next") and p["racebtn"]["text"] == "ABORT"
+    assert p["banner"]["text"] == "roll the ball into the start ring"
+
+
+def test_overlay_texts_pop_over_the_board():
+    count = race("countdown", elapsed_s=-2.4, **GHOST)
+    p = show(snap(armed=True, race=count))
+    assert (p["count"]["text"], p["count"]["cls"]) == ("3", "hud tick")
+    go = race("running", elapsed_s=0.0, **GHOST)
+    p = show(snap(armed=True, race=count), snap(armed=True, race=go))
+    assert (p["count"]["text"], p["count"]["cls"]) == ("GO", "hud go")
+    gate = race("running", elapsed_s=5.0, reached=1, delta_s=0.25, penalty_s=1.5, **GHOST)
+    p = show(snap(armed=True, race=go), snap(armed=True, race=gate))
+    assert (p["split"]["text"], p["split"]["cls"], p["split"]["style"]["color"]) == (
+        "+0.25",
+        "hud split",
+        "#E69F00",
+    )
+    assert (p["pen"]["text"], p["pen"]["cls"]) == ("+1.5 s", "hud pen")
+    first = race("running", elapsed_s=5.0, reached=1)
+    p = show(snap(armed=True, race=race("running", elapsed_s=0.0)), snap(armed=True, race=first))
+    assert p["split"]["text"] == "CP 1  5.00"
+    dnf = race("dnf", elapsed_s=5.2, reached=1, reason="ball lost", **GHOST)
+    p = show(snap(armed=True, race=gate), snap(armed=True, race=dnf))
+    assert [k["text"] for k in p["result"]["kids"]] == ["DNF", "ball lost\narm, then R"]
+    assert p["result"]["cls"] == "hud end" and not p["result"]["hidden"]
+    p = show(
+        snap(armed=True, race=count), snap(armed=True, race=race("idle", reason="left the start"))
+    )
+    assert p["result"]["kids"][0]["text"] == "false start" and p["result"]["cls"] == "hud brief"
+    p = show(snap(armed=True, race=gate), snap(armed=True, race=DONE))
+    assert [k["text"] for k in p["result"]["kids"]] == ["FINISH", "00:31.19"]
+    assert p["result"]["cls"] == "hud brief"
+
+
+def test_off_path_flags_the_arena():
+    off = race("running", elapsed_s=1.0, off_path=True)
+    assert run([OPEN, ("snap", snap(armed=True, race=off))])["body"] == "offpath"
+    assert (
+        run([OPEN, ("snap", snap(armed=True, race=race("running", elapsed_s=1.0)))])["body"] == ""
+    )
+
+
+def test_finish_shows_the_scored_time_then_the_name_entry_and_enter_saves_once():
+    steps = [OPEN, ("snap", snap(race=DONE))]
+    p = run(steps)["page"]
+    assert (p["timelabel"]["text"], p["timer"]["text"]) == ("FINISH TIME", "00:31.19")
+    assert (p["ghostsay"]["text"], p["delta"]["text"]) == ("BEAT THE GHOST BY", "-0.31")
+    assert all(cls == "lamp hit" for _, cls in lamps(p))
+    assert p["banner"]["text"] == "you beat the ghost!"
+    # the pop over the board gets a second first
+    assert p["results"]["hidden"] and not p["choices"]["hidden"] and p["resname"]["disabled"]
+    steps += [("wait", 1000), ("snap", snap(race=DONE))]
+    p = run(steps)["page"]
+    assert not p["results"]["hidden"] and p["choices"]["hidden"]
+    assert p["resname"]["value"] == "JUDGE 1" and not p["resname"]["disabled"]
+    assert p["respen"]["text"] == "Penalty +2.0 s." and p["ressaved"]["hidden"]
+    steps += [
+        ("down", ["Enter", "resname"]),
+        ("frame", None),
+        ("snap", snap(race=DONE)),
+        ("frame", None),
+    ]
+    out = run([*steps, ("down", ["Enter", "resname"]), ("click", "ressave"), ("frame", None)])
+    assert [m["save"] for m in out["sent"] if "save" in m] == ["JUDGE 1"]
+    p = out["page"]
+    assert not p["ressaved"]["hidden"] and p["resname"]["disabled"] and p["ressave"]["disabled"]
+
+
+def test_save_button_saves_the_typed_name():
+    steps = [OPEN, ("snap", snap(race=DONE)), ("wait", 1000), ("snap", snap(race=DONE))]
+    out = run([*steps, ("type", ["resname", " ada "]), ("click", "ressave"), ("frame", None)])
+    assert [m["save"] for m in out["sent"] if "save" in m] == ["ada"]
+    out = run([*steps, ("type", ["resname", "  "]), ("click", "ressave"), ("frame", None)])
+    assert not [m for m in out["sent"] if "save" in m]
+
+
+def test_name_field_only_takes_keys_while_disarmed():
+    armed = snap(armed=True, race=DONE)
+    steps = [OPEN, ("snap", armed), ("wait", 1000), ("snap", armed)]
+    out = run([*steps, ("click", "ressave"), ("down", ["Space", "resname"]), ("frame", None)])
+    p = out["page"]
+    assert not p["results"]["hidden"] and p["resname"]["disabled"] and p["ressave"]["disabled"]
+    assert not p["resarm"]["hidden"]
+    assert not [m for m in out["sent"] if "save" in m]
+    assert [m for m in out["sent"] if m.get("kill")]
+
+
+def test_no_maze_is_free_play_with_no_race_to_start():
+    p = show(snap(race=...), race_maze=None)
+    assert (p["timelabel"]["text"], p["timer"]["text"], p["timer"]["cls"]) == (
+        "NOW PLAYING",
+        "FREE PLAY",
+        "free",
+    )
+    assert p["scores"]["hidden"] and p["gates"]["hidden"] and not p["nomaze"]["hidden"]
+    assert p["racebtn"]["disabled"] and not p["arm"]["disabled"] and not p["kill"]["disabled"]
+
+
+def test_stop_states_and_the_arm_block_reason_show_in_the_line_under_the_board():
+    def line(*snaps):
+        b = show(*snaps)["banner"]
+        return b["text"], b["data"]["tone"]
+
+    assert line(snap(board_lost=True)) == ("board lost, check the usb cable", "stop")
+    assert line(snap(camera_lost=True)) == ("camera lost", "stop")
+    assert line(snap(armed=True, killing=True)) == ("stopped", "stop")
+    seen, gone = snap(armed=True, hand_seen=True), snap(armed=True, hand_seen=False)
+    assert line(seen, gone) == ("HAND LOST", "stop")
+    assert line(gone) != ("HAND LOST", "stop")
+    assert line(snap(arm_blocked="exposure is 10 ms, want 3 ms")) == (
+        "exposure is 10 ms, want 3 ms",
+        "warn",
+    )
+    p = show(snap(armed=True, killing=True))
+    assert (p["armed"]["text"], p["armed"]["cls"]) == ("KILLING", "chip warn")
+
+
+def test_space_always_kills_and_never_clicks_a_focused_button():
+    for on in (None, "arm", "racebtn", "kill"):
+        steps = [
+            OPEN,
+            ("snap", snap()),
+            ("down", ["Space", on]),
+            ("up", ["Space", on]),
+            ("frame", None),
+        ]
+        out = run(steps)
+        assert out["out"][2:4] == [True, True], on  # both key events are swallowed
+        assert out["sent"][-1].get("kill") is True and not any("arm" in m for m in out["sent"]), on
+    out = run(
+        [
+            OPEN,
+            ("snap", snap()),
+            ("down", ["Enter", "arm"]),
+            ("up", ["Enter", "arm"]),
+            ("frame", None),
+        ]
+    )
+    assert out["out"][2:4] == [True, True] and out["sent"][-1] == {"x": 0, "y": 0}
+
+
+def test_buttons_and_keys_send_one_shot_commands():
+    steps = [OPEN, ("snap", snap()), ("click", "arm"), ("down", ["KeyD", None]), ("frame", None)]
+    steps += [
+        ("snap", snap(armed=True)),
+        ("down", ["KeyR", None]),
+        ("up", ["KeyD", None]),
+        ("frame", None),
+    ]
+    steps += [
+        ("snap", snap(armed=True)),
+        ("click", "kill"),
+        ("down", ["KeyC", None]),
+        ("frame", None),
+    ]
+    sent = run(steps)["sent"]
+    assert sent[1:] == [
+        {"x": 1, "y": 0, "arm": True},
+        {"x": 0, "y": 0, "race": "start"},
+        {"x": 0, "y": 0, "kill": True, "recentre": True},
+    ]
+
+
+def test_watch_tab_disables_arm_race_and_kill_and_sends_nothing():
+    steps = [OPEN, ("snap", snap()), ("click", "arm"), ("click", "kill"), ("click", "racebtn")]
+    steps += [("down", ["Space", None]), ("down", ["KeyD", None]), ("frame", None)]
+    steps += [("snap", snap(armed=True)), ("frame", None)]
+    out = run(steps, query="?watch")
+    assert all(m == {} for m in out["sent"]) and len(out["sent"]) == 3
+    assert all(out["page"][i]["disabled"] for i in ("arm", "kill", "racebtn"))
+
+
+def test_mode_and_steering_show_what_is_live_and_the_guard_follows_the_snapshot():
+    p = show(snap(mode="balance"), config={"hand": True})
+    assert pressed(p, "modes") == ["false", "true", "false"]
+    assert pressed(p, "steers") == ["true", "false"]
+    assert p["guard"]["attrs"]["aria-checked"] == "false" and p["guard"]["disabled"]
+    p = show(snap(mode="assist", guard={"w": [0.4, 0], "side": [1, 0]}))
+    assert pressed(p, "modes") == ["false", "false", "false"]
+    assert pressed(p, "steers") == ["false", "true"]
+    assert p["guard"]["attrs"]["aria-checked"] == "true"
