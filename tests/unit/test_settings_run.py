@@ -27,7 +27,7 @@ def play(served, steps=(), answer=None):
 
 
 def fields(page) -> dict:
-    """Each generated field by its settings path: label, unit and its input or switch."""
+    """Each field the page built, by its settings path: label, unit and its input or switch."""
     out = {}
     for section in page["sections"]["kids"]:
         for label, editor, key in (f["kids"] for f in section["kids"][1]["kids"]):
