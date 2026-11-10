@@ -64,6 +64,20 @@ def test_glare_blob_on_whiteboard_never_locks_when_balls_are_dark():
     assert BallTracker(ANY_SHADE).update(img, 0.0).valid
 
 
+def test_the_spot_a_reflection_left_is_not_a_ball_and_a_real_one_is_still_found():
+    tr = BallTracker(CFG)
+    period = CFG["bg_period_s"]
+    glare = ball(plate(level=150), 500, 400, 30, shade=255)
+    for i in range(BG_MIN_SAMPLES):
+        assert not tr.update(glare, i * period).valid
+    t = BG_MIN_SAMPLES * period
+    # the lamp or the plate moved: the remembered bright spot is bare plate now
+    moved = ball(plate(level=150), 620, 430, 30, shade=255)
+    assert not any(tr.update(moved, t + i * DT).valid for i in range(5))
+    out = tr.update(ball(moved.copy(), 800, 300, 19), t + 6 * DT)
+    assert out.valid and out.x_px == pytest.approx(800, abs=2)
+
+
 def test_resting_ball_stays_out_of_the_background_and_found_for_a_minute():
     tr = BallTracker(CFG)
     img = ball(plate(), 500, 400, 45)
