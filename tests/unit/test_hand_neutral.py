@@ -7,7 +7,7 @@ import pytest
 from src.app import Loop
 from src.contracts import Intent
 from src.inputs import hand_process
-from src.inputs.hand import HandInput, HandIntent, recentre_asked, send_intent
+from src.inputs.hand import RECENTRE, HandInput, HandIntent, asked, send_intent
 from src.io.camera import CameraSource
 from src.io.settings import load
 from tests.unit.test_hand import CFG, CountingCapture, FakeHand, calibrated
@@ -95,7 +95,7 @@ def test_progress_rides_the_udp_message_and_recentre_goes_back_the_same_way():
     sender.bind(("127.0.0.1", 0))
     sender.setblocking(False)
     hand_in.recentre()  # nobody to tell yet
-    assert not recentre_asked(sender)
+    assert not asked(sender)
     send_intent(
         sender,
         Intent(0.0, 0.0, False, 1.0),
@@ -108,11 +108,11 @@ def test_progress_rides_the_udp_message_and_recentre_goes_back_the_same_way():
     assert hand_in.progress == 0.5
     hand_in.recentre()
     for _ in range(100):
-        if recentre_asked(sender):
+        if asked(sender) == [RECENTRE]:
             break
     else:
         pytest.fail("the hand process never heard the re centre")
-    assert not recentre_asked(sender)
+    assert not asked(sender)
     # older senders have no progress field
     sender.sendto(
         json.dumps(asdict(Intent(0.0, 0.0, True, 2.0))).encode(), ("127.0.0.1", hand_in.port)
@@ -126,22 +126,103 @@ def test_progress_rides_the_udp_message_and_recentre_goes_back_the_same_way():
 def test_hand_process_recentres_on_the_frame_the_key_arrives():
     cap = CountingCapture()
     hand = HandIntent(CFG)
-    asked = [False, True]
+    keys = [[], [RECENTRE]]
     sent = []
 
     def model(img, t):
-        if not asked:
+        if not keys:
             cap.alive = False
         return (0.2, 0.7)
 
-    def recentre():
-        return asked.pop() if asked else False
+    def heard():
+        return keys.pop() if keys else []
 
     frames = CameraSource(cap)
-    hand_process.run(frames, model, hand, lambda intent, **flags: sent.append(flags), recentre)
+    hand_process.run(frames, model, hand, lambda intent, **flags: sent.append(flags), heard)
     frames.close()
     assert hand.neutral == (0.2, 0.7)
     assert all(f["progress"] == 1.0 for f in sent)
+
+
+def test_hand_process_switches_how_it_reads_when_told_a_mode_and_reports_it():
+    cap = CountingCapture()
+    hand, _ = calibrated()
+    told = [[b"nope"], [b"tilt", b"tilt"], []]
+    sent = []
+
+    def model(img, t):
+        if not told:
+            cap.alive = False
+        return (0.5, 0.5)
+
+    frames = CameraSource(cap)
+    hand_process.run(
+        frames,
+        model,
+        hand,
+        lambda intent, **flags: sent.append(flags["mode"]),
+        lambda: told.pop(0) if told else [],
+    )
+    frames.close()
+    assert sent[:3] == ["palm", "tilt", "tilt"]
+    # degrees are not image fractions, so the old neutral is gone and the hold still restarts
+    assert hand.span == CFG["hand_tilt_span_deg"] and hand.calibrating
+
+
+def heard_by(sender, want):
+    for _ in range(100):
+        if asked(sender) == want:
+            return True
+    return False
+
+
+def test_app_tells_the_hand_process_its_mode_until_the_process_runs_it():
+    hand_in = HandInput(0)
+    sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sender.bind(("127.0.0.1", 0))
+    sender.setblocking(False)
+
+    def report(t_s, mode):
+        send_intent(
+            sender,
+            Intent(0.0, 0.0, False, t_s),
+            hand_in.port,
+            seen=False,
+            calibrating=False,
+            mode=mode,
+        )
+        wait_for(hand_in, t_s)
+
+    assert hand_in.mode is None
+    hand_in.set_mode("palm")  # nobody to tell yet, kept for when the process shows up
+    report(1.0, "tilt")
+    assert hand_in.mode == "palm" and heard_by(sender, [b"palm"])
+    report(2.0, "palm")
+    assert not asked(sender)
+    # a restarted process comes back on its settings and is told again
+    report(3.0, "tilt")
+    assert heard_by(sender, [b"palm"])
+    sender.close()
+    hand_in.close()
+
+
+def test_app_takes_the_running_hand_mode_when_none_was_picked():
+    hand_in = HandInput(0)
+    sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sender.bind(("127.0.0.1", 0))
+    sender.setblocking(False)
+    send_intent(
+        sender,
+        Intent(0.0, 0.0, False, 1.0),
+        hand_in.port,
+        seen=False,
+        calibrating=False,
+        mode="palm",
+    )
+    wait_for(hand_in, 1.0)
+    assert hand_in.mode == "palm" and not asked(sender)
+    sender.close()
+    hand_in.close()
 
 
 def test_snapshot_carries_hand_progress():

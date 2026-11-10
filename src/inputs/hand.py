@@ -47,9 +47,13 @@ class HandIntent:
 
     def __init__(self, cfg: dict):
         self.cfg = cfg
-        self.span = cfg[SPAN[cfg["hand_mode"]]]
-        self.neutral: tuple[float, float] | None = None
         self.seen = False
+        self.set_mode(cfg["hand_mode"])
+
+    def set_mode(self, mode: str) -> None:
+        # tilt reads degrees and palm reads image fractions, so neutral and filter start over
+        self.mode, self.span = mode, self.cfg[SPAN[mode]]
+        self.neutral: tuple[float, float] | None = None
         self._samples: list[tuple[float, float, float]] = []
         self._last_seen: float | None = None
         self._euro = (None, None)
@@ -130,15 +134,14 @@ class HandIntent:
         self._appear = t
 
 
-def recentre_asked(sock: socket.socket) -> bool:
-    # the app answers on the sending socket when the player hits the re centre key
-    asked = False
+def asked(sock: socket.socket) -> list[bytes]:
+    # the app answers on the sending socket: the re centre key, or a hand mode by name
+    msgs = []
     while True:
         try:
-            sock.recv(16)
+            msgs.append(sock.recv(16))
         except BlockingIOError:
-            return asked
-        asked = True
+            return msgs
 
 
 def send_intent(
@@ -150,10 +153,13 @@ def send_intent(
     calibrating: bool,
     progress: float = 0.0,
     lag_s: float | None = None,
+    mode: str | None = None,
 ) -> None:
     msg = {**asdict(intent), "seen": seen, "calibrating": calibrating, "progress": progress}
     if lag_s is not None:
         msg["lag_s"] = lag_s
+    if mode is not None:
+        msg["mode"] = mode
     sock.sendto(json.dumps(msg).encode(), ("127.0.0.1", port))
 
 
@@ -170,6 +176,7 @@ class HandInput:
         self.seen = self.calibrating = False
         self.progress = 0.0
         self.lag_s: float | None = None
+        self.mode: str | None = None  # the hand mode wanted, the sender's own until one is set
 
     def latest(self) -> Intent:
         while True:
@@ -185,11 +192,26 @@ class HandInput:
             self.calibrating = msg.pop("calibrating", False)
             self.progress = msg.pop("progress", 0.0)
             self.lag_s = msg.pop("lag_s", None)
+            self._heard(msg.pop("mode", None))
             self._intent = Intent(**msg)
 
-    def recentre(self) -> None:
+    def _heard(self, mode: str | None) -> None:
+        if self.mode is None:
+            self.mode = mode
+        elif mode is not None and mode != self.mode:
+            # a restarted or deaf sender is told again until it switches
+            self._tell(self.mode.encode())
+
+    def _tell(self, data: bytes) -> None:
         if self._peer is not None:
-            self.sock.sendto(RECENTRE, self._peer)
+            self.sock.sendto(data, self._peer)
+
+    def recentre(self) -> None:
+        self._tell(RECENTRE)
+
+    def set_mode(self, mode: str) -> None:
+        self.mode = mode
+        self._tell(mode.encode())
 
     def close(self) -> None:
         self.sock.close()

@@ -210,6 +210,8 @@ def test_hand_process_runs_the_model_on_the_newest_frame_and_reports_lag():
 
 
 class FakeHand:
+    mode = None
+
     def __init__(self, intent, seen=True, calibrating=False, progress=0.0):
         self.intent = intent
         self.seen = seen
