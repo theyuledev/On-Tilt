@@ -428,3 +428,8 @@ def test_the_page_keeps_asking_for_the_x_once_a_second_until_it_is_found():
     assert (p["banner"]["text"], p["banner"]["data"]["tone"]) == ("click arm to start", "")
     p = show(snap(armed=True, choices=BALANCE, target=lost[1]["target"]))
     assert p["banner"]["text"] == "no x on the board yet, draw one"
+
+
+def test_settings_link_goes_dead_while_armed_so_the_kill_key_stays_in_reach():
+    assert show(snap())["settings"]["cls"] == "pill"
+    assert show(snap(armed=True))["settings"]["cls"] == "pill off"
