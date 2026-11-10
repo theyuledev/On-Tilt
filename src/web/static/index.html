@@ -7,59 +7,124 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<main>
-  <div class="row pills">
-    <span id="link" class="pill">offline</span>
-    <span id="armed" class="pill">disarmed</span>
-    <span id="beat" class="pill warn">no data</span>
-    <span id="stale" class="pill warn" hidden>no input</span>
-    <span id="board" class="pill warn" hidden>board lost</span>
-    <span id="hand" class="pill">hand: none</span>
-    <span id="ballpill" class="pill warn">ball: lost</span>
+<header>
+  <span class="logo">ON-TILT</span>
+  <span id="sub" class="dim"></span>
+  <div class="lights">
+    <span id="link" class="light warn">OFFLINE</span>
+    <span id="board" class="light">BOARD</span>
+    <span id="camlight" class="light">NO CAM</span>
+    <span id="ballpill" class="light warn">NO BALL</span>
+    <span id="hand" class="light">NO HAND</span>
+    <span id="beat" class="light warn">NO DATA</span>
+    <span id="stale" class="light warn" hidden>NO INPUT</span>
   </div>
-  <div class="stage">
-    <div class="arena">
-      <canvas id="race"></canvas>
-      <span id="timer" class="hud">00:00.00</span>
-      <span id="delta" class="hud"></span>
-      <span id="count" class="hud"></span>
-      <span id="pen" class="hud"></span>
-      <div id="result" class="hud"><b></b><span></span></div>
-      <span id="cps" class="hud">0/4</span>
-      <span id="speed" class="hud">0</span>
-      <span id="banner" class="hud" data-tone="warn">connecting...</span>
-      <span id="level" class="hud" hidden>levelling</span>
-      <canvas id="pad"></canvas>
-    </div>
-    <div id="side">
-      <div id="handview"><img id="handcam" alt="hand cam" hidden><span id="handnone">no hand cam</span><span id="handtilt">plate x 0.00° y 0.00°</span><canvas id="tiltboard"></canvas><span id="handhint" hidden>hold your hand flat, palm down, then tilt</span></div>
-      <div id="results" hidden>
-        <b id="restime"></b>
-        <span id="respen"></span>
-        <span id="resdelta"></span>
-        <span id="resghost" hidden>NEW GHOST</span>
-        <input id="resname" maxlength="8" autocomplete="off" spellcheck="false" aria-label="name">
-        <span id="resarm" class="hint" hidden>disarm to type a name</span>
-        <span id="ressaved" hidden>saved</span>
-        <span class="hint">race again: R</span>
-        <span id="resbeat" class="hint" hidden>beat it</span>
+  <span class="pill" aria-disabled="true">SETTINGS</span>
+</header>
+<main>
+  <div class="play">
+    <div class="top">
+      <div class="arena">
+        <canvas id="race"></canvas>
+        <span id="count" class="hud"></span>
+        <span id="split" class="hud"></span>
+        <span id="pen" class="hud"></span>
+        <div id="result" class="hud" hidden><b></b><span></span></div>
+        <span id="level" class="hud" hidden>levelling</span>
+      </div>
+      <div class="info">
+        <div class="panel">
+          <span class="red">BALL POSITION · MM</span>
+          <span id="ballx" class="num">X--.-</span>
+          <span id="bally" class="num">Y--.-</span>
+          <span id="scale" class="dim"></span>
+        </div>
+        <div class="panel tiltrow">
+          <div id="tilt">
+            <span class="dim">PLATE TILT</span>
+            <span id="tiltx">X +0.00°</span>
+            <span id="tilty">Y +0.00°</span>
+          </div>
+          <canvas id="pad"></canvas>
+        </div>
+        <div class="cams">
+          <div class="cam">
+            <span class="dim">HAND CAM</span>
+            <div class="tile" title="c re-centres the hand neutral"><img id="handcam" alt="hand cam" hidden><span id="handnone">no hand</span></div>
+          </div>
+          <div class="cam">
+            <span class="dim">TOP CAM</span>
+            <div class="tile"><img id="cam" alt="overhead cam" hidden><div id="seen" class="ring" hidden></div><span id="nocam">no camera</span></div>
+          </div>
+        </div>
+        <div class="chart">
+          <div class="legend"><span id="striperr">ERR --</span><span id="striptilt">TILT 0.0°</span><span class="dim">5 s</span></div>
+          <canvas id="strip"></canvas>
+        </div>
       </div>
     </div>
-    <canvas id="strip"></canvas>
+    <div class="say">
+      <span class="player">PLAYER 1</span>
+      <span id="banner" data-tone="warn">connecting...</span>
+    </div>
   </div>
-  <div class="row">
-    <button id="arm">arm</button>
-    <span id="armblock" hidden></span>
-    <button id="kill">kill (space)</button>
-    <button id="racebtn">race (r)</button>
+  <div id="side">
+    <div class="field">
+      <div class="between"><span id="timelabel" class="dim">TIME</span><span id="armed" class="chip">DISARMED</span></div>
+      <span id="timer" class="idle">00:00.00</span>
+    </div>
+    <div id="scores" class="field">
+      <div class="score hi"><span>HI-SCORE</span><span id="best" class="num">--:--.--</span></div>
+      <div id="ghostrow" class="score"><span id="ghostsay">VS GHOST</span><span id="delta" class="num">--</span></div>
+    </div>
+    <div id="gates"><span class="dim">GATES</span><div id="cps"></div></div>
+    <div id="nomaze" class="panel" hidden>
+      <b>NOTHING TO RACE YET</b>
+      <span class="dim">Draw walls, an S and an E on the board with a marker. Once the board is read, the path, gates and timer show up here.</span>
+    </div>
+    <div id="results" class="field" hidden>
+      <label for="resname" class="dim">ENTER YOUR NAME · 8 LETTERS</label>
+      <div class="name"><input id="resname" maxlength="8" autocomplete="off" spellcheck="false"><button id="ressave" type="button">SAVE</button></div>
+      <span class="dim">Press enter to save. <span id="respen"></span></span>
+      <span id="resarm" class="dim" hidden>disarm to type a name</span>
+      <span id="ressaved" hidden>saved</span>
+    </div>
+    <div id="choices" class="locked">
+      <div class="field">
+        <span class="dim">MODE</span>
+        <div id="modes" class="seg three" role="group" aria-label="Mode">
+          <button type="button" data-mode="hand" aria-pressed="false" disabled>PLAY</button>
+          <button type="button" data-mode="balance" aria-pressed="false" disabled>BALANCE</button>
+          <button type="button" data-mode="path" aria-pressed="false" disabled>PATH</button>
+        </div>
+      </div>
+      <div class="field">
+        <span class="dim">STEER WITH</span>
+        <div id="steers" class="seg two" role="group" aria-label="Steer with">
+          <button type="button" data-steer="hand" aria-pressed="false" disabled><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 13 V6 M10.5 12 V4 M14 12 V5 M17.5 13 V8 M7 13 L4.5 11 M4.5 11 C3 12 5 17 8 20 H15 C17 18 17.5 16 17.5 13"></path></svg>HAND</button>
+          <button type="button" data-steer="keys" aria-pressed="false" disabled><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="8.5" y="3" width="7" height="7" rx="1.5"></rect><rect x="1" y="13" width="7" height="7" rx="1.5"></rect><rect x="8.5" y="13" width="7" height="7" rx="1.5"></rect><rect x="16" y="13" width="7" height="7" rx="1.5"></rect></svg>WASD</button>
+        </div>
+        <div class="sub">
+          <svg class="elbow" viewBox="0 0 20 28" aria-hidden="true" fill="none" stroke="#5A6699" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2 V16 H17"></path></svg>
+          <span class="dim">HAND MOVES BY</span>
+          <div id="handmodes" class="seg two small" role="group" aria-label="Hand moves by">
+            <button type="button" data-hand="tilt" aria-pressed="false" disabled><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M3 16 L21 8"></path><path d="M5 6 A9 9 0 0 1 12 3"></path></svg>TILT</button>
+            <button type="button" data-hand="palm" aria-pressed="false" disabled><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="2.5"></circle><path d="M12 2 V6 M12 18 V22 M2 12 H6 M18 12 H22"></path></svg>DRAG</button>
+          </div>
+        </div>
+      </div>
+      <div class="between">
+        <span>EDGE GUARD <span class="dim">invisible walls</span></span>
+        <button type="button" id="guard" class="switch" role="switch" aria-checked="false" aria-label="Edge guard" disabled><span></span></button>
+      </div>
+    </div>
+    <div class="buttons">
+      <div><button id="arm" class="round">ARM</button></div>
+      <div><button id="racebtn" class="round">RACE</button></div>
+      <div><button id="kill" class="round">KILL</button><span class="dim">space bar</span></div>
+    </div>
   </div>
-  <div class="row dim"><span id="tilt">tilt x 0.00°  y 0.00°</span><span>arrows / wasd to tilt</span><span>c re-centres the hand neutral</span></div>
 </main>
-<div class="view">
-  <img id="cam" alt="overhead cam">
-  <div id="seen" class="ring" hidden></div>
-  <span id="nocam" hidden>no camera</span>
-</div>
 <script src="/static/race.js"></script>
 <script src="/static/pad.js"></script>
 <script src="/static/strip.js"></script>

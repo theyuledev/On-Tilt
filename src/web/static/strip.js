@@ -4,7 +4,6 @@ const STRIP_S = 5;
 const ERR_COLOR = "#E69F00";
 const TILT_COLOR = "#56B4E9";
 const STRIP_LINE_PX = 2;
-const STRIP_FONT_PX = 12;
 const stripCtx = document.getElementById("strip").getContext("2d");
 const stripBuf = [];
 
@@ -34,12 +33,6 @@ function strip(cfg, s) {
   stripCtx.clearRect(0, 0, w, h);
   stripLine(w, h, s.t_s, "x", cfg.plate_inner_mm / 2, ERR_COLOR);
   stripLine(w, h, s.t_s, "y", Math.max(...stripBuf.map(q => q.y)) || 1, TILT_COLOR);
-  const fs = STRIP_FONT_PX * devicePixelRatio;
-  stripCtx.font = `${fs}px system-ui, sans-serif`;
-  stripCtx.textBaseline = "top";
-  const errText = err === null ? "err --" : `err ${Math.round(err)} mm`;
-  stripCtx.fillStyle = ERR_COLOR;
-  stripCtx.fillText(errText, fs / 2, fs / 3);
-  stripCtx.fillStyle = TILT_COLOR;
-  stripCtx.fillText(`tilt ${tilt.toFixed(1)}°`, fs * 1.5 + stripCtx.measureText(errText).width, fs / 3);
+  document.getElementById("striperr").textContent = err === null ? "ERR --" : `ERR ${Math.round(err)} mm`;
+  document.getElementById("striptilt").textContent = `TILT ${tilt.toFixed(1)}°`;
 }

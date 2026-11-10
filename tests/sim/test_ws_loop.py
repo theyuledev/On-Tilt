@@ -156,7 +156,7 @@ def test_every_snapshot_field_the_page_reads_is_sent(page):
     run(page, 1)
     snap = say(page, {})
     reads = page_reads()
-    seen = {"armed", "t_s", "intent", "ball.x_mm", "ball.vx_mm_s", "plate_state.sent_y_deg"}
+    seen = {"armed", "t_s", "intent", "mode", "ball.x_mm", "ball.valid", "plate_state.sent_y_deg"}
     assert seen <= reads
     assert not NOT_SENT.keys() & snap.keys(), "sent now, drop it from NOT_SENT"
     for read in reads | {"intent.x", "intent.y"}:  # padDot gets s.intent

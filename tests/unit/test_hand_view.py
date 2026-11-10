@@ -122,14 +122,13 @@ def test_the_hand_view_leaves_the_sent_intent_alone_and_runs_at_the_encode_rate(
     assert all(events[i - 1][0] == "send" and events[i - 1][1] == events[i][2] for i in shows)
 
 
-def test_page_shows_the_hand_cam_above_the_results_and_retries_it():
+def test_page_shows_the_hand_cam_in_a_tile_by_the_top_cam_and_retries_it():
     client = TestClient(make_app(SimpleNamespace(cfg=load())))
     page = client.get("/").text
-    assert all(f'id="{i}"' in page for i in ("handview", "handcam", "handnone", "handtilt"))
-    assert page.index('id="side"') < page.index('id="handview"') < page.index('id="results"')
+    at = [page.index(f'id="{i}"') for i in ("handcam", "handnone", "cam", "nocam", "side")]
+    assert at == sorted(at)
     js = client.get("/static/app.js").text
     assert '"/hand.jpg?"' in js and "handRetry = setTimeout(nextHand, 1000)" in js
-    assert '$("handtilt").textContent = `plate x ${p.sent_x_deg' in js
 
 
 def test_a_broken_view_never_stops_the_intents(capsys):
