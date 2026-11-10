@@ -77,9 +77,17 @@ def test_a_player_already_steering_in_harder_keeps_his_command():
     assert out.tilt_x_deg == -2.0
 
 
-def test_without_a_ball_only_the_cap_applies():
+def test_without_a_ball_the_capped_tilt_eases_to_level_and_comes_back_with_the_ball():
     g = Guard(cfg())
-    assert g(at(110.0, 300.0, valid=False), PlateCommand(4.0, 0.0)) == PlateCommand(2.0, 0.0)
+    blind = [at(0.0, t=0.01 * k, valid=False) for k in range(60)]
+    xs = [g(b, PlateCommand(4.0, 0.0)).tilt_x_deg for b in blind]
+    # the 2.0 cap, one tick into the 0.1 s fade
+    assert xs[0] == pytest.approx(1.8)
+    assert all(a > b for a, b in zip(xs, xs[1:], strict=False))
+    assert xs[-1] < 0.01
+    back = [g(at(0.0, t=0.6 + 0.01 * k), PlateCommand(4.0, 0.0)).tilt_x_deg for k in range(60)]
+    assert all(a < b for a, b in zip(back, back[1:], strict=False))
+    assert back[-1] == pytest.approx(2.0, abs=0.01)
 
 
 def test_only_the_hand_mode_is_guarded_and_guard_off_leaves_it_bare():
@@ -138,15 +146,29 @@ def test_a_zero_hold_band_turns_the_hold_line_off():
     assert g(at(g.edge + 5.0), PlateCommand(2.0, 0.0)).tilt_x_deg == 2.0
 
 
-def test_a_ball_lost_while_braking_at_the_rim_fades_the_brake_out():
+def test_a_ball_lost_while_braking_at_the_rim_drops_the_push_and_keeps_the_brake():
     g = Guard(cfg(guard_hold_band_mm=0))
     for k in range(20):
         braked = g(at(100.0, 200.0, t=0.01 * k), PlateCommand(2.0, 0.0)).tilt_x_deg
     assert braked < 1.0
-    lost = [at(100.0, 200.0, t=0.2 + 0.01 * k, valid=False) for k in range(10)]
+    lost = [at(100.0, 200.0, t=0.2 + 0.01 * k, valid=False) for k in range(400)]
     xs = [g(b, PlateCommand(2.0, 0.0)).tilt_x_deg for b in lost]
-    assert all(a <= b for a, b in zip([braked, *xs], xs, strict=False))
-    assert xs[-1] < 2.0 - 0.8 * (2.0 - braked)
+    # never pushed further out than before the loss, the brake tilts it back, then it ends level
+    assert max(xs) <= max(braked, 0.0) + 1e-9
+    assert min(xs) < 0.0
+    assert xs[-1] == pytest.approx(0.0, abs=1e-6)
+
+
+def test_the_command_never_leaves_what_the_plate_can_tilt():
+    g = Guard(cfg())
+    # braking a hard push builds a big correction, then the ball crosses the hold line and the
+    # allowed tilt flips inward before that correction has caught up
+    for k in range(20):
+        g(at(g.edge - 20.0, 300.0, t=0.01 * k), PlateCommand(2.0, 0.0))
+    raw = min(-g.cap[0], 2.0) + g.corr[0]
+    out = g(at(g.edge + 15.0, 300.0, t=0.2), PlateCommand(2.0, 0.0)).tilt_x_deg
+    assert raw < -g.clamp[0]
+    assert out == -g.clamp[0]
 
 
 def test_after_the_release_w_is_exactly_zero_and_the_side_clears():
