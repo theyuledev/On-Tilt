@@ -1,8 +1,11 @@
+from dataclasses import replace
+
 from src.contracts import BallState, Intent, PlateCommand
 from src.control.pid import Integral, integrate, pid, smooth
 from src.inputs.shaping import shape
 from src.modes.assist import goal_mm
 from src.modes.path import clip, target
+from src.modes.spot import held
 
 LEVEL = PlateCommand(tilt_x_deg=0.0, tilt_y_deg=0.0)
 
@@ -29,6 +32,9 @@ class Balance:
 
     def __call__(self, ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
         c = cfg["control"]
+        # the same loop about the target instead of the centre
+        tx, ty = held(cfg)["mm"]
+        ball = replace(ball, x_mm=ball.x_mm - tx, y_mm=ball.y_mm - ty)
         dt = 0.0 if self.acc.t_s is None else max(ball.t_s - self.acc.t_s, 0.0)
         self.acc = integrate(self.acc, ball, c)
         if not ball.valid:

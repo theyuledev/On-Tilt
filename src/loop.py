@@ -10,6 +10,7 @@ from src.inputs.keyboard import KeyboardInput
 from src.io.ports import Frame, FrameSource, InputSource, TiltActuator
 from src.io.serial_link import LinkError
 from src.modes import CLOSED_LOOP, make_mode
+from src.modes.spot import held
 from src.sim.ball import roll
 from src.sim.plate import SimActuator
 from src.vision.tracker import BallPx
@@ -197,6 +198,7 @@ class Loop:
         snap["exposure"] = self.exposure
         snap["arm_blocked"] = self.arm_blocked
         snap["choices"] = asdict(switches.view(self))
+        snap["target"] = held(self.cfg)
         if self.game is not None:
             snap["race"] = self.game.view()
         return snap
