@@ -14,6 +14,8 @@ const handcam = $("handcam"), handnone = $("handnone");
 const nextHand = () => { handcam.src = "/hand.jpg?" + performance.now(); };
 let handRetry;
 const typing = e => e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
+// choice groups on the page and the field each one sets
+const PICKS = { modes: "mode", steers: "steer", handmodes: "hand_mode" };
 
 if (watch) {
   // a projector tab must never overwrite the player's keys
@@ -37,6 +39,13 @@ if (watch) {
   $("arm").onclick = e => { pending.arm = true; e.currentTarget.blur(); };
   $("kill").onclick = e => { pending.kill = true; e.currentTarget.blur(); };
   $("racebtn").onclick = e => { pending.race = raceCmd(); e.currentTarget.blur(); };
+  for (const [group, field] of Object.entries(PICKS)) {
+    for (const b of $(group).children) b.onclick = e => { pick(field, b.dataset.pick); e.currentTarget.blur(); };
+  }
+  $("guard").onclick = e => {
+    pick("guard", e.currentTarget.getAttribute("aria-checked") !== "true");
+    e.currentTarget.blur();
+  };
 }
 cam.onload = () => { cam.hidden = false; nocam.hidden = true; nextCam(); };
 cam.onerror = () => {
@@ -65,9 +74,24 @@ function light(id, text, cls) {
   el.className = "light " + cls;
 }
 
-// marks the button of a choice group whose data value is the live one
-function press(group, key, value) {
-  for (const b of $(group).children) b.setAttribute("aria-pressed", b.dataset[key] === value);
+function pick(field, value) {
+  pending.set = { ...pending.set, [field]: value };
+}
+
+// the live choices on their buttons; they only move while disarmed, so they lock when armed
+function choices(s) {
+  const c = s.choices, locked = watch || !!s.armed;
+  for (const [group, field] of Object.entries(PICKS)) {
+    for (const b of $(group).children) {
+      b.setAttribute("aria-pressed", b.dataset.pick === c[field]);
+      b.disabled = locked || (field === "steer" && b.dataset.pick === "hand" && !cfg.hand);
+    }
+  }
+  $("choices").classList.toggle("locked", locked);
+  $("handrow").hidden = c.steer === "keys";
+  $("guard").setAttribute("aria-checked", c.guard === true);
+  // a build without the edge guard has nothing to switch
+  $("guard").disabled = locked || c.guard === null;
 }
 
 function ring(px) {
@@ -116,8 +140,7 @@ function show(s) {
   $("tilty").textContent = `Y ${signed(p.sent_y_deg)}°`;
   $("arm").disabled = watch || !!s.armed;
   $("racebtn").disabled = watch || s.race === undefined;
-  press("modes", "mode", s.mode);
-  $("guard").setAttribute("aria-checked", guardOf(s) !== null);
+  choices(s);
   ring(s.ball_px);
   strip(cfg, s);
   hud(s, maze);
@@ -160,7 +183,6 @@ Promise.all([json("/config"), json("/race/maze").catch(() => null)]).then(([c, m
   maze = m;
   $("sub").textContent = subtitle(maze);
   $("scale").textContent = `1 px = ${(1 / cfg.px_per_mm).toFixed(2)} mm · ${cfg.camera_fps} fps`;
-  press("steers", "steer", cfg.hand ? "hand" : "keys");
   connect();
   beat();
 }).catch(e => { $("banner").textContent = `load failed: ${e.message}`; });

@@ -8,6 +8,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from src import switches
 from src.games import maze
 from src.inputs import hand_view
 
@@ -100,6 +101,8 @@ def make_app(loop) -> FastAPI:
                         x, y = float(msg["x"]), float(msg["y"])
                         if math.isfinite(x + y):
                             loop.keys.set(x, y)
+                    if "set" in msg:
+                        switches.choose(loop, switches.parse(msg["set"]))
                     if msg.get("arm") and not msg.get("kill"):
                         loop.arm()
                     game = getattr(loop, "game", None)

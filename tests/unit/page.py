@@ -106,6 +106,8 @@ function key(type, code, on) {
   return e.prevented;
 }
 
+// "modes/1" is the second child of #modes
+const find = at => { const [id, n] = at.split("/"); return n ? els[id].children[n] : els[id]; };
 const acts = {
   snap: s => sockets[0].onmessage({ data: JSON.stringify(s) }),
   open: () => sockets[0].onopen(),
@@ -114,7 +116,7 @@ const acts = {
   wait: ms => { clock += ms; },
   down: ([code, on]) => key("keydown", code, on),
   up: ([code, on]) => key("keyup", code, on),
-  click: id => { if (!els[id].disabled) els[id].onclick({ currentTarget: els[id] }); },
+  click: at => { const e = find(at); if (!e.disabled) e.onclick({ currentTarget: e }); },
   type: ([id, text]) => { els[id].value = text; },
 };
 const view = e => ({

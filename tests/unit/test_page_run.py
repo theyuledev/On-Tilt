@@ -297,12 +297,59 @@ def test_watch_tab_disables_arm_race_and_kill_and_sends_nothing():
     assert all(out["page"][i]["disabled"] for i in ("arm", "kill", "racebtn"))
 
 
-def test_mode_and_steering_show_what_is_live_and_the_guard_follows_the_snapshot():
-    p = show(snap(mode="balance"), config={"hand": True})
+def picked(**over):
+    return {"mode": "hand", "steer": "hand", "hand_mode": "tilt", "guard": None, **over}
+
+
+def off(page, *groups):
+    return [k["disabled"] for g in groups for k in page[g]["kids"]]
+
+
+def test_choice_buttons_show_what_is_live_and_lock_while_armed():
+    live = picked(mode="balance", hand_mode="palm", guard=True)
+    p = show(snap(choices=live), config={"hand": True})
     assert pressed(p, "modes") == ["false", "true", "false"]
-    assert pressed(p, "steers") == ["true", "false"]
-    assert p["guard"]["attrs"]["aria-checked"] == "false" and p["guard"]["disabled"]
-    p = show(snap(mode="assist", guard={"w": [0.4, 0], "side": [1, 0]}))
-    assert pressed(p, "modes") == ["false", "false", "false"]
+    assert pressed(p, "steers") == ["true", "false"] and pressed(p, "handmodes") == [
+        "false",
+        "true",
+    ]
+    assert p["guard"]["attrs"]["aria-checked"] == "true" and not p["guard"]["disabled"]
+    assert not any(off(p, "modes", "steers", "handmodes")) and p["choices"]["cls"] == ""
+    assert not p["handrow"]["hidden"]
+    p = show(snap(armed=True, choices=live), config={"hand": True})
+    assert all(off(p, "modes", "steers", "handmodes")) and p["guard"]["disabled"]
+    assert p["choices"]["cls"] == "locked"
+    assert pressed(show(snap(choices=picked(mode="assist"))), "modes") == ["false"] * 3
+
+
+def test_hand_row_hides_on_keys_and_hand_needs_a_hand_source():
+    p = show(snap(choices=picked(steer="keys")))
+    assert p["handrow"]["hidden"] and off(p, "steers") == [True, False]
     assert pressed(p, "steers") == ["false", "true"]
-    assert p["guard"]["attrs"]["aria-checked"] == "true"
+
+
+def test_guard_switch_is_off_limits_on_a_build_without_a_guard():
+    p = show(snap(choices=picked(guard=None)))
+    assert p["guard"]["disabled"] and p["guard"]["attrs"]["aria-checked"] == "false"
+    p = show(snap(choices=picked(guard=False)))
+    assert not p["guard"]["disabled"] and p["guard"]["attrs"]["aria-checked"] == "false"
+
+
+def test_clicked_choices_go_out_once_in_one_set_message():
+    clicks = [("click", at) for at in ("modes/1", "steers/1", "handmodes/1", "guard")]
+    steps = [OPEN, ("snap", snap(choices=picked(guard=False))), *clicks, ("frame", None)]
+    out = run([*steps, ("snap", snap()), ("frame", None)], config={"hand": True})
+    want = {"mode": "balance", "steer": "keys", "hand_mode": "palm", "guard": True}
+    assert [m["set"] for m in out["sent"] if "set" in m] == [want]
+
+
+def test_an_armed_page_and_a_watch_tab_send_no_choices():
+    clicks = [("click", at) for at in ("modes/1", "steers/1", "handmodes/1", "guard")]
+    live = picked(guard=False)
+    for s, query in ((snap(armed=True, choices=live), ""), (snap(choices=live), "?watch")):
+        out = run([OPEN, ("snap", s), *clicks, ("frame", None)], query=query, config={"hand": True})
+        assert not [m for m in out["sent"] if "set" in m], query
+        assert (
+            all(off(out["page"], "modes", "steers", "handmodes"))
+            and out["page"]["guard"]["disabled"]
+        )

@@ -102,6 +102,7 @@ main { flex: 1; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24
 .sub > .dim { white-space: nowrap; }
 .elbow { width: 20px; height: 28px; flex: none; }
 .locked .field > .seg, .locked .sub { opacity: 0.4; }
+#choices:not(.locked) .seg button:disabled { opacity: 0.4; }
 .switch { display: flex; align-items: center; justify-content: flex-start; width: 76px; height: 44px; box-sizing: border-box; padding: 5px; border: 0; border-radius: 999px; background: var(--line); cursor: pointer; }
 .switch span { width: 34px; height: 34px; border-radius: 50%; background: var(--muted); }
 .switch[aria-checked="true"] { justify-content: flex-end; background: var(--green); }

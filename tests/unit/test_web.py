@@ -1,3 +1,4 @@
+import re
 import time
 from functools import partial
 from types import SimpleNamespace
@@ -58,14 +59,12 @@ def test_both_fonts_are_served_from_static_and_nothing_loads_from_the_network(cl
             assert "http://" not in text and "https://" not in text and "//fonts" not in text, path
 
 
-def test_mode_steering_and_guard_controls_are_drawn_but_disabled(client):
+def test_choice_controls_start_disabled_until_the_first_snapshot(client):
     page = client.get("/").text
-    marks = [f'data-mode="{m}"' for m in ("hand", "balance", "path")]
-    marks += ['data-steer="hand"', 'data-steer="keys"', 'data-hand="tilt"', 'data-hand="palm"']
-    for mark in [*marks, 'id="guard"']:
-        at = page.index(mark)
+    assert 'id="choices" class="locked"' in page and page.count("data-pick=") == 7
+    for at in [m.start() for m in re.finditer("data-pick=", page)] + [page.index('id="guard"')]:
         tag = page[page.rindex("<button", 0, at) : page.index(">", at)]
-        assert tag.endswith(" disabled"), mark
+        assert tag.endswith(" disabled")
 
 
 def test_page_has_the_race_hud_and_loads_it_between_race_and_app(client):
