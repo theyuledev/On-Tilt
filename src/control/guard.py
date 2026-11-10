@@ -57,6 +57,7 @@ class Guard:
         self.guard_w = [0.0, 0.0]
         self.guard_side = [0.0, 0.0]
         self.corr = [0.0, 0.0]
+        self.seen = 1.0
         self.t_s: float | None = None
 
     def __call__(self, ball: BallState, cmd: PlateCommand) -> PlateCommand:
@@ -69,9 +70,16 @@ class Guard:
         if not ball.valid:
             # a stale frame keeps its old stamp, the fade still has to run
             dt = dt or 1 / self.c["sim_tick_hz"]
-            return PlateCommand(*(self._lost(i, player[i], dt) for i in range(2)))
-        pos, vel = (ball.x_mm, ball.y_mm), (ball.vx_mm_s, ball.vy_mm_s)
-        return PlateCommand(*(self._axis(i, pos[i], vel[i], player[i], dt) for i in range(2)))
+        # no ball, no wall: the player's tilt eases to level until the ball is back
+        self.seen = smooth(self.seen, float(ball.valid), dt, self.c["guard_blind_s"])
+        player = [t * self.seen for t in player]
+        if not ball.valid:
+            out = [self._lost(i, player[i], dt) for i in range(2)]
+        else:
+            pos, vel = (ball.x_mm, ball.y_mm), (ball.vx_mm_s, ball.vy_mm_s)
+            out = [self._axis(i, pos[i], vel[i], player[i], dt) for i in range(2)]
+        # the hold line and a lagging correction can add up past what the plate can do
+        return PlateCommand(*(min(max(t, -m), m) for t, m in zip(out, self.clamp, strict=True)))
 
     def guard_view(self) -> dict:
         return {"w": [*self.guard_w], "side": [*self.guard_side]}
