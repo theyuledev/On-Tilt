@@ -154,15 +154,25 @@ def test_blank_first_open_gets_an_exposure_toggle_then_a_reopen(monkeypatch, too
     assert ran == cmds
 
 
-def test_gives_up_after_three_opens(monkeypatch):
+@pytest.mark.parametrize("kind", ["blank", "dead"])
+def test_a_stalled_open_is_dropped_after_three_reads(monkeypatch, kind):
+    # each failed read blocks about a second on the rig, so a stalled open can't get 30 of them
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    cap_cls, opened = fake_cameras([(800, 1280, 3)], **{f"{kind}_opens": 1})
+    open_camera(RIG, cap_cls, [].append)
+    fast = [c for c in opened if c.sets]
+    assert fast[0].reads == 3 and fast[0].released
+
+
+def test_gives_up_after_five_opens(monkeypatch):
     monkeypatch.setattr(shutil, "which", lambda name: TOOL)
-    cap_cls, opened = fake_cameras([(800, 1280, 3)], blank_opens=1, dead_opens=2)
+    cap_cls, opened = fake_cameras([(800, 1280, 3)], blank_opens=1, dead_opens=4)
     ran = []
-    with pytest.raises(RuntimeError, match="3 opens"):
+    with pytest.raises(RuntimeError, match="5 opens"):
         open_camera(RIG, cap_cls, ran.append)
-    assert len([c for c in opened if c.sets]) == 3
+    assert len([c for c in opened if c.sets]) == 5
     assert all(c.released for c in opened)
-    assert ran == [MODE8, MODE1, MODE8, MODE1]
+    assert ran == [MODE8, MODE1] * 4
 
 
 def test_good_open_prints_a_wrong_exposure_readback_once(monkeypatch, capsys):

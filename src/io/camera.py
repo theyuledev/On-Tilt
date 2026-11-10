@@ -10,7 +10,8 @@ from src.io.camera_hook import Hooked
 from src.io.ports import Frame
 
 WARMUP_READS = 30
-OPEN_TRIES = 3
+ALIVE_READS = 3
+OPEN_TRIES = 5
 
 
 def _first_frame_shape(cap) -> tuple[int, ...] | None:
@@ -72,10 +73,8 @@ def _open_fast(index: int, rig: dict, video_capture):
 
 
 def _stream_alive(cap) -> bool:
-    if _first_frame_shape(cap) is None:
-        return False
-    n = WARMUP_READS // 3
-    return sum(cap.read()[0] for _ in range(n)) >= n / 2
+    # a stalled open blocks about a second per read, so judge it on a few reads
+    return sum(cap.read()[0] for _ in range(ALIVE_READS)) >= 2
 
 
 def open_camera(rig: dict, video_capture=cv2.VideoCapture, run=subprocess.run):
