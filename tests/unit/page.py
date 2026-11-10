@@ -121,7 +121,10 @@ function key(type, code, on) {
 // "modes/1" is the second child of #modes
 const find = at => { const [id, n] = at.split("/"); return n ? els[id].children[n] : els[id]; };
 const acts = {
-  snap: s => sockets[0].onmessage({ data: JSON.stringify(s) }),
+  // a snapshot the page chokes on answers with the error instead of ending the run
+  snap: s => {
+    try { sockets[0].onmessage({ data: JSON.stringify(s) }); } catch (e) { return String(e); }
+  },
   open: () => sockets[0].onopen(),
   close: () => sockets[0].onclose(),
   frame: () => { const run = rafs; rafs = []; run.forEach(fn => fn()); },

@@ -128,7 +128,8 @@ function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
   ws.onopen = () => { light("link", "LINK", "on"); nextCam(); nextHand(); frame(); };
   ws.onclose = () => { light("link", "OFFLINE", "warn"); banner(null, false, false); setTimeout(connect, 1000); };
-  ws.onmessage = e => { show(JSON.parse(e.data)); requestAnimationFrame(frame); };
+  // the next send is queued first, so a fault while drawing can never hold back a kill
+  ws.onmessage = e => { requestAnimationFrame(frame); show(JSON.parse(e.data)); };
 }
 
 function frame() {

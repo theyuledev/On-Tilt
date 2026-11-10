@@ -490,3 +490,14 @@ def test_a_board_click_only_moves_the_target_in_the_flat_view():
     assert len(targets([held, *tap])) == 1
     assert targets([V, held, *tap]) == [] and targets([V, V, held, *tap]) == []
     assert run([OPEN, V, held])["page"]["race"]["style"]["cursor"] == ""
+
+
+def test_a_snapshot_the_page_cannot_draw_never_holds_back_the_kill_key():
+    broken = snap(armed=True, choices=...)
+    steps = [OPEN, ("snap", snap(armed=True)), ("frame", None), ("snap", broken)]
+    out = run(
+        [*steps, ("down", ["Space", None]), ("frame", None), ("snap", broken), ("frame", None)]
+    )
+    assert "TypeError" in out["out"][3] and out["out"][1] is None
+    assert [m for m in out["sent"] if m.get("kill")] == [{"x": 0, "y": 0, "kill": True}]
+    assert len(out["sent"]) == 4
