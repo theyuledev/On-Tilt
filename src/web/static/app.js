@@ -120,7 +120,7 @@ function show(s) {
   strip(cfg, s);
   hud(s, maze);
   results(s);
-  draw(ctx, cfg, maze, s);
+  drawView(ctx, cfg, maze, s);
   drawPad(padCtx, cfg, s);
 }
 

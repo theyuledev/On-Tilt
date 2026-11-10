@@ -8,11 +8,11 @@ const GATE_FLASH_MS = 120;
 let gatesHit = 0, gateHitAt = -Infinity;
 
 // upright text centred on [x, y] mm
-function label(ctx, [x, y], size, text, color) {
+function label(ctx, [x, y], size, text, color, font = NUM_FONT) {
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(1, -1);
-  ctx.font = `${size}px ${NUM_FONT}`;
+  ctx.font = `${size}px ${font}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = color;

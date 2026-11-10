@@ -23,8 +23,13 @@ const dir = process.argv[1], job = JSON.parse(fs.readFileSync(0, "utf8"));
 const els = {}, win = {}, sockets = [], scripts = [], posts = [];
 let clock = 0, rafs = [];
 const VOID = new Set(["meta", "link", "img", "input"]);
+// canvas calls draw nowhere; what one hands back takes any call too and measures 0 wide
+const ink = new Proxy(function () {}, {
+  get: (t, k) => (k === "width" ? 0 : ink),
+  apply: () => ink,
+});
 const pen = e => new Proxy({ canvas: e }, {
-  get: (t, k) => (k in t ? t[k] : () => ({ width: 0 })),
+  get: (t, k) => (k in t ? t[k] : ink),
   set: (t, k, v) => ((t[k] = v), true),
 });
 

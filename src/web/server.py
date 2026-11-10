@@ -55,6 +55,7 @@ def make_app(loop) -> FastAPI:
             "tilt_full_deg": inp["intent_gain_deg"],
             "px_per_mm": loop.cfg["vision"]["px_per_mm"],
             "camera_fps": rig["camera_fps"],
+            "checkpoint_r_mm": game["checkpoint_r_mm"],
         }
 
     @app.get("/settings")

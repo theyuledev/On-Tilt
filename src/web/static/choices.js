@@ -14,7 +14,9 @@ function wireChoices() {
   for (const b of $("targets").children) b.onclick = e => { pending.target = b.dataset.pick; e.currentTarget.blur(); };
   $("race").onclick = e => {
     const c = e.currentTarget;
-    if (balancing) pending.target = plateMm(e.offsetX / c.clientWidth, e.offsetY / c.clientHeight, cfg);
+    // only the flat picture maps a click straight onto the plate
+    if (!balancing || view !== "top") return;
+    pending.target = plateMm(e.offsetX / c.clientWidth, e.offsetY / c.clientHeight, cfg);
   };
 }
 
@@ -45,7 +47,7 @@ function targets(s) {
   balancing = s.choices.mode === "balance";
   $("targetfield").hidden = !balancing;
   $("steerfield").hidden = balancing;
-  $("race").style.cursor = balancing && !watch ? "crosshair" : "";
+  $("race").style.cursor = balancing && !watch && view === "top" ? "crosshair" : "";
   $("sub").textContent = balancing ? "BALANCE · CLICK THE BOARD TO MOVE THE TARGET" : subtitle(maze);
   handnone.textContent = balancing ? "not used" : "no hand";
   for (const b of $("targets").children) {
