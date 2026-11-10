@@ -27,7 +27,7 @@ camera_uvc: read it off `uvc-util -d`, the Vend:Prod column of the overhead cam.
 
 ## arm / kill
 
-page: `ARM` button arms, `KILL` button or the space key kills. arrows / wasd steer the plate while armed. the chip over the timer says disarmed / armed / killing, the board light and the line under the board say `board lost` when the port is gone.
+page: `ARM` button arms, `KILL` button or the space key kills. arrows / wasd steer the plate while armed. the chip over the timer says disarmed / armed / killing, the board light and the line under the board say `board lost` when the port is gone. V steps the board picture through top-down, follow cam and the 3D plate, T goes straight back to top-down. the view is only how that tab draws.
 
 bench, typed at the `>` prompt:
 
