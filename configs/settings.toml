@@ -1,11 +1,15 @@
 [rig]
 center_x_us = { value = 1500, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 center_y_us = { value = 1500, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-trim_x_us = { value = 0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
-trim_y_us = { value = 0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+trim_x_us = { value = -80, label = "measured (2026-11-08)" }
+trim_y_us = { value = -80, label = "measured (2026-11-08)" }
+# TODO(measured: us_per_deg_x) 200 / (|t1| + |t2|) from the +-100 us steps, sign noted
 us_per_deg_x = { value = 28.75, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+# TODO(measured: us_per_deg_y) 200 / (|t1| + |t2|) from the +-100 us steps, sign noted
 us_per_deg_y = { value = 28.75, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+# TODO(measured: limit_x_us) largest range where nothing binds, from the corner check
 limit_x_us = { value = 150, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+# TODO(measured: limit_y_us) largest range where nothing binds, from the corner check
 limit_y_us = { value = 150, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 startup_range_us = { value = 150, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 startup_flag = true
