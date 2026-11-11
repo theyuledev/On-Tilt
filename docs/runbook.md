@@ -26,7 +26,7 @@ camera_uvc: read it off `uvc-util -d`, the Vend:Prod column of the overhead cam.
 
 ## arm / kill
 
-page: `arm` button arms, `kill (space)` button or the space key kills. arrows / wasd steer the plate while armed. the pill says disarmed / armed / killing, `board lost` shows up when the port is gone.
+page: `arm` button arms, `kill (space)` button or the space key kills. `hold (h)` only works while armed: it keeps the plate level between runs so the next arm doesn't jump, it never arms; kill still drops it. after an arm the tilt fades in from level over arm_fade_s. arrows / wasd steer the plate while armed. the pill says disarmed / armed / holding / killing, `board lost` shows up when the port is gone.
 
 bench, typed at the `>` prompt:
 

@@ -344,6 +344,25 @@ def test_watch_tab_sends_nothing_and_takes_no_input(client):
     assert 'has("watch")' in js and "watch ? {} :" in js
 
 
+def test_arm_needs_a_live_link_and_offline_one_shots_never_reach_a_fresh_app(client):
+    page = client.get("/").text
+    assert '<button id="arm" disabled>arm</button>' in page
+    assert '<button id="hold" disabled>hold (h)</button>' in page
+    js = static(client, "app.js")
+    drops = "delete pending.arm; delete pending.race; delete pending.recentre; delete pending.hold;"
+    opened = js[js.index("ws.onopen") : js.index("ws.onclose")]
+    assert '$("arm").disabled = watch;' in opened and '$("hold").disabled = watch;' in opened
+    assert drops in opened and opened.index(drops) < opened.index("frame();")
+    close = js[js.index("ws.onclose") : js.index("setTimeout(connect")]
+    assert drops in close
+    assert '$("arm").disabled = true;' in close and '$("hold").disabled = true;' in close
+    assert "pending.kill" not in close and "pending.kill" not in opened
+    # kill stays clickable offline and the watch tab still locks every button
+    assert js.count('$("kill").disabled') == 1
+    lock = '$("hold").disabled = $("arm").disabled = $("kill").disabled'
+    assert lock + ' = $("racebtn").disabled = true' in js
+
+
 class Recentres:
     def __init__(self):
         self.n = 0

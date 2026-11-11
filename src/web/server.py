@@ -100,6 +100,8 @@ def make_app(loop) -> FastAPI:
                             loop.keys.set(x, y)
                     if msg.get("arm") and not msg.get("kill"):
                         loop.arm()
+                    if msg.get("hold") and not msg.get("kill"):
+                        loop.hold()
                     game = getattr(loop, "game", None)
                     if game is not None and msg.get("race") == "start":
                         game.start()
