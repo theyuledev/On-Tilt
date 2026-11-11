@@ -1,29 +1,15 @@
-// the plate as a slab in perspective for the 3D view: plate mm in, canvas px out, the camera
-// comes from cam.js (uses race.js fit and colours, gates.js GATE / GATE_LIT / GATE_R / NUM_FONT)
-const EYE_PX = 1300;  // eye distance in scene px
-const PLATE_PX = 270;  // the plate's half width in scene px, whatever it measures in mm
-const SCENE_PX = 900;  // scene px across the canvas
-const HORIZON = 0.54;  // the point the camera looks at sits this far down the canvas
-const WALL_PX = 24, SLAB_PX = 30, LABEL_PX = 56, TAG_PX = 62;  // heights over the plate
-const TILT_SHOW = 3;  // the real plate barely tilts, so the picture exaggerates it
+// the plate as a tray in perspective for the 3D view, drawn through lens.js with the camera from
+// cam.js (uses race.js fit and colours, gates.js GATE / GATE_LIT / GATE_R / NUM_FONT, follow.js
+// WALL_TOP, hud.js signed)
+const WALL_PX = 10;  // how high a marker stroke stands, well under the top of the ball
+const RIM_PX = 10;  // how high the rim stands round the board
+const SLAB_PX = 18;  // how thick the tray is under the board
+const LABEL_PX = 56;  // how high a gate's number hangs over the plate
+const TAG_MIN_PX = 18;  // the ball's tag text never gets smaller than this on screen
+const SHADOW = { dark: 0.45, blur: 40, drop: 18 };  // the tray's shadow on the ground, scene px
 const SLAB = ["#B4966B", "#BC9E73", "#C4A77D", "#BC9E73"];
+const WALL_SIDE = "rgba(27, 27, 27, 0.9)";
 const RING = Array.from({ length: 25 }, (_, i) => [Math.cos((i * Math.PI) / 12), Math.sin((i * Math.PI) / 12)]);
-
-// p(x, y, z) -> [canvas x, canvas y, depth, px per scene px]; x, y plate mm, z scene px up
-function projector(cam, tilt, half, px) {
-  const u = PLATE_PX / half, f = px / SCENE_PX, rad = Math.PI / 180;
-  const cy = Math.cos(cam.yaw * rad), sy = Math.sin(cam.yaw * rad);
-  const cp = Math.cos(cam.pitch * rad), sp = Math.sin(cam.pitch * rad);
-  // a positive tilt lowers that axis's + edge
-  const lx = Math.sin(TILT_SHOW * tilt[0] * rad), ly = Math.sin(TILT_SHOW * tilt[1] * rad);
-  return (x, y, z = 0) => {
-    const h = z - (x * lx + y * ly) * u, dx = (x - cam.cx) * u, dy = (y - cam.cy) * u;
-    const X = dx * cy - dy * sy, Y = dx * sy + dy * cy;
-    const deep = (Y * sp - h * cp) * cam.zoom;
-    const k = (f * cam.zoom * EYE_PX) / Math.max(EYE_PX + deep, 50);
-    return [px / 2 + X * k, HORIZON * px - (Y * cp + h * sp) * k, deep, k];
-  };
-}
 
 function trace(ctx, P, pts, close) {
   ctx.beginPath();
@@ -34,8 +20,17 @@ function trace(ctx, P, pts, close) {
   if (close) ctx.closePath();
 }
 
-function slab(ctx, P, h) {
+// the board, the slab under it and a soft shadow on the ground; f is canvas px per scene px
+function tray(ctx, P, h, f) {
   const c = [[-h, h], [h, h], [h, -h], [-h, -h]];
+  ctx.save();
+  ctx.shadowColor = `rgba(0, 0, 0, ${SHADOW.dark})`;
+  ctx.shadowBlur = SHADOW.blur * f;
+  ctx.shadowOffsetY = SHADOW.drop * f;
+  ctx.fillStyle = SLAB[0];
+  trace(ctx, P, c.map(([x, y]) => [x, y, -SLAB_PX]), true);
+  ctx.fill();
+  ctx.restore();
   c.forEach(([ax, ay], i) => {
     const [bx, by] = c[(i + 1) % 4];
     ctx.fillStyle = SLAB[i];
@@ -71,20 +66,26 @@ function flat(ctx, P, maze, r, race, k) {
   });
 }
 
-// things that stand up from the plate, each with the depth it is sorted by
-function barriers(ctx, P, maze) {
-  return (maze.walls || []).flatMap(w => w.slice(1).map(([bx, by], i) => {
-    const [ax, ay] = w[i];
-    return [P((ax + bx) / 2, (ay + by) / 2)[2], () => {
-      ctx.fillStyle = "rgba(27, 27, 27, 0.9)";
-      trace(ctx, P, [[ax, ay, 0], [bx, by, 0], [bx, by, WALL_PX], [ax, ay, WALL_PX]], true);
-      ctx.fill();
-      ctx.strokeStyle = CROSS;
-      ctx.lineWidth = 2 * P(ax, ay, WALL_PX)[3];
-      trace(ctx, P, [[ax, ay, WALL_PX], [bx, by, WALL_PX]]);
-      ctx.stroke();
-    }];
-  }));
+// one upright strip from a to b with a line along its top, and the depth it is sorted by
+function fence(ctx, P, [ax, ay], [bx, by], top, fill, edge) {
+  return [P((ax + bx) / 2, (ay + by) / 2)[2], () => {
+    ctx.fillStyle = fill;
+    trace(ctx, P, [[ax, ay, 0], [bx, by, 0], [bx, by, top], [ax, ay, top]], true);
+    ctx.fill();
+    ctx.strokeStyle = edge;
+    ctx.lineWidth = 2 * P(ax, ay, top)[3];
+    trace(ctx, P, [[ax, ay, top], [bx, by, top]]);
+    ctx.stroke();
+  }];
+}
+
+// what stands up from the plate: the rim on its four sides and the marker strokes as low walls
+function standing(ctx, P, maze, h) {
+  const c = [[-h, h], [h, h], [h, -h], [-h, -h]];
+  const rim = c.map((a, i) => fence(ctx, P, a, c[(i + 1) % 4], RIM_PX, SLAB[i], RIM));
+  const wall = (a, b) => fence(ctx, P, a, b, WALL_PX, WALL_SIDE, WALL_TOP);
+  const strokes = (maze && maze.walls) || [];
+  return [...rim, ...strokes.flatMap(w => w.slice(1).map((b, i) => wall(w[i], b)))];
 }
 
 function gateSigns(ctx, P, maze, race) {
@@ -128,8 +129,8 @@ function ghostPaint(ctx) {
   };
 }
 
-// the ball's place on the plate: crosshair, shadow and a tag that keeps its size on screen
-function mark(ctx, P, [x, y], h, r, k, f) {
+// the ball's place on the plate: crosshair and shadow
+function mark(ctx, P, [x, y], h, r, k) {
   ctx.strokeStyle = CROSS;
   ctx.lineWidth = 1.5 * k;
   trace(ctx, P, [[x, -h, 1], [x, h, 1]]);
@@ -139,32 +140,40 @@ function mark(ctx, P, [x, y], h, r, k, f) {
   ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
   ring3(ctx, P, [x + 0.3 * r, y - 0.45 * r], 1.1 * r);
   ctx.fill();
-  const [sx, sy, deep] = P(x, y, TAG_PX), text = `x ${signed(x, 1)}  y ${signed(y, 1)} mm`;
-  return [deep - 1, () => {
-    ctx.font = `${23 * f}px 'VT323', monospace`;
-    ctx.textAlign = "center";
-    const w = ctx.measureText(text).width + 24 * f;
-    ctx.fillStyle = "#0B0E1E";
-    ctx.beginPath();
-    ctx.roundRect(sx - w / 2, sy - 20 * f, w, 28 * f, 14 * f);
-    ctx.fill();
-    ctx.fillStyle = "#FF7A6B";
-    ctx.fillText(text, sx, sy);
-  }];
+}
+
+// centre of the ball's tag: over the ball, under it when there is no room above, never on it.
+// the ball is [x, y, radius] on the canvas, w and hgt the tag's size
+function tagAt([sx, sy, rad], w, hgt, px) {
+  const off = rad + hgt;
+  return [Math.max(w / 2, Math.min(px - w / 2, sx)), sy - off < hgt / 2 ? sy + off : sy - off];
+}
+
+function tag(ctx, ball, text, px) {
+  const size = Math.max((23 * px) / SCENE_PX, TAG_MIN_PX * devicePixelRatio);
+  ctx.font = `${size}px 'VT323', monospace`;
+  ctx.textAlign = "center";
+  const w = ctx.measureText(text).width + size, hgt = 1.2 * size, [x, y] = tagAt(ball, w, hgt, px);
+  ctx.fillStyle = "#0B0E1E";
+  ctx.beginPath();
+  ctx.roundRect(x - w / 2, y - hgt / 2, w, hgt, hgt / 2);
+  ctx.fill();
+  ctx.fillStyle = "#FF7A6B";
+  ctx.fillText(text, x, y + 0.26 * size);
 }
 
 function draw3d(ctx, cfg, maze, s, cam) {
   const px = fit(ctx.canvas), h = cfg.plate_inner_mm / 2, r = cfg.ball_d_mm / 2, u = PLATE_PX / h;
   const tilt = [s.plate_state.sent_x_deg, s.plate_state.sent_y_deg], P = projector(cam, tilt, h, px);
   const k = P(cam.cx, cam.cy)[3], at = [s.ball.x_mm, s.ball.y_mm], g = s.race && s.race.ghost_mm;
-  const up = [];
+  const up = standing(ctx, P, maze, h);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, px, px);
   ctx.lineJoin = ctx.lineCap = "round";
-  slab(ctx, P, h);
+  tray(ctx, P, h, px / SCENE_PX);
   if (maze) {
     flat(ctx, P, maze, r, s.race, k);
-    up.push(...barriers(ctx, P, maze), ...gateSigns(ctx, P, maze, s.race));
+    up.push(...gateSigns(ctx, P, maze, s.race));
   }
   if (s.choices.mode === "balance") {
     ctx.strokeStyle = PATH;
@@ -173,7 +182,12 @@ function draw3d(ctx, cfg, maze, s, cam) {
     ctx.stroke();
   }
   if (g) up.push(orb(ctx, P, g, r, u, ghostPaint(ctx)));
-  if (s.ball.valid) up.push(mark(ctx, P, at, h, r, k, px / SCENE_PX), orb(ctx, P, at, r, u, ballPaint(ctx)));
+  if (s.ball.valid) mark(ctx, P, at, h, r, k);
   // far things first so near ones cover them
   up.sort((a, b) => b[0] - a[0]).forEach(([, paint]) => paint());
+  if (!s.ball.valid) return;
+  // the ball and its tag go on last, no wall or rim ever hides them
+  const [sx, sy, , kb] = P(...at, r * u);
+  orb(ctx, P, at, r, u, ballPaint(ctx))[1]();
+  tag(ctx, [sx, sy, r * u * kb], `x ${signed(at[0], 1)}  y ${signed(at[1], 1)} mm`, px);
 }

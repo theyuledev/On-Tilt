@@ -63,7 +63,7 @@ def test_both_fonts_are_served_from_static_and_nothing_loads_from_the_network(cl
 def test_page_has_the_view_tag_the_board_map_and_loads_the_camera_before_the_views(client):
     page = client.get("/").text
     assert all(f'id="{i}"' in page for i in ("viewtag", "minimap", "mini"))
-    order = ("race", "gates", "cam", "plate3d", "follow", "view", "choices", "app")
+    order = ("race", "gates", "cam", "lens", "plate3d", "follow", "view", "choices", "app")
     at = [page.index(f"/static/{f}.js") for f in order]
     assert at == sorted(at)
     assert "drawView(ctx, cfg, maze, s);" in static(client, "app.js")
