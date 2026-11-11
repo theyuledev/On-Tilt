@@ -5,7 +5,7 @@ from typing import NamedTuple
 import numpy as np
 
 from src.contracts import BallState
-from src.vision.px_to_mm import ball_state
+from src.vision.px_to_mm import ball_state, with_calib
 from src.vision.tracker import BallPx, BallTracker
 
 
@@ -23,7 +23,7 @@ class Pipeline:
     """One step per frame on the grab thread; the loop just reads latest()."""
 
     def __init__(self, cfg: dict):
-        self.cfg = cfg["vision"]
+        self.cfg = with_calib(cfg["vision"])
         self.tracker = BallTracker(self.cfg)
         self.history: list[BallState] = []
         self.last: Observation | None = None
