@@ -153,10 +153,20 @@ def test_pd_alone_cannot_hold_through_the_trim_error():
 def test_release_after_holding_100_mm_out_adds_no_windup_overshoot():
     # the integral only winds inside i_err_max_mm, so a long hold far out must not add overshoot
     with_i = -min(b.x_mm for b in run((100, 0, 0, 0), hold_s=5.0).balls)
-    pd_only = -min(b.x_mm for b in run((100, 0, 0, 0), integral=False, hold_s=5.0).balls)
-    assert with_i <= pd_only + 1.0
-    # pd alone releasing from the plate limit already overshoots ~11 mm
+    no_hold = -min(b.x_mm for b in run((100, 0, 0, 0)).balls)
+    assert with_i <= no_hold + 1.0
+    # a release from 100 mm out comes in at cruising speed and overshoots under 10 mm
     assert with_i < 25
+
+
+def test_a_run_up_from_the_far_corner_comes_in_slow_enough_to_stop_at_the_target():
+    c = load()["control"]
+    cruise = c["kp_deg_mm"] * c["balance_reach_mm"] / c["kd_deg_s_mm"]
+    out = run((130, 130, 0, 0))
+    assert max(math.hypot(b.vx_mm_s, b.vy_mm_s) for b in out.balls) < 1.5 * cruise
+    # how far past the centre it went on the way in
+    assert min(b.x_mm + b.y_mm for b in out.balls) / math.sqrt(2) > -15
+    assert worst(out.balls, 10) < 20
 
 
 def test_inverter_never_strays_more_than_comp_and_steps_stay_bounded():

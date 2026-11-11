@@ -33,8 +33,9 @@ class Balance:
 
     def __call__(self, ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
         c = cfg["control"]
-        # the same loop about the target instead of the centre
-        tx, ty = held(cfg)["mm"]
+        # the same loop about the target instead of the centre. a far ball is pulled as if only
+        # balance_reach_mm away, so the brake outweighs the pull before it is too fast to stop
+        tx, ty = clip((ball.x_mm, ball.y_mm), held(cfg)["mm"], c["balance_reach_mm"])
         ball = replace(ball, x_mm=ball.x_mm - tx, y_mm=ball.y_mm - ty)
         dt = 0.0 if self.acc.t_s is None else max(ball.t_s - self.acc.t_s, 0.0)
         self.acc = integrate(self.acc, ball, c)

@@ -69,3 +69,18 @@ def test_balance_tilts_about_the_target_exactly_as_it_did_about_the_centre(cfg):
     assert make_mode("balance", cfg)(moved, NO_INTENT, cfg) == at_centre
     on_it = make_mode("balance", cfg)(BallState(50.0, 20.0, 0.0, 0.0, True, 1.0), NO_INTENT, cfg)
     assert (on_it.tilt_x_deg, on_it.tilt_y_deg) == (0.0, 0.0)
+
+
+def test_a_ball_past_the_reach_is_pulled_no_harder_than_one_at_it(cfg):
+    c = cfg["control"]
+    reach = c["balance_reach_mm"]
+
+    def tilt(x, y):
+        return make_mode("balance", cfg)(BallState(x, y, 0.0, 0.0, True, 0.0), NO_INTENT, cfg)
+
+    side = reach / math.sqrt(2)
+    assert tilt(3 * reach, 0.0) == tilt(reach, 0.0)
+    assert tilt(4 * side, 4 * side).tilt_x_deg == pytest.approx(tilt(side, side).tilt_x_deg)
+    assert abs(tilt(reach / 2, 0.0).tilt_x_deg) < abs(tilt(reach, 0.0).tilt_x_deg)
+    # the pull stays inside what the brake term may ask for, or a far ball never stops speeding up
+    assert c["kp_deg_mm"] * reach <= c["d_max_deg"]
