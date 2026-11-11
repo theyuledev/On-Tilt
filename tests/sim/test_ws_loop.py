@@ -24,7 +24,6 @@ HANDS_OFF = {"x": 0, "y": 0}
 # snapshot fields the page reads that the bare loop does not send
 NOT_SENT = {
     "race": "only there once a game is wired",
-    "guard": "not sent yet, the board skips the glow without it",
 }
 FN = re.compile(r"^function \w+\(([^)]*)\) \{$(.*?)^\}", re.M | re.S)
 # ways a reconnect can drop a queued arm; add forms here, don't loosen these
@@ -41,7 +40,10 @@ def page(monkeypatch):
     now = [1000.0]
     # only the key stamps follow the test clock, the socket keeps real time
     monkeypatch.setattr(keyboard, "time", SimpleNamespace(monotonic=lambda: now[0]))
-    loop = Loop(load())
+    cfg = load()
+    # held keys roll the sim ball to the rim, the guard would brake it
+    cfg["control"]["guard_on"] = False
+    loop = Loop(cfg)
     client = TestClient(make_app(loop))
     with client.websocket_connect("/ws") as sock:
         yield SimpleNamespace(loop=loop, client=client, sock=sock, now=now)
@@ -212,6 +214,9 @@ def page_reads():
 
 
 def test_every_snapshot_field_the_page_reads_is_sent(page):
+    # the guard field only has its full shape while the guard is on
+    page.loop.cfg["control"]["guard_on"] = True
+    page.loop.mode = "hand"
     run(page, 1)
     snap = say(page, {})
     reads = page_reads()

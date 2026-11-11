@@ -35,6 +35,7 @@ def hold_ball_at(loop, clock, x, n, key=(0.0, 0.0), dt=0.01):
 def test_hand_step_back_to_zero_lands_exactly_on_centre(clock):
     cfg = load()
     cfg["control"]["inverter_on"] = True  # must stay out of the way in hand mode
+    cfg["control"]["guard_on"] = False  # the guard caps the tilt below 3 deg
     loop = Loop(cfg)
     loop.arm()
     ticks(loop, clock, 100, key=(0.9, 0.0))

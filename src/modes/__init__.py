@@ -1,6 +1,7 @@
 from dataclasses import replace
 
 from src.contracts import BallState, Intent, PlateCommand
+from src.control.guard import Guard
 from src.control.pid import Integral, integrate, pid, smooth
 from src.inputs.shaping import shape
 from src.modes.assist import goal_mm
@@ -83,7 +84,19 @@ MODES = {"hand": hand, "balance": Balance, "path": PathFollower, "assist": assis
 CLOSED_LOOP = ("balance", "path", "assist")
 
 
+class Guarded(Guard):
+    """A player mode with the edge guard between it and the plate."""
+
+    def __init__(self, mode, cfg: dict):
+        super().__init__(cfg)
+        self.mode = mode
+
+    def __call__(self, ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
+        return super().__call__(ball, self.mode(ball, intent, cfg))
+
+
 def make_mode(name: str, cfg: dict):
     """The callable for one run of a mode; modes that keep state are classes built from cfg."""
     mode = MODES[name]
-    return mode(cfg) if isinstance(mode, type) else mode
+    mode = mode(cfg) if isinstance(mode, type) else mode
+    return Guarded(mode, cfg) if name == "hand" and cfg["control"]["guard_on"] else mode
