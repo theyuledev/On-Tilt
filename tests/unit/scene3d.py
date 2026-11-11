@@ -33,9 +33,9 @@ console.log(JSON.stringify(JSON.parse(fs.readFileSync(0, "utf8")).map(([js, args
 """
 
 
-def run(*jobs):
+def run(*jobs, px=PX):
     out = subprocess.run(
-        ["node", "-e", RUN, str(PX), *(str(STATIC / f"{f}.js") for f in SCRIPTS)],
+        ["node", "-e", RUN, str(px), *(str(STATIC / f"{f}.js") for f in SCRIPTS)],
         input=json.dumps(jobs),
         capture_output=True,
         text=True,
@@ -61,5 +61,5 @@ def shots(at=(0, 0)):
     return dict(zip(names, cams, strict=True))
 
 
-def draw(maze, s, cam):
-    return run(("draw3d", ["PEN", CFG, maze, s, cam]))[0]
+def draw(maze, s, cam, px=PX):
+    return run(("draw3d", ["PEN", CFG, maze, s, cam]), px=px)[0]

@@ -134,3 +134,33 @@ def test_walls_stand_well_below_the_top_of_the_ball_in_every_shot():
         (_, top, _, _), (_, mid, _, k) = project(cam, [(0, -r, wall), (0, 0, up)])
         # how far up the ball a wall touching its near side reaches on screen
         assert (mid + up * k - top) / (2 * up * k) < 0.25, name
+
+
+def test_a_wall_is_drawn_that_high_with_a_grey_top_not_the_red_of_the_crosshair():
+    wall, side, grey, red = scene3d.run(("() => [WALL_PX, WALL_SIDE, WALL_TOP, CROSS]", []))[0]
+    wide = scene3d.shots()["wide"]
+    drawn = scene3d.draw(WALLED, scene3d.snap(), wide)
+    after = drawn[drawn.index(["fillStyle=", side]) :]
+    quad = [call[1:3] for call in after if call[0] in ("moveTo", "lineTo")][:4]
+    for got, want in zip(quad[2:], project(wide, [(60, -30, wall), (-60, -30, wall)]), strict=True):
+        assert got == pytest.approx(want[:2])
+    assert next(call[1] for call in after if call[0] == "strokeStyle=") == grey != red
+
+
+def test_the_tag_text_stays_big_enough_to_read_on_a_small_canvas():
+    (least,) = scene3d.run(("() => TAG_MIN_PX", []))
+    tower = scene3d.shots()["tower"]
+    for px, want in ((300, least), (PX, 23)):
+        drawn = scene3d.draw(None, scene3d.snap(), tower, px=px)
+        box = next(i for i, call in enumerate(drawn) if call[0] == "roundRect")
+        font = next(call[1] for call in reversed(drawn[:box]) if call[0] == "font=")
+        assert float(font.split("px")[0]) == pytest.approx(want)
+
+
+def test_the_tray_casts_a_soft_shadow_that_stays_under_the_board():
+    drawn = scene3d.draw(None, scene3d.snap(valid=False), scene3d.shots()["wide"])
+    names = [call[0] for call in drawn]
+    blur, fills = names.index("shadowBlur="), [i for i, n in enumerate(names) if n == "fill"]
+    assert drawn[blur][1] > 0 and names.index("save") < blur < fills[0]
+    # switched off again before anything else is painted
+    assert fills[0] < names.index("restore") < fills[1]
