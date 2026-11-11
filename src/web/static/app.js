@@ -39,7 +39,7 @@ if (watch) {
   $("racebtn").onclick = e => { pending.race = raceCmd(); e.currentTarget.blur(); };
   wireChoices();
 }
-cam.onload = () => { cam.hidden = false; nocam.hidden = true; nextCam(); };
+cam.onload = () => { cam.hidden = false; nocam.hidden = true; outline(); nextCam(); };
 cam.onerror = () => {
   cam.hidden = true;
   nocam.hidden = false;
@@ -64,6 +64,23 @@ function light(id, text, cls) {
   const el = $(id);
   el.textContent = text;
   el.className = "light " + cls;
+}
+
+// the board as the app places it, drawn over the camera picture
+function outline() {
+  const el = $("plate"), pts = cfg && cfg.plate_outline_px;
+  el.style.display = pts && cam.naturalWidth ? "" : "none";
+  if (!pts || !cam.naturalWidth) return;
+  el.setAttribute("viewBox", `0 0 ${cfg.camera_width} ${cfg.camera_width * cam.naturalHeight / cam.naturalWidth}`);
+  el.style.width = `${cam.clientWidth}px`;
+  el.style.height = `${cam.clientHeight}px`;
+  el.firstElementChild.setAttribute("points", pts.map(p => p.join(",")).join(" "));
+}
+
+// a tracked board comes with the snapshot whenever it moved; dashed while it is not found
+function tracked(s) {
+  if (s.plate_outline_px) { cfg.plate_outline_px = s.plate_outline_px; outline(); }
+  $("plate").classList.toggle("lost", !!s.plate_lost);
 }
 
 function ring(px) {
@@ -117,6 +134,7 @@ function show(s) {
   choices(s);
   targets(s);
   ring(s.ball_px);
+  tracked(s);
   strip(cfg, s);
   hud(s, maze);
   results(s);

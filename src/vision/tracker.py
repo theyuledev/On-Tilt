@@ -58,10 +58,12 @@ class Background:
 
 
 class BallTracker:
-    """Locks onto one ball, learns its radius and whether it's dark, coasts through short misses."""
+    """Locks onto one ball, learns its radius and whether it's dark, coasts through short misses.
+    on_plate says whether a blob is where a ball can be; one that is not is never the ball."""
 
-    def __init__(self, cfg: dict):
+    def __init__(self, cfg: dict, on_plate=lambda c: True):
         self.cfg = cfg
+        self.on_plate = on_plate
         self.background = Background(cfg)
         self.reset()
 
@@ -117,7 +119,7 @@ class BallTracker:
     def _search(self, gray: np.ndarray, t_s: float) -> Candidate | None:
         level = self.background.level if self.dark is not False else None
         if self.r is None:
-            found = find_balls(gray, self.cfg, level)
+            found = [c for c in find_balls(gray, self.cfg, level) if self.on_plate(c)]
             return found[0] if found else None
         tol = self.cfg["radius_tol"]
         lo, hi = self.r * (1 - tol), self.r * (1 + tol)
@@ -131,6 +133,7 @@ class BallTracker:
         box = (int(max(px - d, 0)), int(max(py - d, 0)), int(px + d), int(py + d))
         for b in (box, None):
             found = [c for c in round_blobs(gray, near, self.dark, b, level) if c.r_px >= lo]
+            found = [c for c in found if self.on_plate(c)]
             if b is not None:
                 found = [c for c in found if not cut_by(c, b, w, h)]
             else:

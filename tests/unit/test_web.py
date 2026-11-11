@@ -13,6 +13,7 @@ from src.inputs.keyboard import KeyboardInput
 from src.io.ports import Frame
 from src.io.settings import load
 from src.safety import SafetyState
+from src.vision.px_to_mm import outline_px, with_calib
 from src.web.server import JPEG_PERIOD_S, STATIC, make_app
 
 pytestmark = pytest.mark.unit
@@ -394,6 +395,7 @@ def test_config_gives_plate_ball_and_stale_limit_from_settings(client):
         "plate_inner_mm": cfg["rig"]["plate_inner_mm"],
         "ball_d_mm": cfg["rig"]["ball_d_mm"],
         "camera_width": cfg["rig"]["camera_width"],
+        "plate_outline_px": outline_px(cfg["rig"]["plate_inner_mm"] / 2, with_calib(cfg["vision"])),
         "heartbeat_stale_s": cfg["game"]["heartbeat_stale_s"],
         "dead_zone": cfg["input"]["dead_zone"],
         "hand": False,
@@ -569,3 +571,32 @@ def test_ws_ignores_keys_that_are_not_finite():
         ws.send_json({"x": 0.5, "y": -0.5})
         ws.receive_json()
     assert keys.latest().valid and (keys.latest().x, keys.latest().y) == (0.5, -0.5)
+
+
+def test_ws_sends_the_plate_outline_to_a_socket_only_when_it_moved():
+    state = {"plate_outline_px": [[1.0, 2.0]]}
+    loop = SimpleNamespace(cfg=load(), hand=None, snapshot=lambda: {"ok": 1, **state})
+
+    def ask(ws):
+        ws.send_json({})
+        return ws.receive_json()
+
+    with TestClient(make_app(loop)).websocket_connect("/ws") as ws:
+        assert ask(ws) == {"ok": 1, "plate_outline_px": [[1.0, 2.0]]}
+        assert ask(ws) == {"ok": 1}
+        state["plate_outline_px"] = [[5.0, 6.0]]
+        assert ask(ws) == {"ok": 1, "plate_outline_px": [[5.0, 6.0]]}
+        assert ask(ws) == {"ok": 1}
+        # a tab that connects later starts from nothing
+        with TestClient(make_app(loop)).websocket_connect("/ws") as late:
+            assert ask(late) == {"ok": 1, "plate_outline_px": [[5.0, 6.0]]}
+    state.clear()
+    with TestClient(make_app(loop)).websocket_connect("/ws") as ws:
+        assert ask(ws) == {"ok": 1}
+
+
+def test_page_redraws_the_plate_outline_from_the_snapshot(client):
+    js = static(client, "app.js")
+    assert "if (s.plate_outline_px) { cfg.plate_outline_px = s.plate_outline_px; outline(); }" in js
+    assert "tracked(s);" in js
+    assert "#plate.lost polygon { stroke-dasharray:" in static(client, "style.css")

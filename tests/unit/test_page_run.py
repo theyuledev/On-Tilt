@@ -505,3 +505,9 @@ def test_a_snapshot_the_page_cannot_draw_never_holds_back_the_kill_key():
     assert "TypeError" in out["out"][3] and out["out"][1] is None
     assert [m for m in out["sent"] if m.get("kill")] == [{"x": 0, "y": 0, "kill": True}]
     assert len(out["sent"]) == 4
+
+
+def test_plate_outline_is_marked_while_the_plate_is_not_found():
+    assert show(snap())["plate"]["cls"] == ""
+    assert show(snap(plate_lost=True))["plate"]["cls"] == "lost"
+    assert show(snap(plate_lost=True), snap(plate_lost=False))["plate"]["cls"] == ""

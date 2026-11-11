@@ -14,6 +14,7 @@ from src.games import maze
 from src.inputs import hand_view
 from src.modes import spot
 from src.vision.cross import cross_mm
+from src.vision.px_to_mm import outline_px, with_calib
 from src.web import form
 
 STATIC = Path(__file__).parent / "static"
@@ -36,6 +37,7 @@ def retarget(loop, want) -> None:
 
 def make_app(loop) -> FastAPI:
     app = FastAPI()
+    vision = with_calib(loop.cfg["vision"])
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
     @app.get("/")
@@ -49,6 +51,7 @@ def make_app(loop) -> FastAPI:
             "plate_inner_mm": rig["plate_inner_mm"],
             "ball_d_mm": rig["ball_d_mm"],
             "camera_width": rig["camera_width"],
+            "plate_outline_px": outline_px(rig["plate_inner_mm"] / 2, vision),
             "heartbeat_stale_s": game["heartbeat_stale_s"],
             "dead_zone": inp["dead_zone"],
             "hand": loop.hand is not None,
@@ -122,6 +125,7 @@ def make_app(loop) -> FastAPI:
     @app.websocket("/ws")
     async def ws(sock: WebSocket):
         await sock.accept()
+        outline = None
         try:
             while True:
                 msg = await sock.receive_json()
@@ -150,7 +154,13 @@ def make_app(loop) -> FastAPI:
                         loop.hand.recentre()
                 except Exception as e:
                     print(f"ws message dropped: {e!r}")
-                await sock.send_json(loop.snapshot())
+                snap = loop.snapshot()
+                # the board outline is long, so a socket only gets it again when it moved
+                if snap.get("plate_outline_px") is outline:
+                    snap.pop("plate_outline_px", None)
+                else:
+                    outline = snap["plate_outline_px"]
+                await sock.send_json(snap)
         except WebSocketDisconnect:
             pass
 

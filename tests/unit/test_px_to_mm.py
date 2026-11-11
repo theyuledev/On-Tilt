@@ -3,7 +3,7 @@ import json
 import pytest
 
 from src.contracts import BallState
-from src.vision.px_to_mm import ball_state, plate_mm, with_calib
+from src.vision.px_to_mm import ball_state, outline_px, plate_mm, plate_px, with_calib
 from src.vision.tracker import BallPx
 
 pytestmark = pytest.mark.unit
@@ -89,3 +89,17 @@ def test_the_saved_calibration_is_only_loaded_when_use_calib_is_on(tmp_path):
     off = {**CFG, "use_calib": False}
     assert with_calib(off) is off
     assert with_calib({**CFG, "use_calib": True})["calib"] == CALIB
+
+
+@pytest.mark.parametrize("cfg", [{**CFG, "plate_yaw_deg": 30.0}, CALIBRATED])
+def test_plate_px_undoes_plate_mm(cfg):
+    for px in ((640.0, 400.0), (900.0, 150.0), (301.5, 702.25)):
+        assert plate_px(*plate_mm(*px, cfg), cfg) == pytest.approx(px)
+
+
+def test_outline_walks_the_square_corner_to_corner():
+    pts = outline_px(50.0, CFG, per_side=4)
+    assert len(pts) == 16
+    assert pts[0] == [740.0, 300.0]
+    assert pts[4] == [540.0, 300.0]
+    assert pts[1] == [690.0, 300.0]

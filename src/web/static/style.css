@@ -173,3 +173,6 @@ h2 { margin: 0; font: 400 18px var(--px); line-height: 1.3; color: var(--yellow)
 .value.bad { box-shadow: inset 0 0 0 3px var(--red); }
 .key { font-size: 17px; color: #6F7BAE; }
 .settings .seg button:disabled { opacity: 0.4; }
+#plate { position: absolute; left: 0; top: 0; pointer-events: none; }
+#plate polygon { fill: none; stroke: #b040ff; stroke-width: 2; vector-effect: non-scaling-stroke; }
+#plate.lost polygon { stroke-dasharray: 6 4; }
