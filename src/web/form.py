@@ -11,7 +11,8 @@ from src.modes import MODES, make_mode
 from src.modes.spot import held
 
 # servo limits, the pulse map, the safety times and the board link stay with the settings file
-LOCKED = ("rig",)
+LOCKED = ("rig", "bench")
+HIDDEN = ("bench",)  # what the tracker is scored against, not the game's to show
 LABEL = "player-tuned (settings page)"
 # divided by while the app runs
 POSITIVE = (("vision", "px_per_mm"), ("control", "sim_tick_hz"))
@@ -25,6 +26,7 @@ def view(loop) -> dict:
     """The running value of every setting in the files, by section, and what locks them."""
     saved, cfg = settings.load(), loop.cfg
     sections = {s: {k: cfg[s].get(k, v) for k, v in sec.items()} for s, sec in saved.items()}
+    sections = {s: sec for s, sec in sections.items() if s not in HIDDEN}
     return {
         "armed": loop.safety.armed,
         "locked": list(LOCKED),
