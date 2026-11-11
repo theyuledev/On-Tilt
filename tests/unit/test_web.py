@@ -12,15 +12,15 @@ from src.inputs.keyboard import KeyboardInput
 from src.io.ports import Frame
 from src.io.settings import load
 from src.safety import SafetyState
-from src.web.server import JPEG_PERIOD_S, make_app
+from src.web.server import JPEG_PERIOD_S, STATIC, make_app
 
 pytestmark = pytest.mark.unit
 
-HUD_IDS = ("race", "timer", "speed", "cps", "banner", "ballpill", "kill", "seen", "pad", "level")
-PILL_IDS = ("hand", "beat", "board", "stale")
-RACE_IDS = ("racebtn", "count", "delta", "pen", "result")
+HUD_IDS = ("race", "timer", "cps", "banner", "kill", "seen", "pad", "level", "ballx", "tilt")
+LIGHT_IDS = ("link", "board", "camlight", "ballpill", "hand", "beat", "stale")
+RACE_IDS = ("racebtn", "count", "split", "delta", "best", "pen", "result")
 RACE_FIELDS = ("state", "elapsed_s", "reached", "delta_s", "penalty_s", "reason", "ghost_lap_s")
-RESULT_IDS = ("restime", "respen", "resdelta", "resghost", "resname", "ressaved", "resbeat")
+RESULT_IDS = ("respen", "resname", "ressave", "ressaved", "resarm")
 
 
 @pytest.fixture
@@ -34,20 +34,38 @@ def static(client, name):
     return r.text
 
 
-def test_page_has_the_race_hud_pills_and_kill(client):
+def page_at(client, text):
+    return client.get("/").text.index(text)
+
+
+def test_page_has_the_race_hud_lights_and_kill(client):
     page = client.get("/").text
-    assert all(f'id="{i}"' in page for i in HUD_IDS + PILL_IDS)
-    assert "00:00.00" in page and "no input" in page and 'id="side"' in page
+    assert all(f'id="{i}"' in page for i in HUD_IDS + LIGHT_IDS)
+    assert "00:00.00" in page and "NO INPUT" in page and 'id="side"' in page
     assert "/static/style.css" in page and "/static/app.js" in page and "/static/race.js" in page
     assert "/static/pad.js" in page
 
 
-def test_race_hud_hides_without_a_race_and_tilt_reads_big(client):
-    page = client.get("/").text
-    assert 'id="tilt"' in page and "arrows / wasd to tilt" in page
-    assert '$("timer").hidden = $("cps").hidden = s.race === undefined' in static(client, "app.js")
+def test_both_fonts_are_served_from_static_and_nothing_loads_from_the_network(client):
     css = static(client, "style.css")
-    assert "#tilt { font: 24px" in css and "color: #fff; white-space: pre" in css
+    for name, family in (("PressStart2P", "Press Start 2P"), ("VT323", "VT323")):
+        assert f'@font-face {{ font-family: "{family}"; src: url("fonts/{name}.woff2")' in css
+        font = client.get(f"/static/fonts/{name}.woff2")
+        assert font.status_code == 200 and font.content[:4] == b"wOF2"
+    for path in STATIC.iterdir():
+        if path.suffix in (".html", ".css", ".js"):
+            text = path.read_text()
+            assert "http://" not in text and "https://" not in text and "//fonts" not in text, path
+
+
+def test_mode_steering_and_guard_controls_are_drawn_but_disabled(client):
+    page = client.get("/").text
+    marks = [f'data-mode="{m}"' for m in ("hand", "balance", "path")]
+    marks += ['data-steer="hand"', 'data-steer="keys"', 'data-hand="tilt"', 'data-hand="palm"']
+    for mark in [*marks, 'id="guard"']:
+        at = page.index(mark)
+        tag = page[page.rindex("<button", 0, at) : page.index(">", at)]
+        assert tag.endswith(" disabled"), mark
 
 
 def test_page_has_the_race_hud_and_loads_it_between_race_and_app(client):
@@ -62,13 +80,12 @@ def test_banner_line_comes_from_guide_and_starts_on_connecting(client):
     assert "function guide(s, ctx)" in static(client, "guide.js")
     assert 'data-tone="warn">connecting...</span>' in client.get("/").text
     js = static(client, "app.js")
-    assert "guide(s, { live, watch, hand: cfg.hand, lost })" in js
-    assert 'pill("link", "offline", "warn"); banner(null, false, false);' in js
+    assert "guide(s, { live, watch, hand: cfg.hand, lost, gates })" in js
+    assert 'light("link", "OFFLINE", "warn"); banner(null, false, false);' in js
     css = static(client, "style.css")
-    assert '#banner[data-tone="stop"] { color: #f33; font-size: 12vmin; }' in css
-    # plain hints sit small at the bottom so they never cover the ball
-    hint = '#banner[data-tone=""] { place-items: end center; padding-bottom: 12px; '
-    assert hint + "font-size: 3vmin; color: #aaa; }" in css
+    assert '#banner[data-tone="stop"] { color: var(--red); }' in css
+    # the line sits under the board so it never covers the ball
+    assert page_at(client, 'class="arena"') < page_at(client, 'id="banner"')
 
 
 def test_hud_is_keyed_on_the_race_view(client):
@@ -76,14 +93,14 @@ def test_hud_is_keyed_on_the_race_view(client):
     assert "function hud(s, maze)" in js and "hud(s, maze)" in static(client, "app.js")
     assert all(f"r.{f}" in js for f in RACE_FIELDS)
     assert "s.race && s.race.state" in js and "r.off_path === true" in js
-    assert "#56B4E9" in js and "#E69F00" in js and "FIRST LAP" in js
+    assert "#3EE6E0" in js and "#E69F00" in js and "FIRST LAP" in js
     assert "fmtLap(" in js and "maze.checkpoints.length" in js
     assert '"false start"' in js and "arm, then R" in js
 
 
 def test_race_js_lights_reached_gates_and_pulses_the_next(client):
     js = static(client, "race.js")
-    assert "function gates(ctx, maze, r, race)" in js and "gates(ctx, maze, r, s.race)" in js
+    assert "function gates(ctx, maze, ballR, race)" in js and "gates(ctx, maze, r, s.race)" in js
     assert "race.reached" in js and "GATE_PULSE_MS" in js and "GATE_FLASH_MS" in js
 
 
@@ -95,14 +112,6 @@ def test_r_key_and_race_button_send_a_one_shot_start_or_abort(client):
     hud = static(client, "hud.js")
     assert '"abort" : "start"' in hud
     assert 'PRE = ["calibrating", "staging"]' in hud and '[...PRE, "countdown", "running"]' in hud
-
-
-def test_hud_shows_no_race_text_while_calibrating_or_staging(client):
-    hud = static(client, "hud.js")
-    guard = hud.index("if (!r || PRE.includes(r.state))")
-    assert 'if (r) $("timer").textContent = $("cps").textContent = ""' in hud
-    assert guard < hud.index("countdown(r, was);") < hud.index("split(r, was, performance")
-    assert 'toggle("racing", live && !PRE.includes(r.state))' in hud
 
 
 def test_watch_tab_disables_the_race_button(client):
@@ -234,31 +243,11 @@ def test_ws_arm_alone_from_disarmed_arms():
 def test_page_has_a_results_panel_loaded_after_hud_and_before_app(client):
     page = client.get("/").text
     assert all(f'id="{i}"' in page for i in RESULT_IDS)
-    assert page.index('id="side"') < page.index('id="results" hidden')
+    assert page.index('id="side"') < page.index('id="results" class="field" hidden')
     assert '<input id="resname" maxlength="8"' in page
     at = [page.index(f"/static/{f}.js") for f in ("hud", "results", "app")]
     assert at == sorted(at)
     assert "hud(s, maze);\n  results(s);" in static(client, "app.js")
-
-
-def test_results_panel_shows_the_finished_race_and_saves_a_judge_name(client):
-    js = static(client, "results.js")
-    assert all(f"r.{f}" in js for f in ("state", "score", "delta_s", "ghost_lap_s"))
-    assert 'r.state === "finished" && !!r.score' in js and "RES_DELAY_MS = 1000;" in js
-    assert "fmtLap(r.score.time_s)" in js and "signed(d)" in js and "d < 0 ? AHEAD : BEHIND" in js
-    assert "JUDGE ${resSaves + 1}" in js and "pending.save = name;" in js
-    page = client.get("/").text
-    assert ">NEW GHOST<" in page and ">race again: R<" in page and ">beat it<" in page
-    assert ">saved<" in page and "#resghost {" in static(client, "style.css")
-    assert "#CC79A7" in static(client, "style.css")
-
-
-def test_name_field_only_takes_keys_while_disarmed(client):
-    js = static(client, "results.js")
-    assert "resName.disabled = !!s.armed ||" in js and "if (resName.disabled) resName.blur();" in js
-    page = client.get("/").text
-    assert '<span id="resarm" class="hint" hidden>disarm to type a name</span>' in page
-    assert 'resEl("resarm").hidden = panel.hidden || !s.armed || resSaved;' in js
 
 
 def test_typing_in_a_field_skips_the_window_keys_but_still_lets_go_of_tilt(client):
@@ -282,13 +271,13 @@ def test_space_kills_while_armed_even_from_the_name_field(client):
 def test_page_has_a_hand_pill_keyed_on_the_snapshot_flags(client):
     assert 'id="hand"' in client.get("/").text
     js = static(client, "app.js")
-    assert "hold still" in js and "s.hand_seen" in js and "s.hand_calibrating" in js
+    assert "HOLD STILL" in js and "s.hand_seen" in js and "s.hand_calibrating" in js
 
 
-def test_pad_draws_dead_zone_intent_dot_and_guards_the_progress_ring(client):
+def test_pad_draws_the_intent_dot_and_guards_the_progress_ring(client):
     js = static(client, "pad.js")
     assert "function drawPad(ctx, cfg, s)" in js
-    assert "cfg.dead_zone" in js and "s.intent" in js and "hold still" in js
+    assert "cfg.dead_zone" in js and "s.intent" in js
     assert "s.hand_progress !== undefined" in js
     # pad.js leans on these race.js helpers
     race = static(client, "race.js")
@@ -326,17 +315,6 @@ def test_space_or_enter_never_clicks_a_focused_arm_button(client):
     for b in ("arm", "kill"):
         assert f'$("{b}").onclick = e => {{ pending.{b} = true; e.currentTarget.blur(); }}' in js
     assert '$("racebtn").onclick = e => { pending.race = raceCmd(); e.currentTarget.blur(); }' in js
-
-
-def test_arm_block_reason_sits_by_arm_and_hides_when_null_or_missing(client):
-    page = client.get("/").text
-    assert '<span id="armblock" hidden></span>' in page
-    assert page.index('id="arm"') < page.index('id="armblock"')
-    js = static(client, "app.js")
-    # !undefined and !null are both true, so a snapshot without the key stays hidden
-    assert '$("armblock").hidden = !s.arm_blocked;' in js
-    assert '$("armblock").textContent = s.arm_blocked || "";' in js
-    assert "#armblock { color: #f33;" in static(client, "style.css")
 
 
 def test_watch_tab_sends_nothing_and_takes_no_input(client):
@@ -377,29 +355,11 @@ def test_config_gives_plate_ball_and_stale_limit_from_settings(client):
         "dead_zone": cfg["input"]["dead_zone"],
         "hand": False,
         "tilt_full_deg": cfg["input"]["intent_gain_deg"],
+        "px_per_mm": cfg["vision"]["px_per_mm"],
+        "camera_fps": cfg["rig"]["camera_fps"],
     }
     with_hand = TestClient(make_app(SimpleNamespace(cfg=cfg, hand=object())))
     assert with_hand.get("/config").json()["hand"] is True
-
-
-def test_board_sits_in_the_hand_view_and_loads_after_race_before_app(client):
-    page = client.get("/").text
-    at = [page.index(i) for i in ('id="handview"', '<canvas id="tiltboard">', 'id="results"')]
-    assert at == sorted(at)
-    assert '<span id="handhint" hidden>hold your hand flat, palm down, then tilt</span>' in page
-    at = [page.index(f"/static/{f}.js") for f in ("race", "board", "app")]
-    assert at == sorted(at)
-    assert "  drawPad(padCtx, cfg, s);\n  board(s, cfg);\n}" in static(client, "app.js")
-    assert "#tiltboard {" in static(client, "style.css")
-
-
-def test_board_draws_cmd_real_ball_bars_and_the_ghost_hand(client):
-    js = static(client, "board.js")
-    assert "function board(s, cfg)" in js and "cfg.tilt_full_deg" in js
-    assert all(f in js for f in ("sent_x_deg", "est_x_deg", "b.valid", "s.intent.x"))
-    assert '["hand", ' in js and '["cmd", ' in js and '["real", ' in js
-    assert "if (g) glow(ctx, cmd, g);" in js and "performance.now()" in js
-    assert '$("handhint").hidden = !on;' in js
 
 
 def race_maze(name):
@@ -448,8 +408,7 @@ def test_race_maze_is_404_for_a_missing_or_bad_maze(monkeypatch, tmp_path, body)
 def test_page_still_connects_and_draws_the_plate_without_a_maze(client):
     app = static(client, "app.js")
     assert 'json("/race/maze").catch(() => null)]).then(' in app
-    assert 'if (maze) $("cps").textContent = `0/' in app
-    assert 'if (maze) $("cps").textContent = `CP ' in static(client, "hud.js")
+    assert "if (maze) lamps(maze.checkpoints.length" in static(client, "hud.js")
     js = static(client, "race.js")
     assert "if (maze) {\n    if (maze.walls) walls(ctx, maze);" in js
     assert js.index("if (maze) {") < js.index("gates(ctx, maze, r, s.race)")
@@ -459,7 +418,7 @@ def test_race_js_draws_walls_under_the_race_line_only_when_the_maze_has_them(cli
     js = static(client, "race.js")
     assert "function walls(ctx, maze)" in js and "maze.walls.forEach((w) => polyline(ctx, w))" in js
     guarded = js.index("if (maze.walls) walls(ctx, maze);")
-    assert guarded < js.index("ribbon(ctx, maze, cfg.ball_d_mm)")
+    assert guarded < js.index("    route(ctx, maze);")
 
 
 def test_race_js_draws_the_plate_in_mm_with_a_ball_trail(client):
@@ -468,11 +427,10 @@ def test_race_js_draws_the_plate_in_mm_with_a_ball_trail(client):
     assert "cfg.plate_inner_mm" in js and "TRAIL_S" in js and "s.ball.valid" in js
 
 
-def test_race_js_draws_the_ghost_under_a_white_player(client):
+def test_race_js_draws_the_ghost_under_the_player(client):
     js = static(client, "race.js")
-    assert "s.race" in js and "ghost_mm" in js and "#CC79A7" in js
-    assert "ghost_lap_s" in js and "fmtLap" in js
-    assert "#fff" in js and "#ff8c1a" not in js
+    assert "s.race" in js and "ghost_mm" in js and "#FF5FA2" in js
+    assert js.index("if (g) ghost(ctx, g, r, s.t_s)") < js.index("if (s.ball.valid) ball(ctx")
 
 
 def test_page_has_a_strip_loaded_after_race_and_before_app(client):
@@ -488,7 +446,7 @@ def test_strip_plots_ball_error_and_sent_tilt_over_the_last_5_s(client):
     assert "s.ball" in js and "b.valid" in js and "sent_x_deg" in js and "sent_y_deg" in js
     assert "const STRIP_S = 5;" in js and "keep(stripBuf, [err, tilt], s.t_s, STRIP_S)" in js
     assert "now - buf[0].t > keepS" in static(client, "race.js")
-    assert "fit(c)" in js and "err --" in js
+    assert "fit(c)" in js and "ERR --" in js
 
 
 def test_strip_err_has_a_fixed_plate_half_width_scale_and_tilt_autoscales(client):
@@ -500,7 +458,7 @@ def test_strip_err_has_a_fixed_plate_half_width_scale_and_tilt_autoscales(client
 
 def test_page_rings_the_tracked_ball_on_the_camera_image(client):
     page = client.get("/").text
-    assert 'id="seen"' in page and 'class="view"' in page
+    assert page.index('id="cam"') < page.index('id="seen"') < page.index('id="nocam"')
     js = static(client, "app.js")
     assert "s.ball_px" in js and "cfg.camera_width" in js
 

@@ -13,7 +13,14 @@ function guide(s, ctx) {
   if (s.armed && s.stale) return say("no input, plate levelled", "warn");
   if (ctx.lost) return say("HAND LOST", "stop");
   // the hud has these
-  if (["countdown", "running", "finished", "dnf"].includes(r.state)) return say("");
+  if (["countdown", "dnf"].includes(r.state)) return say("");
+  if (r.state === "running") {
+    return say(r.reached + 1 < ctx.gates ? `gate ${r.reached + 1} is next` : "head for the finish");
+  }
+  if (r.state === "finished") {
+    if (typeof r.delta_s !== "number") return say("finished! type a name to save it");
+    return say(r.delta_s < 0 ? "you beat the ghost!" : "the ghost wins, r to race again");
+  }
   if (r.state === "calibrating") {
     return say((r.cal && r.cal.msg) || "calibrating... keep your hand off, place the ball in the middle", "warn");
   }

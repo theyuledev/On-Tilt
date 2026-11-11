@@ -1,43 +1,38 @@
-// what the loop is steering by, in intent units: +x right, +y up, half-width = 1
-const PAD_FILL = 0.84;  // the rest of the half-width is the hold-still ring
+// what the loop is steering by, in intent units: +x right, +y up, the rim is 1
+const PAD_VIEW = 1.1;
+const PAD_DOT = "#FFD23F";
 
-function padGrid(ctx, deadZone) {
-  ctx.lineWidth = 0.02;
-  ctx.strokeStyle = "#666";
-  polyline(ctx, [[-1, 0], [1, 0]]);
-  polyline(ctx, [[0, -1], [0, 1]]);
-  circle(ctx, [0, 0], deadZone);
+// hold still progress, clockwise from the top
+function padRing(ctx, progress) {
+  ctx.beginPath();
+  ctx.arc(0, 0, 1, Math.PI / 2, Math.PI / 2 - 2 * Math.PI * Math.min(1, progress), true);
+  ctx.lineWidth = 0.1;
+  ctx.strokeStyle = PAD_DOT;
   ctx.stroke();
 }
 
 function padDot(ctx, intent, deadZone) {
-  circle(ctx, [intent.x, intent.y], 0.06);
-  ctx.lineWidth = 0.03;
-  ctx.strokeStyle = ctx.fillStyle = "#ff3";
-  if (Math.hypot(intent.x, intent.y) >= deadZone) ctx.fill(); else ctx.stroke();
-}
-
-function padRing(ctx, h, progress) {
-  ctx.beginPath();
-  ctx.arc(h, h, h * 0.96, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Math.min(1, progress));
-  ctx.lineWidth = h * 0.06;
-  ctx.strokeStyle = "#ffb300";
-  ctx.stroke();
+  const d = Math.hypot(intent.x, intent.y), out = Math.max(1, d);
+  circle(ctx, [intent.x / out, intent.y / out], d >= deadZone ? 0.14 : 0.12);
+  ctx.fillStyle = PAD_DOT;
+  ctx.fill();
 }
 
 function drawPad(ctx, cfg, s) {
-  const px = fit(ctx.canvas), h = px / 2, k = h * PAD_FILL;
+  const px = fit(ctx.canvas), k = px / (2 * PAD_VIEW);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, px, px);
-  ctx.setTransform(k, 0, 0, -k, h, h);
-  padGrid(ctx, cfg.dead_zone);
+  ctx.setTransform(k, 0, 0, -k, px / 2, px / 2);
+  circle(ctx, [0, 0], 1);
+  ctx.fillStyle = "#0B0E1E";
+  ctx.fill();
+  ctx.lineWidth = 0.05;
+  ctx.strokeStyle = "#5A6699";
+  ctx.stroke();
+  ctx.lineWidth = 0.04;
+  ctx.strokeStyle = "#2B3564";
+  polyline(ctx, [[-1, 0], [1, 0]]);
+  polyline(ctx, [[0, -1], [0, 1]]);
+  if (s.hand_progress !== undefined) padRing(ctx, s.hand_progress);
   padDot(ctx, s.intent, cfg.dead_zone);
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  if (s.hand_progress !== undefined) padRing(ctx, h, s.hand_progress);
-  if (s.hand_seen && s.hand_calibrating) {
-    ctx.font = `${Math.round(px / 9)}px system-ui, sans-serif`;
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#ffb300";
-    ctx.fillText("hold still", h, px * 0.8);
-  }
 }

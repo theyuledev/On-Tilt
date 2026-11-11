@@ -59,10 +59,15 @@ function intent() {
   return { x: Math.max(-1, Math.min(1, x)), y: Math.max(-1, Math.min(1, y)) };
 }
 
-function pill(id, text, cls) {
+function light(id, text, cls) {
   const el = $(id);
   el.textContent = text;
-  el.className = "pill " + cls;
+  el.className = "light " + cls;
+}
+
+// marks the button of a choice group whose data value is the live one
+function press(group, key, value) {
+  for (const b of $(group).children) b.setAttribute("aria-pressed", b.dataset[key] === value);
 }
 
 function ring(px) {
@@ -76,9 +81,24 @@ function ring(px) {
 }
 
 function banner(s, live, lost) {
-  const g = guide(s, { live, watch, hand: cfg.hand, lost });
+  const gates = maze ? maze.checkpoints.length : 0;
+  const g = guide(s, { live, watch, hand: cfg.hand, lost, gates });
   $("banner").textContent = g.text;
   $("banner").dataset.tone = g.tone;
+}
+
+function lights(s) {
+  const b = s.ball;
+  light("ballpill", b.valid ? "BALL" : "NO BALL", b.valid ? "on" : "warn");
+  light("board", s.board_lost ? "BOARD LOST" : "BOARD", s.board_lost ? "warn" : "on");
+  light("camlight", s.camera_lost ? "CAM LOST" : cam.hidden ? "NO CAM" : "CAM",
+        s.camera_lost ? "warn" : cam.hidden ? "" : "on");
+  light("hand", !s.hand_seen ? "NO HAND" : s.hand_calibrating ? "HOLD STILL" : "HAND",
+        !s.hand_seen ? "" : s.hand_calibrating ? "warn" : "on");
+  $("stale").hidden = $("level").hidden = !(s.stale && s.armed && !s.hand_calibrating);
+  nocam.textContent = s.camera_lost ? "camera lost" : "no camera";
+  $("armed").textContent = s.killing ? "KILLING" : s.armed ? "ARMED" : "DISARMED";
+  $("armed").className = "chip " + (s.killing ? "warn" : s.armed ? "on" : "");
 }
 
 function show(s) {
@@ -89,33 +109,27 @@ function show(s) {
   if (!s.plate_state) return;
   if (s.t_s !== lastT) { lastT = s.t_s; lastSeen = performance.now(); }
   const b = s.ball, p = s.plate_state;
-  pill("ballpill", "ball: " + (b.valid ? "tracked" : "lost"), b.valid ? "on" : "warn");
-  $("speed").textContent = b.valid ? Math.round(Math.hypot(b.vx_mm_s, b.vy_mm_s)) : 0;
-  $("timer").hidden = $("cps").hidden = s.race === undefined;
-  pill("armed", s.killing ? "killing" : s.armed ? "armed" : "disarmed",
-       s.killing ? "warn" : s.armed ? "on" : "");
-  $("armblock").hidden = !s.arm_blocked;
-  $("armblock").textContent = s.arm_blocked || "";
-  $("stale").hidden = $("level").hidden = !(s.stale && s.armed && !s.hand_calibrating);
-  $("board").hidden = !s.board_lost;
-  pill("hand", "hand: " + (!s.hand_seen ? "none" : s.hand_calibrating ? "hold still" : "live"),
-       !s.hand_seen ? "" : s.hand_calibrating ? "warn" : "on");
-  nocam.textContent = s.camera_lost ? "camera lost" : "no camera";
-  $("tilt").textContent = `tilt x ${p.sent_x_deg.toFixed(2)}°  y ${p.sent_y_deg.toFixed(2)}°`;
-  $("handtilt").textContent = `plate x ${p.sent_x_deg.toFixed(2)}° y ${p.sent_y_deg.toFixed(2)}°`;
+  lights(s);
+  $("ballx").textContent = "X" + (b.valid ? signed(b.x_mm, 1) : "--.-");
+  $("bally").textContent = "Y" + (b.valid ? signed(b.y_mm, 1) : "--.-");
+  $("tiltx").textContent = `X ${signed(p.sent_x_deg)}°`;
+  $("tilty").textContent = `Y ${signed(p.sent_y_deg)}°`;
+  $("arm").disabled = watch || !!s.armed;
+  $("racebtn").disabled = watch || s.race === undefined;
+  press("modes", "mode", s.mode);
+  $("guard").setAttribute("aria-checked", guardOf(s) !== null);
   ring(s.ball_px);
   strip(cfg, s);
   hud(s, maze);
   results(s);
   draw(ctx, cfg, maze, s);
   drawPad(padCtx, cfg, s);
-  board(s, cfg);
 }
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.onopen = () => { pill("link", "live", "on"); nextCam(); nextHand(); frame(); };
-  ws.onclose = () => { pill("link", "offline", "warn"); banner(null, false, false); setTimeout(connect, 1000); };
+  ws.onopen = () => { light("link", "LINK", "on"); nextCam(); nextHand(); frame(); };
+  ws.onclose = () => { light("link", "OFFLINE", "warn"); banner(null, false, false); setTimeout(connect, 1000); };
   ws.onmessage = e => { show(JSON.parse(e.data)); requestAnimationFrame(frame); };
 }
 
@@ -128,9 +142,15 @@ function frame() {
 function beat() {
   if (lastSeen !== undefined) {
     const age = (performance.now() - lastSeen) / 1000;
-    pill("beat", `tick ${Math.round(age * 1000)} ms ago`, age > cfg.heartbeat_stale_s ? "warn" : "on");
+    light("beat", `${Math.round(age * 1000)} MS`, age > cfg.heartbeat_stale_s ? "warn" : "on");
   }
   requestAnimationFrame(beat);
+}
+
+function subtitle(maze) {
+  if (!maze) return "NO MAZE ON THE BOARD";
+  if (maze.walls && maze.walls.length) return `MAZE READ FROM BOARD · ${maze.walls.length} STROKES`;
+  return `COURSE LOADED · ${maze.checkpoints.length} GATES`;
 }
 
 const json = url => fetch(url).then(r => r.ok ? r.json() : Promise.reject(new Error(`${url} ${r.status}`)));
@@ -138,7 +158,9 @@ const json = url => fetch(url).then(r => r.ok ? r.json() : Promise.reject(new Er
 Promise.all([json("/config"), json("/race/maze").catch(() => null)]).then(([c, m]) => {
   cfg = c;
   maze = m;
-  if (maze) $("cps").textContent = `0/${maze.checkpoints.length}`;
+  $("sub").textContent = subtitle(maze);
+  $("scale").textContent = `1 px = ${(1 / cfg.px_per_mm).toFixed(2)} mm · ${cfg.camera_fps} fps`;
+  press("steers", "steer", cfg.hand ? "hand" : "keys");
   connect();
   beat();
 }).catch(e => { $("banner").textContent = `load failed: ${e.message}`; });

@@ -66,9 +66,27 @@ def test_each_branch_says_one_next_step():
     assert guide(*cases.values()) == list(cases)
 
 
-def test_hud_race_states_leave_the_banner_empty():
-    states = ("countdown", "running", "finished", "dnf")
-    assert guide(*[(race(st), {}) for st in states]) == [("", "")] * 4
+def test_countdown_and_dnf_leave_the_line_to_the_overlay():
+    assert guide(*[(race(st), {}) for st in ("countdown", "dnf")]) == [("", "")] * 2
+
+
+def test_a_running_race_names_the_next_gate_and_a_finish_says_how_it_went():
+    gates = {"gates": 4}
+    assert guide(
+        (race("running", reached=0), gates),
+        (race("running", reached=2), gates),
+        (race("running", reached=3), gates),
+        (race("finished", delta_s=-0.3), gates),
+        (race("finished", delta_s=0.0), gates),
+        (race("finished", delta_s=None), gates),
+    ) == [
+        ("gate 1 is next", ""),
+        ("gate 3 is next", ""),
+        ("head for the finish", ""),
+        ("you beat the ghost!", ""),
+        ("the ghost wins, r to race again", ""),
+        ("finished! type a name to save it", ""),
+    ]
 
 
 def test_stop_states_win_in_order_and_watch_still_sees_them():
