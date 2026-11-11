@@ -1,7 +1,9 @@
+import math
+
 import pytest
 
 from src.contracts import BallState
-from src.control.pid import Integral, integrate, pid, smooth
+from src.control.pid import Integral, integrate, pid, smooth, unstick
 
 pytestmark = pytest.mark.unit
 
@@ -48,3 +50,45 @@ def test_smooth_is_a_first_order_lag_that_passes_through_at_or_under_a_tick():
     assert smooth(0.0, 30.0, 0.01, 0.03) == pytest.approx(10.0)
     assert smooth(0.0, 30.0, 0.01, 0.01) == 30.0
     assert smooth(0.0, 30.0, 0.0, 0.03) == 0.0
+
+
+LEAN = {
+    "sim_g_mm_s2": 9810,
+    "rolling_friction_x_mm_s2": 47,
+    "rolling_friction_y_mm_s2": 39,
+    "unstick_gain": 1.2,
+    "unstick_in_mm": 1,
+    "unstick_full_mm": 10,
+    "unstick_v_mm_s": 80,
+}
+FULL = 1.2 * math.degrees(math.asin(47 / (5 / 7 * 9810)))
+
+
+def test_unstick_leans_the_full_amount_toward_the_goal_when_slow_and_off_it():
+    assert FULL == pytest.approx(0.461, abs=0.001)
+    assert unstick(30.0, 0.0, 0.0, 0.0, LEAN) == pytest.approx((-FULL, 0.0))
+    assert unstick(0.0, -20.0, 0.0, 0.0, LEAN) == pytest.approx((0.0, FULL))
+    kx, ky = unstick(-20.0, 20.0, 10.0, -10.0, LEAN)
+    assert kx == pytest.approx(FULL / math.sqrt(2)) and ky == pytest.approx(-FULL / math.sqrt(2))
+
+
+def test_unstick_eases_in_from_the_goal_and_fades_out_with_speed():
+    assert unstick(0.0, 0.0, 0.0, 0.0, LEAN) == (0.0, 0.0)
+    assert unstick(1.0, 0.0, 0.0, 0.0, LEAN) == pytest.approx((0.0, 0.0))
+    assert unstick(10.0, 0.0, 0.0, 0.0, LEAN) == pytest.approx((-FULL, 0.0))
+    assert unstick(5.5, 0.0, 0.0, 0.0, LEAN)[0] == pytest.approx(-FULL / 2)
+    assert unstick(30.0, 0.0, 40.0, 0.0, LEAN)[0] == pytest.approx(-FULL)
+    assert unstick(30.0, 0.0, 60.0, 0.0, LEAN)[0] == pytest.approx(-FULL / 2)
+    assert unstick(30.0, 0.0, 0.0, 80.0, LEAN) == pytest.approx((0.0, 0.0))
+
+
+def test_unstick_is_bounded_and_continuous():
+    lean = [math.hypot(*unstick(r / 10, 0.0, v, 0.0, LEAN)) for r in range(300) for v in (0, 50)]
+    assert max(lean) <= FULL + 1e-9
+    near = [abs(unstick(r / 100, 0.0, 0.0, 0.0, LEAN)[0]) for r in range(1500)]
+    assert max(abs(b - a) for a, b in zip(near, near[1:], strict=False)) < 0.002
+
+
+def test_unstick_is_off_at_zero_gain_or_a_zero_fade():
+    assert unstick(30.0, 0.0, 0.0, 0.0, {**LEAN, "unstick_gain": 0.0}) == (0.0, 0.0)
+    assert unstick(30.0, 0.0, 0.0, 0.0, {**LEAN, "unstick_v_mm_s": 0}) == pytest.approx((0.0, 0.0))

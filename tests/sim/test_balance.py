@@ -1,6 +1,6 @@
 import math
 import random
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 
 import pytest
 
@@ -27,6 +27,7 @@ class Run:
     reversals: int = 0  # x pulse direction changes
     lead: float = 0.0  # worst |inverted - safety approved| pulse
     step: float = 0.0  # worst tick to tick change of the pulse that goes out
+    acc: list = field(default_factory=list)  # balance integral each tick
 
 
 def config(integral=True, inverter=None, tuning=None):
@@ -81,6 +82,7 @@ def run(
                 vy = (seen.y_mm - old[1]) / (frames * dt)
             seen = replace(seen, vx_mm_s=vx, vy_mm_s=vy)
         sent = safety.step(guard, tilt_to_pulse(mode(seen, NO_INTENT, cfg), rig), False, dt, rig)
+        out.acc.append(mode.acc)
         pulse = sent
         if control["inverter_on"]:
             band, pulse = invert(band, sent, False, cfg)
@@ -125,8 +127,8 @@ def test_holds_within_20_mm_for_30_s_with_a_1_deg_trim_error(start_pos, inverter
     assert worst(run(start_pos, inverter, offset_deg=1.0).balls, 5) < 20
 
 
-# a 2 deg trim parks the ball at trim / kp = 40 mm, past the default window, so the integral
-# never winds there; the window needs i_err_max_mm >= trim / kp and i_max_deg >= trim
+# a 2 deg trim is past i_max_deg, so the default integral can't cancel it alone;
+# the wide set lifts i_max_deg past the trim
 WIDE = {"ki_deg_s_mm": 0.03, "i_max_deg": 3.0, "i_err_max_mm": 60}
 
 
@@ -136,8 +138,9 @@ def test_a_wider_integral_window_holds_through_a_2_deg_trim_error(start_pos):
 
 
 @pytest.mark.parametrize("start_pos", STARTS)
-def test_the_default_window_does_not_reach_a_2_deg_trim_error(start_pos):
-    assert worst(run(start_pos, offset_deg=2.0).balls, 5) >= 20
+def test_the_integral_never_winds_past_i_max_under_a_2_deg_trim(start_pos):
+    lim = load()["control"]["i_max_deg"]
+    assert max(max(abs(a.x), abs(a.y)) for a in run(start_pos, offset_deg=2.0).acc) <= lim
 
 
 @pytest.mark.parametrize("inverter", [False, True])
@@ -151,12 +154,10 @@ def test_pd_alone_cannot_hold_through_the_trim_error():
 
 
 def test_release_after_holding_100_mm_out_adds_no_windup_overshoot():
-    # the integral only winds inside i_err_max_mm, so a long hold far out must not add overshoot
-    with_i = -min(b.x_mm for b in run((100, 0, 0, 0), hold_s=5.0).balls)
-    pd_only = -min(b.x_mm for b in run((100, 0, 0, 0), integral=False, hold_s=5.0).balls)
-    assert with_i <= pd_only + 1.0
-    # pd alone releasing from the plate limit already overshoots ~11 mm
-    assert with_i < 25
+    # the integral only winds inside i_err_max_mm, so a long hold far out leaves nothing wound
+    out = run((100, 0, 0, 0), hold_s=5.0)
+    assert out.acc[round(5.0 * load()["control"]["sim_tick_hz"]) - 1].x == 0
+    assert -min(b.x_mm for b in out.balls) < 25
 
 
 def test_inverter_never_strays_more_than_comp_and_steps_stay_bounded():

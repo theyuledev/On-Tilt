@@ -15,6 +15,7 @@ CFG = {
         "d_max_deg": 2.0,
         "assist_margin_mm": 20,
         "path_lookahead_mm": 40,
+        "unstick_gain": 0.0,
     },
 }
 REACH = 305 / 2 - 61.8 / 2 - 20
