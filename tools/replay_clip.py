@@ -3,9 +3,14 @@
     uv run python -m tools.replay_clip data/clips/<clip>.avi [start:end ...]
 
 Windows are frame numbers, end excluded. No window means the whole clip.
+
+    uv run python -m tools.replay_clip data/recordings/<folder> [...]
+
+Recorder folders instead of a clip: what each holds and what a replay would skip.
 """
 
 import sys
+from pathlib import Path
 from statistics import fmean
 from time import perf_counter
 from typing import NamedTuple
@@ -14,6 +19,7 @@ import numpy as np
 
 from src.io.camera import ClipSource
 from src.io.settings import load
+from src.vision.bench import rec
 from src.vision.tracker import BallTracker
 
 Window = tuple[int, int]
@@ -71,6 +77,12 @@ def spans(frames: list[int]) -> str:
 
 def main(argv: list[str]) -> None:
     path, *args = argv
+    if Path(path).is_dir():
+        for folder in map(Path, argv):
+            # a gap longer than the background's own sampling period is a new scene
+            gap_s = rec.settings(folder)["vision"]["bg_period_s"]
+            print(rec.describe(folder.name, rec.read(folder, gap_s)))
+        return
     windows = [parse_window(a) for a in args] or [(0, sys.maxsize)]
     res = run(path, windows, load()["vision"])
     for (a, b), (radii, missed) in res.windows.items():
