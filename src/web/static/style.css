@@ -36,6 +36,10 @@ main { flex: 1; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24
 .top { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24px; }
 .arena { position: relative; overflow: hidden; flex: 3 1 400px; max-width: calc(100vh - 260px); min-width: 0; padding: 10px; border-radius: 28px; background: var(--panel); }
 #race { display: block; width: 100%; aspect-ratio: 1 / 1; }
+#race.follow { transform-origin: 50% 58%; transform: perspective(1000px) rotateX(34deg) scale(1.32); }
+#minimap { position: absolute; right: 18px; top: 18px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; border-radius: 18px; background: var(--ground); }
+#mini { display: block; width: 128px; height: 128px; }
+#viewtag { position: absolute; left: 14px; bottom: 6px; padding: 8px 12px; border: 0; border-radius: 999px; background: var(--ground); color: var(--yellow); font: 400 12px var(--px); line-height: 1; cursor: pointer; }
 .info { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
 .tiltrow { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; }
 #tilt { display: flex; flex-direction: column; gap: 6px; }

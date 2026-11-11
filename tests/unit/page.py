@@ -23,8 +23,13 @@ const dir = process.argv[1], job = JSON.parse(fs.readFileSync(0, "utf8"));
 const els = {}, win = {}, sockets = [], scripts = [], posts = [];
 let clock = 0, rafs = [];
 const VOID = new Set(["meta", "link", "img", "input"]);
+// canvas calls draw nowhere; what one hands back takes any call too and measures 0 wide
+const ink = new Proxy(function () {}, {
+  get: (t, k) => (k === "width" ? 0 : ink),
+  apply: () => ink,
+});
 const pen = e => new Proxy({ canvas: e }, {
-  get: (t, k) => (k in t ? t[k] : () => ({ width: 0 })),
+  get: (t, k) => (k in t ? t[k] : ink),
   set: (t, k, v) => ((t[k] = v), true),
 });
 
@@ -116,7 +121,10 @@ function key(type, code, on) {
 // "modes/1" is the second child of #modes
 const find = at => { const [id, n] = at.split("/"); return n ? els[id].children[n] : els[id]; };
 const acts = {
-  snap: s => sockets[0].onmessage({ data: JSON.stringify(s) }),
+  // a snapshot the page chokes on answers with the error instead of ending the run
+  snap: s => {
+    try { sockets[0].onmessage({ data: JSON.stringify(s) }); } catch (e) { return String(e); }
+  },
   open: () => sockets[0].onopen(),
   close: () => sockets[0].onclose(),
   frame: () => { const run = rafs; rafs = []; run.forEach(fn => fn()); },

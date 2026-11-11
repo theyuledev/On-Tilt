@@ -433,3 +433,71 @@ def test_the_page_keeps_asking_for_the_x_once_a_second_until_it_is_found():
 def test_settings_link_goes_dead_while_armed_so_the_kill_key_stays_in_reach():
     assert show(snap())["settings"]["cls"] == "pill"
     assert show(snap(armed=True))["settings"]["cls"] == "pill off"
+
+
+V, T = ("down", ["KeyV", None]), ("down", ["KeyT", None])
+
+
+def looks(steps, **kw):
+    out = run([OPEN, *steps], **kw)
+    p = out["page"]
+    return p["viewtag"]["text"], p["race"]["cls"], p["minimap"]["hidden"], out["sent"]
+
+
+def test_v_steps_through_the_views_t_is_top_down_at_once_and_nothing_is_sent():
+    s = ("snap", snap())
+    plain = looks([s])
+    assert plain[:3] == ("TOP VIEW", "", True)
+    assert looks([V, s])[:3] == ("FOLLOW CAM 3X", "follow", False)
+    assert looks([V, V, s])[:3] == ("CAM 2 WIDE", "", True)
+    assert looks([V, V, V, s])[:3] == plain[:3]
+    assert looks([V, T, s])[:3] == plain[:3] and looks([V, V, T, s])[:3] == plain[:3]
+    assert looks([("click", "viewtag"), s])[:3] == ("FOLLOW CAM 3X", "follow", False)
+    assert looks([V, V, s, ("frame", None)])[3] == plain[3] + [{"x": 0, "y": 0}]
+
+
+def test_view_keys_work_on_a_watch_tab_and_stay_out_of_the_name_field():
+    s = ("snap", snap())
+    assert looks([V, s], query="?watch")[:3] == ("FOLLOW CAM 3X", "follow", False)
+    done = ("snap", snap(race=DONE))
+    typing = [done, ("wait", 1000), done, ("down", ["KeyV", "resname"]), done]
+    assert looks(typing)[0] == "TOP VIEW"
+
+
+def test_the_3d_tag_names_the_shot_the_camera_is_on():
+    def racing(t, state="running", **kw):
+        ball = {"x_mm": 85.0 - 20 * t, "y_mm": 85.0, "vx_mm_s": -20.0, "vy_mm_s": 0.0}
+        live = race(state, elapsed_s=t, reached=0, **kw)
+        return (
+            "snap",
+            snap(t_s=50 + t, armed=True, ball={**ball, "valid": True, "t_s": t}, race=live),
+        )
+
+    early = [racing(i / 30) for i in range(30)]
+    later = [racing(i / 30) for i in range(30, 75)]
+    assert looks([V, V, *early])[0] == "CAM 2 WIDE"
+    assert looks([V, V, *early, *later])[0] == "CAM 3 CHASE"
+    done = [racing(2.5, "finished", score={"time_s": 2.5, "penalty_s": 0.0, "checkpoints": 4})]
+    assert looks([V, V, *early, *later, *done])[0] == "CAM 1 TOWER"
+    # no maze, no path to follow: it stays wide
+    free = [("snap", snap(t_s=50 + i / 30, armed=True, race=...)) for i in range(90)]
+    assert looks([V, V, *free], race_maze=None)[0] == "CAM 2 WIDE"
+
+
+def test_a_board_click_only_moves_the_target_in_the_flat_view():
+    held = ("snap", snap(armed=True, choices=BALANCE, target=AT))
+    tap = [("tap", ["race", 0.75, 0.25]), ("frame", None)]
+    assert len(targets([held, *tap])) == 1
+    assert targets([V, held, *tap]) == [] and targets([V, V, held, *tap]) == []
+    assert run([OPEN, V, held])["page"]["race"]["style"]["cursor"] == ""
+
+
+def test_a_snapshot_the_page_cannot_draw_never_holds_back_the_kill_key():
+    broken = snap(armed=True, choices=...)
+    steps = [OPEN, ("snap", snap(armed=True)), ("frame", None), ("snap", broken)]
+    out = run(
+        [*steps, ("down", ["Space", None]), ("frame", None), ("snap", broken), ("frame", None)]
+    )
+    assert "TypeError" in out["out"][3] and out["out"][1] is None
+    assert [m for m in out["sent"] if m.get("kill")] == [{"x": 0, "y": 0, "kill": True}]
+    assert len(out["sent"]) == 4

@@ -4,7 +4,7 @@ const keymap = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowD
                  KeyA: [-1, 0], KeyD: [1, 0], KeyW: [0, 1], KeyS: [0, -1] };
 let pending = {};
 let ws, cfg, maze, lastT, lastSeen, handWasSeen = false;
-let armedNow = false, balancing = false, askedX = -Infinity;
+let armedNow = false;
 const $ = id => document.getElementById(id);
 const cam = $("cam"), nocam = $("nocam"), ctx = $("race").getContext("2d");
 const padCtx = $("pad").getContext("2d");
@@ -14,8 +14,6 @@ const handcam = $("handcam"), handnone = $("handnone");
 const nextHand = () => { handcam.src = "/hand.jpg?" + performance.now(); };
 let handRetry;
 const typing = e => e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
-// choice groups on the page and the field each one sets
-const PICKS = { modes: "mode", steers: "steer", handmodes: "hand_mode" };
 
 if (watch) {
   // a projector tab must never overwrite the player's keys
@@ -39,18 +37,7 @@ if (watch) {
   $("arm").onclick = e => { pending.arm = true; e.currentTarget.blur(); };
   $("kill").onclick = e => { pending.kill = true; e.currentTarget.blur(); };
   $("racebtn").onclick = e => { pending.race = raceCmd(); e.currentTarget.blur(); };
-  for (const [group, field] of Object.entries(PICKS)) {
-    for (const b of $(group).children) b.onclick = e => { pick(field, b.dataset.pick); e.currentTarget.blur(); };
-  }
-  $("guard").onclick = e => {
-    pick("guard", e.currentTarget.getAttribute("aria-checked") !== "true");
-    e.currentTarget.blur();
-  };
-  for (const b of $("targets").children) b.onclick = e => { pending.target = b.dataset.pick; e.currentTarget.blur(); };
-  $("race").onclick = e => {
-    const c = e.currentTarget;
-    if (balancing) pending.target = plateMm(e.offsetX / c.clientWidth, e.offsetY / c.clientHeight, cfg);
-  };
+  wireChoices();
 }
 cam.onload = () => { cam.hidden = false; nocam.hidden = true; nextCam(); };
 cam.onerror = () => {
@@ -77,47 +64,6 @@ function light(id, text, cls) {
   const el = $(id);
   el.textContent = text;
   el.className = "light " + cls;
-}
-
-function pick(field, value) {
-  pending.set = { ...pending.set, [field]: value };
-}
-
-// the live choices on their buttons; they only move while disarmed, so they lock when armed
-function choices(s) {
-  const c = s.choices, locked = watch || !!s.armed;
-  for (const [group, field] of Object.entries(PICKS)) {
-    for (const b of $(group).children) {
-      b.setAttribute("aria-pressed", b.dataset.pick === c[field]);
-      b.disabled = locked || (field === "steer" && b.dataset.pick === "hand" && !cfg.hand);
-    }
-  }
-  $("choices").classList.toggle("locked", locked);
-  $("handrow").hidden = c.steer === "keys";
-  // the guard only works on a player, and a build without one has nothing to switch
-  $("guardsay").textContent = c.mode === "hand" ? "invisible walls" : `off in ${c.mode}`;
-  $("guard").setAttribute("aria-checked", c.guard === true && c.mode === "hand");
-  $("guard").disabled = locked || c.guard === null || c.mode !== "hand";
-}
-
-// balance swaps steering for the target picker; the target may move while armed
-function targets(s) {
-  const t = s.target;
-  balancing = s.choices.mode === "balance";
-  $("targetfield").hidden = !balancing;
-  $("steerfield").hidden = balancing;
-  $("race").style.cursor = balancing && !watch ? "crosshair" : "";
-  $("sub").textContent = balancing ? "BALANCE · CLICK THE BOARD TO MOVE THE TARGET" : subtitle(maze);
-  handnone.textContent = balancing ? "not used" : "no hand";
-  for (const b of $("targets").children) {
-    b.setAttribute("aria-pressed", b.dataset.pick === t.src);
-    b.disabled = watch;
-  }
-  // keep looking for the X until the camera has one
-  if (balancing && !watch && t.src === "marker" && !t.found && performance.now() - askedX > 1000) {
-    askedX = performance.now();
-    pending.target = "marker";
-  }
 }
 
 function ring(px) {
@@ -174,7 +120,7 @@ function show(s) {
   strip(cfg, s);
   hud(s, maze);
   results(s);
-  draw(ctx, cfg, maze, s);
+  drawView(ctx, cfg, maze, s);
   drawPad(padCtx, cfg, s);
 }
 
@@ -182,7 +128,8 @@ function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
   ws.onopen = () => { light("link", "LINK", "on"); nextCam(); nextHand(); frame(); };
   ws.onclose = () => { light("link", "OFFLINE", "warn"); banner(null, false, false); setTimeout(connect, 1000); };
-  ws.onmessage = e => { show(JSON.parse(e.data)); requestAnimationFrame(frame); };
+  // the next send is queued first, so a fault while drawing can never hold back a kill
+  ws.onmessage = e => { requestAnimationFrame(frame); show(JSON.parse(e.data)); };
 }
 
 function frame() {

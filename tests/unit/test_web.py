@@ -59,6 +59,17 @@ def test_both_fonts_are_served_from_static_and_nothing_loads_from_the_network(cl
             assert "http://" not in text and "https://" not in text and "//fonts" not in text, path
 
 
+def test_page_has_the_view_tag_the_board_map_and_loads_the_camera_before_the_views(client):
+    page = client.get("/").text
+    assert all(f'id="{i}"' in page for i in ("viewtag", "minimap", "mini"))
+    order = ("race", "gates", "cam", "plate3d", "follow", "view", "choices", "app")
+    at = [page.index(f"/static/{f}.js") for f in order]
+    assert at == sorted(at)
+    assert "drawView(ctx, cfg, maze, s);" in static(client, "app.js")
+    lean = "transform-origin: 50% 58%; transform: perspective(1000px) rotateX(34deg) scale(1.32);"
+    assert f"#race.follow {{ {lean} }}" in static(client, "style.css")
+
+
 def test_play_and_settings_pages_link_to_each_other(client):
     assert '<a id="settings" class="pill" href="/settings">SETTINGS</a>' in client.get("/").text
     page = client.get("/settings").text
@@ -105,9 +116,10 @@ def test_hud_is_keyed_on_the_race_view(client):
 
 
 def test_race_js_lights_reached_gates_and_pulses_the_next(client):
-    js = static(client, "race.js")
-    assert "function gates(ctx, maze, ballR, race)" in js and "gates(ctx, maze, r, s.race)" in js
+    js = static(client, "gates.js")
+    assert "function gates(ctx, maze, ballR, race)" in js
     assert "race.reached" in js and "GATE_PULSE_MS" in js and "GATE_FLASH_MS" in js
+    assert "gates(ctx, maze, r, s.race)" in static(client, "race.js")
 
 
 def test_r_key_and_race_button_send_a_one_shot_start_or_abort(client):
@@ -363,6 +375,7 @@ def test_config_gives_plate_ball_and_stale_limit_from_settings(client):
         "tilt_full_deg": cfg["input"]["intent_gain_deg"],
         "px_per_mm": cfg["vision"]["px_per_mm"],
         "camera_fps": cfg["rig"]["camera_fps"],
+        "checkpoint_r_mm": cfg["game"]["checkpoint_r_mm"],
     }
     with_hand = TestClient(make_app(SimpleNamespace(cfg=cfg, hand=object())))
     assert with_hand.get("/config").json()["hand"] is True
@@ -416,27 +429,28 @@ def test_page_still_connects_and_draws_the_plate_without_a_maze(client):
     assert 'json("/race/maze").catch(() => null)]).then(' in app
     assert "if (maze) lamps(maze.checkpoints.length" in static(client, "hud.js")
     js = static(client, "race.js")
-    assert "if (maze) {\n    if (maze.walls) walls(ctx, maze);" in js
+    assert "if (maze) {\n    if (maze.walls) (look.tall ? tallWalls : walls)(ctx, maze);" in js
     assert js.index("if (maze) {") < js.index("gates(ctx, maze, r, s.race)")
 
 
 def test_race_js_draws_walls_under_the_race_line_only_when_the_maze_has_them(client):
     js = static(client, "race.js")
-    assert "function walls(ctx, maze)" in js and "maze.walls.forEach((w) => polyline(ctx, w))" in js
-    guarded = js.index("if (maze.walls) walls(ctx, maze);")
+    assert "function walls(ctx, maze, color = MARKER)" in js
+    assert "maze.walls.forEach((w) => polyline(ctx, w))" in js
+    guarded = js.index("if (maze.walls) (look.tall ? tallWalls : walls)(ctx, maze);")
     assert guarded < js.index("    route(ctx, maze);")
 
 
 def test_race_js_draws_the_plate_in_mm_with_a_ball_trail(client):
     js = static(client, "race.js")
-    assert "function draw(ctx, cfg, maze, s)" in js
+    assert "function draw(ctx, cfg, maze, s, look)" in js
     assert "cfg.plate_inner_mm" in js and "TRAIL_S" in js and "s.ball.valid" in js
 
 
 def test_race_js_draws_the_ghost_under_the_player(client):
     js = static(client, "race.js")
     assert "s.race" in js and "ghost_mm" in js and "#FF5FA2" in js
-    assert js.index("if (g) ghost(ctx, g, r, s.t_s)") < js.index("if (s.ball.valid) ball(ctx")
+    assert js.index("if (g) ghost(ctx, g, r, s.t_s)") < js.index("  ball(ctx, at, r, h);")
 
 
 def test_page_has_a_strip_loaded_after_race_and_before_app(client):
