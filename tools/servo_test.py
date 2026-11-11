@@ -30,6 +30,7 @@ def plan(rig: dict, axis: int, tick: float) -> list[tuple[int, str]]:
     r = round(min(c - lo, hi - c))
     rate = rig["slew_us_s"] / 4
     out: list[tuple[int, str]] = []
+
     def hold(us, s, phase):
         out.extend([(us, phase)] * round(s / tick))
 
