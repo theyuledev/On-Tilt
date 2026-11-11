@@ -1,4 +1,6 @@
 import asyncio
+import os
+import sys
 import time
 
 import uvicorn
@@ -73,9 +75,9 @@ def main() -> None:
         loop.bus.subscribe("tick", lambda rec: game.tick(rec, loop.safety.killing, loop.board_lost))
     start_run_log(loop.bus)
     port = int(env("PORT", "8000"))
-    server = uvicorn.Server(
-        uvicorn.Config(make_app(loop), host="127.0.0.1", port=port, log_level="warning")
-    )
+    app = make_app(loop)
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+    app.state.leave = lambda: setattr(server, "should_exit", True)
 
     async def go():
         ticker = asyncio.create_task(run(loop))
@@ -85,6 +87,9 @@ def main() -> None:
         ticker.cancel()
 
     asyncio.run(go())
+    if app.state.restart:
+        print("restarting")
+        os.execv(sys.executable, [sys.executable, "-m", "src.app"])
 
 
 if __name__ == "__main__":

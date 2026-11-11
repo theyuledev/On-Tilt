@@ -36,6 +36,7 @@ if (watch) {
   addEventListener("blur", () => held.clear());
   $("arm").onclick = e => { pending.arm = true; e.currentTarget.blur(); };
   $("kill").onclick = e => { pending.kill = true; e.currentTarget.blur(); };
+  $("restart").onclick = e => { fetch("/restart", { method: "POST" }); e.currentTarget.blur(); };
   $("racebtn").onclick = e => { pending.race = raceCmd(); e.currentTarget.blur(); };
   wireChoices();
 }
@@ -130,6 +131,7 @@ function show(s) {
   $("tiltx").textContent = `X ${signed(p.sent_x_deg)}°`;
   $("tilty").textContent = `Y ${signed(p.sent_y_deg)}°`;
   $("arm").disabled = watch || !!s.armed;
+  $("restart").disabled = !!s.armed;
   $("racebtn").disabled = watch || s.race === undefined || s.choices.mode === "balance";
   choices(s);
   targets(s);

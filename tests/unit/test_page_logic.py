@@ -44,7 +44,7 @@ def test_each_branch_says_one_next_step():
     cases = {
         ("connecting...", "warn"): ({**ARMED, "board_lost": True}, {"live": False}),
         ("board lost, check the usb cable", "stop"): ({"board_lost": True}, {}),
-        ("camera lost", "stop"): ({"camera_lost": True}, {}),
+        ("camera lost, press restart", "stop"): ({"camera_lost": True}, {}),
         ("stopped", "stop"): ({"killing": True}, {}),
         ("stopped: camera lost", "stop"): ({"stopped_by": "camera lost"}, {}),
         ("", ""): ({}, {"watch": True}),
@@ -102,7 +102,7 @@ def test_stop_states_win_in_order_and_watch_still_sees_them():
     ) == [
         ("stopped", "stop"),
         ("board lost, check the usb cable", "stop"),
-        ("camera lost", "stop"),
+        ("camera lost, press restart", "stop"),
         ("", ""),
         ("put the ball on the plate", ""),
         ("hold still... locking neutral", "warn"),

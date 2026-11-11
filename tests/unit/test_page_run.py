@@ -229,7 +229,7 @@ def test_stop_states_and_the_arm_block_reason_show_in_the_line_under_the_board()
         return b["text"], b["data"]["tone"]
 
     assert line(snap(board_lost=True)) == ("board lost, check the usb cable", "stop")
-    assert line(snap(camera_lost=True)) == ("camera lost", "stop")
+    assert line(snap(camera_lost=True)) == ("camera lost, press restart", "stop")
     assert line(snap(armed=True, killing=True)) == ("stopped", "stop")
     seen, gone = snap(armed=True, hand_seen=True), snap(armed=True, hand_seen=False)
     assert line(seen, gone) == ("HAND LOST", "stop")

@@ -153,3 +153,15 @@ def test_save_local_adds_to_the_end_of_a_section_and_writes_toml_values(tmp_path
         '"a\\"b"',
         "[1, [2.0, false]]",
     ]
+
+
+def test_restart_asks_the_app_to_leave_but_never_while_armed(page, loop):
+    left = []
+    page.app.state.leave = lambda: left.append(True)
+    loop.arm()
+    got = page.post("/restart")
+    assert (got.status_code, got.json()) == (409, {"error": "armed, kill first"})
+    assert not left and not page.app.state.restart
+    loop.safety = type(loop.safety)()
+    assert page.post("/restart").json() == {"restarting": True}
+    assert left == [True] and page.app.state.restart

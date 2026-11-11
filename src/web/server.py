@@ -37,6 +37,7 @@ def retarget(loop, want) -> None:
 
 def make_app(loop) -> FastAPI:
     app = FastAPI()
+    app.state.restart, app.state.leave = False, lambda: None
     vision = with_calib(loop.cfg["vision"])
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
@@ -79,6 +80,15 @@ def make_app(loop) -> FastAPI:
         except (ValueError, OSError) as e:
             return JSONResponse({"error": str(e)}, status_code=400)
         return form.view(loop)
+
+    @app.post("/restart")
+    async def restart():
+        # a dead camera only comes back in a fresh process: it has to open before the board does
+        if loop.safety.armed:
+            return JSONResponse({"error": "armed, kill first"}, status_code=409)
+        app.state.restart = True
+        app.state.leave()
+        return {"restarting": True}
 
     @app.get("/race/maze")
     def race_maze():
