@@ -8,14 +8,21 @@ import subprocess
 
 from src.web.server import STATIC
 
-SCRIPTS = ("race", "gates", "hud", "cam", "follow", "lens", "plate3d")
-PX, HALF, BALL_R = 900, 135, 8
-CFG = {"plate_inner_mm": 2 * HALF, "ball_d_mm": 2 * BALL_R}
+SCRIPTS = ("race", "board", "target", "gates", "hud", "cam", "follow", "lens", "plate3d", "deck3d")
+PX, HALF, BALL_R, TAKE_R = 900, 135, 8, 30
+OWN_PATH = [[50, 50], [-50, 50], [-50, -50]]
+CFG = {
+    "plate_inner_mm": 2 * HALF,
+    "ball_d_mm": 2 * BALL_R,
+    "checkpoint_r_mm": TAKE_R,
+    "path_mm": OWN_PATH,
+}
 # each job is [js that gives a function, its args]; "PEN" in the args is the canvas stand-in and
 # makes the answer what was drawn instead of what came back
 RUN = """
 const fs = require("fs"), vm = require("vm");
-const box = vm.createContext({ devicePixelRatio: 1, performance: { now: () => 0 } });
+const Path2D = class { constructor(d) { this.d = d; } };
+const box = vm.createContext({ devicePixelRatio: 1, performance: { now: () => 0 }, Path2D });
 for (const f of process.argv.slice(2)) vm.runInContext(fs.readFileSync(f, "utf8"), box);
 const px = Number(process.argv[1]);
 console.log(JSON.stringify(JSON.parse(fs.readFileSync(0, "utf8")).map(([js, args]) => {
@@ -44,13 +51,14 @@ def run(*jobs, px=PX):
     return json.loads(out.stdout)
 
 
-def snap(ball=(0, 0), valid=True, mode="hand", tilt=(0, 0)):
+def snap(ball=(0, 0), valid=True, mode="hand", tilt=(0, 0), race=None):
     return {
         "ball": {"x_mm": ball[0], "y_mm": ball[1], "valid": valid},
         "plate_state": {"sent_x_deg": tilt[0], "sent_y_deg": tilt[1]},
         "choices": {"mode": mode},
         "target": {"mm": [0, 0]},
-        "race": None,
+        "race": race,
+        "t_s": 1.0,
     }
 
 

@@ -1,4 +1,4 @@
-// the checkpoint rings and the S / E letters on the board picture
+// the checkpoint rings, the start ring and the S / E letters on the board picture
 // (uses race.js circle and its colours)
 const GATE = "#4A5380";
 const GATE_LIT = "#00795A";
@@ -39,17 +39,34 @@ function gate(ctx, at, r, n, hit, next, last) {
   ctx.stroke();
 }
 
-function gates(ctx, maze, ballR, race) {
+// the ring a gate or the start is really taken at
+function zone(ctx, at, r, color, dash = []) {
+  ctx.lineWidth = 0.8;
+  ctx.strokeStyle = color;
+  ctx.setLineDash(dash);
+  circle(ctx, at, r);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+// the start ring shows until the race clock runs
+const startOpen = race => !race || !["running", "finished"].includes(race.state);
+
+// takeR is how close takes a gate, the small numbered ring in its middle scales with the ball
+function gates(ctx, maze, ballR, race, takeR) {
   const r = ballR * GATE_R, finish = maze.checkpoints.length - 1, now = performance.now();
   const reached = race && race.state ? race.reached : 0;
   const live = race && (race.state === "countdown" || race.state === "running");
   const pulse = 0.6 + 0.4 * Math.cos((2 * Math.PI * now) / GATE_PULSE_MS);
   if (reached > gatesHit) gateHitAt = now;
   gatesHit = reached;
+  const waiting = !!race && ["staging", "countdown"].includes(race.state);
+  if (startOpen(race)) zone(ctx, maze.start, takeR, waiting ? PATH : GATE, [3, 3]);
   maze.checkpoints.forEach((i, n) => {
-    const next = live && n === reached;
+    const next = live && n === reached, hit = n < reached;
     ctx.globalAlpha = next ? pulse : 1;
-    gate(ctx, maze.points[i], r, n, n < reached, next, n === finish);
+    zone(ctx, maze.points[i], takeR, hit ? GATE_LIT : next ? PATH : GATE);
+    gate(ctx, maze.points[i], r, n, hit, next, n === finish);
   });
   ctx.globalAlpha = 1;
   const since = now - gateHitAt;

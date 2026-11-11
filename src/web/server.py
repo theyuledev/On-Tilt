@@ -60,6 +60,7 @@ def make_app(loop) -> FastAPI:
             "px_per_mm": loop.cfg["vision"]["px_per_mm"],
             "camera_fps": rig["camera_fps"],
             "checkpoint_r_mm": game["checkpoint_r_mm"],
+            "path_mm": loop.cfg["control"]["path_mm"],
         }
 
     @app.get("/settings")

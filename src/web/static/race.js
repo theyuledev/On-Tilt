@@ -77,12 +77,12 @@ function walls(ctx, maze, color = MARKER, width = 3.2) {
   maze.walls.forEach((w) => polyline(ctx, w));
 }
 
-function route(ctx, maze) {
+function route(ctx, pts) {
   ctx.lineCap = "butt";
   ctx.lineWidth = 1.2;
   ctx.strokeStyle = PATH;
   ctx.setLineDash([3, 3]);
-  polyline(ctx, maze.points);
+  polyline(ctx, pts);
   ctx.setLineDash([]);
 }
 
@@ -128,11 +128,20 @@ function ball(ctx, [x, y], r, h) {
   ctx.fill();
 }
 
+// the path on the board: the course's, or in path mode the one the ball follows by itself.
+// a race always runs the course, whatever the mode (uses hud.js LIVE)
+function shownPath(maze, cfg, s) {
+  const racing = !!s.race && LIVE.includes(s.race.state);
+  if (s.choices.mode === "path" && !racing) return cfg.path_mm || null;
+  return maze ? maze.points : null;
+}
+
 // look is the window: its centre in plate mm, the zoom, and tall for the follow cam's extras
 function draw(ctx, cfg, maze, s, look) {
   const px = fit(ctx.canvas), h = cfg.plate_inner_mm / 2, r = cfg.ball_d_mm / 2;
   const k = (look.zoom * px) / (2 * (h + MARGIN_MM)), at = [s.ball.x_mm, s.ball.y_mm];
   const g = s.race && s.race.ghost_mm;
+  const path = shownPath(maze, cfg, s), course = !!maze && path === maze.points;
   keep(trail, s.ball.valid && [s.ball.x_mm, s.ball.y_mm], s.t_s, TRAIL_S);
   if (g) keep(ghostTrail, g, s.t_s, TRAIL_S); else ghostTrail.length = 0;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -141,12 +150,11 @@ function draw(ctx, cfg, maze, s, look) {
   ticks(ctx, h);
   plate(ctx, h);
   guardLine(ctx, s, h);
-  if (maze) {
-    if (maze.walls) (look.tall ? tallWalls : walls)(ctx, maze);
-    ends(ctx, maze, h, r);
-    route(ctx, maze);
-    gates(ctx, maze, r, s.race);
-  }
+  if (maze && maze.walls) (look.tall ? tallWalls : walls)(ctx, maze);
+  // the S, the E and the gates belong to the course, not to a path the plate drives by itself
+  if (course) ends(ctx, maze, h, r);
+  if (path) route(ctx, path);
+  if (course) gates(ctx, maze, r, s.race, cfg.checkpoint_r_mm);
   if (g) ghost(ctx, g, r, s.t_s);
   if (s.choices.mode === "balance") reticle(ctx, s.target, r);
   tail(ctx, trail, s.t_s, TRAIL_S, r / 2, BALL, 0.25);

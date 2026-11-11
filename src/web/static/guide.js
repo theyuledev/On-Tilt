@@ -32,6 +32,7 @@ function guide(s, ctx) {
     const lost = s.target.src === "marker" && !s.target.found;
     return lost ? say("no x on the board yet, draw one", "warn") : say("click the board or draw an x");
   }
+  if (s.choices && s.choices.mode === "path") return say("the plate rolls the ball round the path");
   if (!ctx.hand) return say("arrows / wasd to tilt, r to race");
   if (!s.hand_seen) return say("hand flat under the webcam, palm down");
   return say("tilt your hand to roll the ball, r to race");
