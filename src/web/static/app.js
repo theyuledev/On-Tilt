@@ -5,6 +5,7 @@ const keymap = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowD
 let pending = {};
 let ws, cfg, maze, lastT, lastSeen, handWasSeen = false;
 let armedNow = false;
+let showFailed = false;
 const $ = id => document.getElementById(id);
 const cam = $("cam"), nocam = $("nocam"), ctx = $("race").getContext("2d");
 const padCtx = $("pad").getContext("2d");
@@ -114,9 +115,31 @@ function show(s) {
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.onopen = () => { pill("link", "live", "on"); nextCam(); nextHand(); frame(); };
-  ws.onclose = () => { pill("link", "offline", "warn"); banner(null, false, false); setTimeout(connect, 1000); };
-  ws.onmessage = e => { show(JSON.parse(e.data)); requestAnimationFrame(frame); };
+  ws.onopen = () => {
+    pill("link", "live", "on");
+    $("arm").disabled = watch;
+    nextCam();
+    nextHand();
+    frame();
+  };
+  ws.onclose = () => {
+    // one-shots clicked while offline must not fire on whatever app answers next, kill can wait
+    delete pending.arm; delete pending.race; delete pending.recentre;
+    pill("link", "offline", "warn"); banner(null, false, false);
+    $("arm").disabled = true;
+    setTimeout(connect, 1000);
+  };
+  ws.onmessage = e => {
+    // frame() carries kill, so one bad state must not stop it
+    try {
+      show(JSON.parse(e.data));
+    } catch (err) {
+      if (!showFailed) console.error(err);
+      showFailed = true;
+    } finally {
+      requestAnimationFrame(frame);
+    }
+  };
 }
 
 function frame() {
