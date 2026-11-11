@@ -44,9 +44,14 @@ def plate_level(small: np.ndarray, cfg: dict, dark: bool) -> np.ndarray:
 
 
 def threshold(gray: np.ndarray, cfg: dict, dark: bool, background=None) -> np.ndarray:
-    """Per-pixel cut-off from the downsampled background when given, else from the plate level."""
+    """Per-pixel cut-off from the plate level, and for a dark ball from the downsampled background
+    too when given: darker than both. A glint the background remembers leaves bare plate when it
+    moves, dark only against the memory."""
+    level = plate_level(downsample(gray, cfg), cfg, dark)
     if background is None:
-        background = plate_level(downsample(gray, cfg), cfg, dark)
+        background = level
+    elif dark:
+        background = np.minimum(background, level)
     c = cfg["min_contrast"]
     level = cv2.convertScaleAbs(background, alpha=1 - c if dark else 1 + c)
     h, w = gray.shape
