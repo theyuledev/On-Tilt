@@ -43,3 +43,7 @@ def test_the_best_of_several_sizes_is_the_drawn_balls():
 def test_it_answers_on_an_empty_plate_too():
     x, y, r = disc(plate(), [R])
     assert 0 <= x < 400 and 0 <= y < 300 and r == R
+
+
+def test_a_picture_too_small_to_slide_the_disc_over_gets_no_answer():
+    assert disc(plate()[:60, :60], [R]) is None

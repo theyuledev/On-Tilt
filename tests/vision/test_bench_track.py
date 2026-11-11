@@ -80,6 +80,11 @@ def test_arrival_at_a_driver_target_is_an_anchor():
 def test_a_mark_under_the_target_without_travel_is_no_anchor():
     still = tracks(rolling([5.0] * 200), TOP, HOLE)
     assert arrivals([trial()], still, AT) == (set(), Counter({track.NO_TRAVEL: 1}), 0)
+    # the driver saw it there on its first tick
+    assert arrivals([trial(reached=0.0)], still, AT).trials == Counter({track.NO_TRAVEL: 1})
+    # right on the circle is still at the target
+    on = tracks(rolling([-24.0 + 0.24 * i for i in range(100)] + [0.0] * 100), TOP, HOLE)
+    assert arrivals([trial()], on, AT).trials == Counter({track.NO_TRAVEL: 1})
     # the same thing 60 mm from another target is not travel either: it never gets there
     assert arrivals([trial(target=(65.0, 0.0), reached=None)], still, AT).tracks == set()
     # just outside the circle at the start counts as coming from somewhere else

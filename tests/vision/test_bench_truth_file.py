@@ -1,0 +1,146 @@
+import json
+from collections import Counter
+from pathlib import Path
+
+import cv2
+import numpy as np
+import pytest
+
+from src.vision.bench import rec, truth_file
+from src.vision.bench.track import ARRIVED, NEVER, NO_TRAVEL, Arrivals
+from src.vision.bench.truth import ARRIVAL, DISPUTED, SECOND, UNSEEN, Label
+from tools import replay_clip
+
+pytestmark = pytest.mark.unit
+
+A, B = (100.0, 100.0), (140.0, 100.0)
+
+
+def test_describe_counts_labels_by_support_and_every_skip_by_reason():
+    got = [
+        Label(A, A, 20.0, ARRIVAL, True, True),
+        Label(A, B, 20.0, ARRIVAL, False, False),
+        Label(A, A, 20.0, SECOND, True, True),
+        UNSEEN,
+        UNSEEN,
+        DISPUTED,
+    ]
+    recording = rec.Recording([], 7, Counter({rec.NO_NEXT: 1}), 1, Counter())
+    arrived = Arrivals(set(), Counter({ARRIVED: 3, NEVER: 1}), 4)
+    built = truth_file.Built(recording, got, arrived, 2)
+    assert truth_file.describe("one", built).splitlines() == [
+        f"one: 3 of 7 frames labelled (2 {ARRIVAL}, 1 {SECOND}), 2 at rest",
+        f"  second detector agrees on 1 of 2 frames that {ARRIVAL}",
+        f"  4 trials: 3 {ARRIVED}, 1 {NEVER}; stuck not recorded in 4",
+        "  2 torn log lines left out",
+        f"  skipped 4 of 7 frames: 2 {UNSEEN}, 1 {rec.NO_NEXT}, 1 {DISPUTED}",
+    ]
+    empty = rec.Recording([], 0, Counter(), 0, Counter())
+    bare = truth_file.Built(empty, [], Arrivals(set(), Counter(), 0), 0)
+    assert truth_file.describe("two", bare).splitlines() == [
+        "two: 0 of 0 frames labelled, 0 at rest",
+        "  skipped 0 of 0 frames",
+    ]
+
+
+def picture(path: Path, *discs: tuple[int, int, int]) -> None:
+    grain = np.random.default_rng(1).integers(-4, 5, (300, 400))
+    img = (200 + grain).astype(np.uint8)
+    for x, y, r in discs:
+        cv2.circle(img, (x, y), r, 30, -1)
+    cv2.imwrite(str(path), img)
+
+
+def snap(t_s: float, seen: bool = True) -> dict:
+    ball = {"x_mm": 0.0, "y_mm": 0.0, "vx_mm_s": 0.0, "vy_mm_s": 0.0, "valid": seen}
+    px = [200.0, 150.0, 19.0] if seen else None
+    return {"t_s": t_s, "armed": True, "ball": ball, "ball_px": px}
+
+
+def recorded(tmp_path: Path) -> Path:
+    """A recorder folder with a 16 mm ball: it rolls to a driver target, lies there in two
+    pictures and is lost before the third."""
+    folder = tmp_path / "one"
+    (folder / "frames").mkdir(parents=True)
+    (folder / "settings.local.toml").write_text("[rig]\nball_d_mm = { value = 16 }\n")
+    times = [100.0, 100.05, 100.1, 100.15]
+    snaps = [*map(snap, times), snap(100.2, False), snap(100.25, False)]
+    level = {"tilt_x_deg": 0.0, "tilt_y_deg": 0.0}
+    # in from 60 mm out at 40 mm/s, then on the target; the log loses it at 100.17
+    log = []
+    for t in np.arange(95.0, 100.3, 0.01).tolist():
+        x = min(-60 + 40 * (t - 95.0), 0.0)
+        ball = {"x_mm": x, "y_mm": 0.0, "valid": t < 100.17, "t_s": t}
+        log.append({"t_s": t, "plate_cmd": level, "ball": ball})
+    trials = [
+        {"target": [0, 0], "t_start": 95.0, "reached_s": 1.5, "ball_lost": False},
+        # the next target is 10 mm from where it lies: no travel to speak of
+        {"target": [10, 0], "t_start": 99.0, "reached_s": 0.01, "ball_lost": False},
+        {"ended": "time is up"},
+    ]
+    for name, rows in ("snap", snaps), ("run", log), ("trials", trials):
+        (folder / f"{name}.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    with (folder / "run.jsonl").open("a") as f:
+        f.write('{"t_s": 100.3, "pla')
+    # a dark disc twice the ball's size lies beside the ball
+    picture(folder / "frames" / "000100.000.jpg", (200, 150, 19), (310, 230, 38))
+    # the ball somewhere the recorded position is not
+    picture(folder / "frames" / "000100.100.jpg", (80, 80, 19))
+    picture(folder / "frames" / "000100.200.jpg")
+    return folder
+
+
+def test_build_cuts_tracks_at_the_bench_top_speed_and_the_coast_time(tmp_path, monkeypatch):
+    asked = {}
+
+    def spy(rows, top_mm_s, hole_s):
+        asked.update(top_mm_s=top_mm_s, hole_s=hole_s)
+        return []
+
+    monkeypatch.setattr(truth_file, "tracks", spy)
+    folder = recorded(tmp_path)
+    cfg = rec.settings(folder)
+    truth_file.build(folder, cfg)
+    coast_s = cfg["vision"]["lost_after_misses"] / cfg["rig"]["camera_fps"]
+    assert asked == {"top_mm_s": cfg["bench"]["top_speed_mm_s"], "hole_s": coast_s}
+
+
+def test_build_notes_when_the_plate_was_asked_to_tilt(tmp_path, monkeypatch):
+    seen = {}
+
+    def spy(shots, found, arrived, tilted, bench, second):
+        seen["tilted"] = list(tilted)
+        return [UNSEEN] * len(shots)
+
+    monkeypatch.setattr(truth_file, "labels", spy)
+    folder = recorded(tmp_path)
+    rows = [json.loads(x) for x in (folder / "run.jsonl").read_text().splitlines()[:-1]]
+    for i, deg in (7, 0.4), (3, -0.2):
+        rows[i]["plate_cmd"] = {"tilt_x_deg": 0.0, "tilt_y_deg": deg}
+    early, late = rows[3]["t_s"], rows[7]["t_s"]
+    # a clock that stepped back: the later row comes first in the file
+    rows[3], rows[7] = rows[7], rows[3]
+    (folder / "run.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    truth_file.build(folder, rec.settings(folder))
+    assert seen["tilted"] == [early, late]
+
+
+def test_the_labels_command_writes_a_row_a_picture_and_what_it_skipped(tmp_path, capsys):
+    folder = recorded(tmp_path)
+
+    replay_clip.main(["--labels", str(tmp_path / "truth"), str(folder)])
+
+    assert capsys.readouterr().out.splitlines() == [
+        f"one: 2 of 3 frames labelled (2 {ARRIVAL}), 2 at rest",
+        f"  second detector agrees on 1 of 2 frames that {ARRIVAL}",
+        f"  2 trials: 1 {ARRIVED}, 1 {NO_TRAVEL}; stuck not recorded in 2",
+        "  1 torn log lines left out",
+        f"  skipped 1 of 3 frames: 1 {UNSEEN}",
+    ]
+    rows = [json.loads(x) for x in (tmp_path / "truth" / "one.jsonl").read_text().splitlines()]
+    label = {"a": [200.0, 150.0], "b": [200.0, 150.0], "r_px": 19.0, "support": ARRIVAL}
+    assert rows == [
+        {"frame": "000100.000.jpg", **label, "at_rest": True, "second": True},
+        {"frame": "000100.100.jpg", **label, "at_rest": True, "second": False},
+        {"frame": "000100.200.jpg", "skip": UNSEEN},
+    ]

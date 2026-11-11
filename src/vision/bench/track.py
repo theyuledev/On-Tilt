@@ -66,7 +66,7 @@ def _arrival(trial: dict, tracks: list[Track], at_target_mm: float) -> tuple[str
         return LOST, None
     if trial.get("stuck"):
         return STUCK, None
-    if not trial["reached_s"]:
+    if trial["reached_s"] is None:
         return NEVER, None
     start = trial["t_start"]
     i = holding(tracks, start, start + trial["reached_s"])

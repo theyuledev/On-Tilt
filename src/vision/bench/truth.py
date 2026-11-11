@@ -2,19 +2,14 @@
 The recorded position is the live tracker's own word, so it only becomes a label with something
 else behind it; a picture with nothing behind it gets a reason instead."""
 
-import json
 import math
-from collections import Counter
-from collections.abc import Callable, Iterator
-from pathlib import Path
+from collections.abc import Callable
 from typing import NamedTuple
 
-import cv2
 import numpy as np
 
-from src.vision.bench import rec
-from src.vision.bench.second import disc
-from src.vision.bench.track import Arrivals, Track, arrivals, holding, tracks
+from src.vision.bench.rec import Shot
+from src.vision.bench.track import Track, holding
 
 ARRIVAL = "arrived at a driver target"
 SECOND = "second detector agrees"
@@ -25,7 +20,8 @@ DISPUTED = "detectors disagree"
 UNREADABLE = "picture unreadable"
 
 Px = tuple[float, float]
-Second = Callable[[rec.Shot], Px | None]
+# centre and radius of what a second detector finds in the picture, None when it cannot look
+Second = Callable[[Shot], tuple[float, float, float] | None]
 
 
 class Label(NamedTuple):
@@ -45,25 +41,36 @@ def _off_path(p: Px, a: Px, b: Px) -> float:
     return math.hypot(p[0] - a[0] - u * dx, p[1] - a[1] - u * dy)
 
 
-def _speed(snap: dict) -> float:
-    return math.hypot(snap["ball"]["vx_mm_s"], snap["ball"]["vy_mm_s"])
+def _slow(shot: Shot, bench: dict) -> bool:
+    balls = shot.snap["ball"], shot.after["ball"]
+    return all(math.hypot(b["vx_mm_s"], b["vy_mm_s"]) < bench["rest_mm_s"] for b in balls)
 
 
-def _at_rest(shot: rec.Shot, found: list[Track], bench: dict) -> bool:
-    k, n = shot.snap, shot.after
-    if max(_speed(k), _speed(n)) >= bench["rest_mm_s"]:
-        return False
-    since = k["t_s"] - bench["rest_s"]
-    i = holding(found, since, n["t_s"])
+def _lying(found: list[Track], start: float, end: float, at: float, rest_mm: float) -> bool:
+    """Tracked from start to end without leaving the spot it is on at `at`."""
+    i = holding(found, start, end)
     if i is None:
         return False
     t, xy = found[i]
-    seen = xy[(t >= since) & (t <= n["t_s"])]
-    return float(np.hypot(*(seen - seen[-1]).T).max()) < bench["rest_mm"]
+    here = xy[min(np.searchsorted(t, at), len(t) - 1)]
+    seen = xy[(t >= start) & (t <= end)]
+    return float(np.hypot(*(seen - here).T).max()) < rest_mm
+
+
+def _at_rest(shot: Shot, found: list[Track], bench: dict) -> bool:
+    """Slow, and lying where it is for the rest time up to the picture."""
+    since, now = shot.snap["t_s"] - bench["rest_s"], shot.after["t_s"]
+    return _slow(shot, bench) and _lying(found, since, now, now, bench["rest_mm"])
+
+
+def _stays(shot: Shot, found: list[Track], bench: dict) -> bool:
+    """Slow, and lying where it is for the rest time from the picture on."""
+    now = shot.snap["t_s"]
+    return _slow(shot, bench) and _lying(found, now, now + bench["rest_s"], now, bench["rest_mm"])
 
 
 def _seen(
-    shot: rec.Shot, found: list[Track], arrived: set[int], bench: dict, second: Second | None
+    shot: Shot, found: list[Track], arrived: set[int], bench: dict, second: Second | None
 ) -> Label | str:
     k, n = shot.snap, shot.after
     if not all(s["ball"]["valid"] and s["ball_px"] for s in (k, n)):
@@ -74,7 +81,8 @@ def _seen(
         at = second(shot)
         if at is None:
             return UNREADABLE
-        agrees = _off_path(at, (ax, ay), (bx, by)) <= r
+        # inside the ball at the size the second detector looked for, not the tracker's
+        agrees = _off_path(at[:2], (ax, ay), (bx, by)) <= at[2]
     if holding(found, k["t_s"], n["t_s"]) in arrived:
         support = ARRIVAL
     elif agrees:
@@ -84,104 +92,51 @@ def _seen(
     return Label((ax, ay), (bx, by), r, support, _at_rest(shot, found, bench), agrees)
 
 
-def _resting(shots: list[rec.Shot], seen: list, order: range, stretch: int) -> int | None:
-    """The nearest sighting that way, if it is a labelled ball at rest."""
+def _nearest(shots: list[Shot], seen: list, order: range, stretch: int) -> int | None:
+    """The nearest picture that way with the ball seen in it, if that sighting has a label."""
     for j in order:
         if shots[j].stretch != stretch:
             return None
         if seen[j] != UNSEEN:
-            return j if isinstance(seen[j], Label) and seen[j].at_rest else None
+            return j if isinstance(seen[j], Label) else None
     return None
 
 
-def _still(i: int, shots: list[rec.Shot], seen: list, bench: dict) -> Label | str:
-    """A ball the live tracker missed, resting at one place in the labelled pictures before and
-    after: it lay there all along."""
-    before = _resting(shots, seen, range(i - 1, -1, -1), shots[i].stretch)
-    after = _resting(shots, seen, range(i + 1, len(shots)), shots[i].stretch)
+def _still(
+    i: int, shots: list[Shot], seen: list, found: list[Track], tilted: np.ndarray, bench: dict
+) -> Label | str:
+    """A ball the live tracker missed. It lay at rest in the labelled picture before, lies on
+    at the same place from the labelled picture after, and the plate was never asked to tilt
+    in between: it lay there all along."""
+    before = _nearest(shots, seen, range(i - 1, -1, -1), shots[i].stretch)
+    after = _nearest(shots, seen, range(i + 1, len(shots)), shots[i].stretch)
     if before is None or after is None:
+        return UNSEEN
+    if not (seen[before].at_rest and _stays(shots[after], found, bench)):
         return UNSEEN
     p, q = shots[before].snap["ball"], shots[after].snap["ball"]
     if math.hypot(p["x_mm"] - q["x_mm"], p["y_mm"] - q["y_mm"]) >= bench["rest_mm"]:
+        return UNSEEN
+    gap = shots[before].after["t_s"], shots[after].snap["t_s"]
+    first, last = np.searchsorted(tilted, gap)
+    if first != last:
         return UNSEEN
     at = seen[before].a
     return Label(at, at, seen[before].r_px, STILL, True, None)
 
 
 def labels(
-    shots: list[rec.Shot],
+    shots: list[Shot],
     found: list[Track],
     arrived: set[int],
+    tilted: np.ndarray,
     bench: dict,
     second: Second | None = None,
 ) -> list[Label | str]:
-    """One label or one reason per picture."""
+    """One label or one reason per picture. found are the tracks of the full-rate log, arrived
+    the ones that reached a driver target, tilted the sorted times the plate was asked to tilt."""
     seen = [_seen(shot, found, arrived, bench, second) for shot in shots]
-    return [_still(i, shots, seen, bench) if got == UNSEEN else got for i, got in enumerate(seen)]
-
-
-def by_disc(cfg: dict) -> Second:
-    """The second detector at the ball size the settings give, never the tracker's."""
-    r_px = cfg["rig"]["ball_d_mm"] / 2 * cfg["vision"]["px_per_mm"]
-
-    def find(shot: rec.Shot) -> Px | None:
-        gray = cv2.imread(str(shot.path), cv2.IMREAD_GRAYSCALE)
-        return None if gray is None else disc(gray, [r_px])[:2]
-
-    return find
-
-
-def _jsonl(path: Path) -> Iterator[dict]:
-    with path.open() as f:
-        for line in f:
-            yield json.loads(line)
-
-
-def build(folder: Path, cfg: dict, second: Second | None = None):
-    """The folder's pictures, a label or a reason for each, and how its trials ended."""
-    bench, vision = cfg["bench"], cfg["vision"]
-    recording = rec.read(folder, vision["bg_period_s"])
-    # longer than the tracker coasts, and it could have lost the ball and found something else
-    hole_s = vision["lost_after_misses"] / cfg["rig"]["camera_fps"]
-    found = tracks(_jsonl(folder / "run.jsonl"), bench["top_speed_mm_s"], hole_s)
-    trials = folder / "trials.jsonl"
-    arrived = arrivals(_jsonl(trials) if trials.exists() else [], found, bench["at_target_mm"])
-    got = labels(recording.shots, found, arrived.tracks, bench, second)
-    return recording, got, arrived
-
-
-def write(path: Path, shots: list[rec.Shot], got: list[Label | str]) -> None:
-    with path.open("w") as f:
-        for shot, g in zip(shots, got, strict=True):
-            row = {"skip": g} if isinstance(g, str) else g._asdict()
-            f.write(json.dumps({"frame": shot.path.name, **row}) + "\n")
-
-
-def describe(name: str, recording: rec.Recording, got: list[Label | str], arrived: Arrivals) -> str:
-    """Labels by what backs them and every picture without one by its reason."""
-    marked = [g for g in got if isinstance(g, Label)]
-    by = Counter(g.support for g in marked)
-    checked = [g.second for g in marked if g.support == ARRIVAL and g.second is not None]
-    skipped = recording.skipped + Counter(g for g in got if isinstance(g, str))
-    trials = arrived.trials
-
-    def listed(c: Counter) -> str:
-        return ", ".join(f"{n} {what}" for what, n in c.most_common())
-
-    lines = [
-        f"{name}: {len(marked)} of {recording.frames} frames labelled"
-        + (f" ({listed(by)})" if by else "")
-        + f", {sum(g.at_rest for g in marked)} at rest",
+    return [
+        _still(i, shots, seen, found, tilted, bench) if got == UNSEEN else got
+        for i, got in enumerate(seen)
     ]
-    if checked:
-        lines.append(
-            f"  second detector agrees on {sum(checked)} of {len(checked)} frames that {ARRIVAL}"
-        )
-    if trials:
-        lines.append(
-            f"  {sum(trials.values())} trials: {listed(trials)}; "
-            f"stuck not recorded in {arrived.stuck_unknown}"
-        )
-    why = f": {listed(skipped)}" if skipped else ""
-    lines.append(f"  skipped {sum(skipped.values())} of {recording.frames} frames{why}")
-    return "\n".join(lines)

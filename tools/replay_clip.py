@@ -23,7 +23,7 @@ import numpy as np
 
 from src.io.camera import ClipSource
 from src.io.settings import load
-from src.vision.bench import rec, truth
+from src.vision.bench import rec, truth_file
 from src.vision.tracker import BallTracker
 
 Window = tuple[int, int]
@@ -86,9 +86,9 @@ def main(argv: list[str]) -> None:
         out.mkdir(parents=True, exist_ok=True)
         for folder in map(Path, args[1:]):
             cfg = rec.settings(folder)
-            recording, got, arrived = truth.build(folder, cfg, truth.by_disc(cfg))
-            truth.write(out / f"{folder.name}.jsonl", recording.shots, got)
-            print(truth.describe(folder.name, recording, got, arrived))
+            built = truth_file.build(folder, cfg, truth_file.by_disc(cfg))
+            truth_file.write(out / f"{folder.name}.jsonl", built)
+            print(truth_file.describe(folder.name, built))
         return
     if Path(path).is_dir():
         for folder in map(Path, argv):
