@@ -43,12 +43,13 @@ def toward(v, target, step):
 
 def kill_lines(start, level, rate, dts):
     # each axis walks to level at rate * dt, then the level P repeats for the hold, then D
-    (x, y), (cx, cy), held, out = start, level, 0.0, []
+    # the hold counts from the first level P, so the tick that gets there adds nothing
+    (x, y), (cx, cy), held, out = start, level, None, []
     for dt in dts:
         x, y = toward(x, cx, rate * dt), toward(y, cy, rate * dt)
         out.append(f"P {round(x)} {round(y)}")
         if (x, y) == (cx, cy):
-            held += dt
+            held = 0.0 if held is None else held + dt
             if held >= LEVEL_HOLD_S:
                 return [*out, "D"]
     raise AssertionError("ramp never reached level")
@@ -100,6 +101,10 @@ def test_kill_from_a_tilt_sends_the_plain_ramp_then_level_then_d(loop, board, cl
     after = board.sent[n:]
     assert after == want
     assert after[-2:] == [level, "D"]
+    # D comes a full hold after the first level P, whichever tick was slow
+    first = after.index(level)
+    assert after.count(level) >= 2
+    assert sum(dts[first + 1 : len(after) - 1]) >= LEVEL_HOLD_S
     assert not board.armed and not loop.snapshot()["armed"]
 
 

@@ -101,7 +101,8 @@ def test_kill_over_ws_ramps_level_then_disarms_and_only_then_rearms(page):
     assert all(r.servo_cmd.y_us == cy for r in on)
     level = [r for r in on if (r.servo_cmd.x_us, r.servo_cmd.y_us) == (cx, cy)]
     assert on[-1] is level[-1] and not run(page, 1, RIGHT)[-1].armed
-    assert len(level) * DT == pytest.approx(LEVEL_HOLD_S, abs=DT)
+    # the hold counts from the first level pulse sent
+    assert (len(level) - 1) * DT == pytest.approx(LEVEL_HOLD_S, abs=DT)
 
     say(page, {"arm": True, **RIGHT})
     assert run(page, 1, RIGHT)[-1].armed and say(page, RIGHT)["armed"]
