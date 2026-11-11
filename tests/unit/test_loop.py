@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from src.contracts import BallState, Intent, PlateCommand
+from src.control.mapping import MappingWatch
 from src.io.camera import ClipSource
 from src.io.ports import Frame
 from src.io.settings import ROOT, load
@@ -157,6 +158,37 @@ def test_a_broken_estimator_switches_off_and_balance_carries_on(call, capsys):
     assert cmds == drive(Spy())[1]
     assert loop.last.armed and loop.est is None and loop.snapshot()["est"] is None
     assert capsys.readouterr().out.count("estimator off") == 1
+
+
+def test_a_broken_mapping_watch_switches_off_and_balance_carries_on(monkeypatch, capsys):
+    want = drive(Spy())[1]
+
+    def boom(*a):
+        raise ValueError("singular")
+
+    monkeypatch.setattr(MappingWatch, "step", boom)
+    loop, cmds = drive(Spy())
+    assert cmds == want
+    assert loop.last.armed and loop.mapping is None and loop.snapshot()["mapping_bad"] is None
+    assert capsys.readouterr().out.count("mapping watch off") == 1
+
+
+def test_a_tripped_mapping_watch_that_faults_keeps_the_plate_level_till_rearm(
+    monkeypatch, capsys
+):
+    loop, _ = drive(Spy())
+    loop.mapping.bad = "x"
+    monkeypatch.setattr(MappingWatch, "step", broken("step").step)
+    for i in range(6, 9):
+        loop.hand.t = t = 1.0 + i * 0.01
+        loop.frames.see(10.0 + i, t)
+        rec = loop.tick(t, 0.01)
+    assert rec.armed and loop.mapping is None and rec.plate_cmd == PlateCommand(0.0, 0.0)
+    assert loop.snapshot()["mapping_bad"] == "x"
+    assert capsys.readouterr().out.count("mapping watch off") == 1
+    loop.arm()
+    assert loop.snapshot()["mapping_bad"] is None
+    assert loop.tick(t + 0.01, 0.01).plate_cmd != PlateCommand(0.0, 0.0)
 
 
 def test_closed_loop_names_real_modes():
