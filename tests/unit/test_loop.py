@@ -244,6 +244,22 @@ def test_the_loop_tracks_a_replayed_clip_at_clip_time():
     assert loop.snapshot()["est"] is not None
 
 
+def test_plate_state_from_the_pipeline_reaches_the_snapshot():
+    loop, cam = cam_loop()
+    cam.see(0.0, 1.0)
+    loop.tick(1.0, 0.01)
+    snap = loop.snapshot()
+    assert snap["plate_lost"] is False and "plate_outline_px" not in snap
+    outline = [[1.0, 2.0], [3.0, 4.0]]
+    cam.see(0.0, 1.01)
+    cam.obs = cam.obs._replace(occluded=True, outline_px=outline)
+    loop.tick(1.01, 0.01)
+    snap = loop.snapshot()
+    assert snap["plate_lost"] is True and snap["plate_outline_px"] is outline
+    # the arduino's flag is its own thing: a hidden plate must not cut the servos off
+    assert snap["board_lost"] is False
+
+
 def held_ball(mode, push):
     """4 s armed in mode with a ball that sits 50 mm out whatever the plate does."""
     cam, hand, cfg = Cam(), Hand(push), load()

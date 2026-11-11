@@ -24,6 +24,7 @@ HANDS_OFF = {"x": 0, "y": 0}
 # snapshot fields the page reads that the bare loop does not send
 NOT_SENT = {
     "race": "only there once a game is wired",
+    "plate_outline_px": "only when a tracked plate moved",
 }
 FN = re.compile(r"^function \w+\(([^)]*)\) \{$(.*?)^\}", re.M | re.S)
 # ways a reconnect can drop a queued arm; add forms here, don't loosen these

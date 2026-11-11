@@ -1,7 +1,7 @@
 import math
 
 from src.contracts import BallState
-from src.vision.calib import load_calib, px_to_plate_mm
+from src.vision.calib import load_calib, plate_mm_to_px, px_to_plate_mm
 from src.vision.tracker import BallPx
 
 
@@ -27,6 +27,33 @@ def plate_mm(x_px: float, y_px: float, cfg: dict) -> tuple[float, float]:
     cx, cy = cfg["plate_centre_px"]
     s = cfg["px_per_mm"]
     return _turn((x_px - cx) / s, (cy - y_px) / s, cfg["plate_yaw_deg"])
+
+
+def plate_px(x_mm: float, y_mm: float, cfg: dict) -> tuple[float, float]:
+    """Image px from plate mm, the other way round."""
+    calib = cfg.get("calib")
+    if calib is not None:
+        u, v = _turn(x_mm, y_mm, -cfg["calib_yaw_deg"])
+        ox, oy = cfg["calib_centre_mm"]
+        x, y = plate_mm_to_px([[u + ox, v + oy]], calib)[0]
+        return float(x), float(y)
+    u, v = _turn(x_mm, y_mm, -cfg["plate_yaw_deg"])
+    cx, cy = cfg["plate_centre_px"]
+    s = cfg["px_per_mm"]
+    return cx + s * u, cy - s * v
+
+
+def outline_px(half_mm: float, cfg: dict, per_side: int = 12) -> list[list[float]]:
+    """A square of that half size around the plate centre, as image px, walked corner to corner.
+    Several points a side, the lens bends a straight edge."""
+    corners = [(1, 1), (-1, 1), (-1, -1), (1, -1)]
+    out = []
+    for (ax, ay), (bx, by) in zip(corners, corners[1:] + corners[:1], strict=True):
+        for i in range(per_side):
+            t = i / per_side
+            x, y = plate_px(half_mm * (ax + (bx - ax) * t), half_mm * (ay + (by - ay) * t), cfg)
+            out.append([round(x, 1), round(y, 1)])
+    return out
 
 
 def ball_state(ball: BallPx, prev: list[BallState], cfg: dict) -> BallState:

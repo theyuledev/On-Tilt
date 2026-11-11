@@ -41,6 +41,8 @@ class Loop:
         self.band = start(cfg["rig"])
         self.actuator = actuator or SimActuator(cfg["rig"], cfg["control"])
         self.board_lost = False
+        # the white board in the picture, when the pipeline tracks it
+        self.plate_lost, self.plate_outline = False, None
         self.stale = False
         self.hand_seen = self.hand_calibrating = False
         self.mode = cfg["control"]["mode"]
@@ -144,6 +146,7 @@ class Loop:
             return
         self.seen_t = obs.t_read
         self.ball_px, self.ball = obs.ball_px, obs.ball
+        self.plate_lost, self.plate_outline = obs.occluded, obs.outline_px
         if obs.ball.valid:
             self._watch("update", obs.t_read, obs.ball.x_mm, obs.ball.y_mm)
         else:
@@ -195,6 +198,9 @@ class Loop:
         snap["stale"] = self.stale
         snap["board_lost"] = self.board_lost
         snap["camera_lost"] = self.camera_lost
+        snap["plate_lost"] = self.plate_lost
+        if self.plate_outline is not None:
+            snap["plate_outline_px"] = self.plate_outline
         px = self.ball_px
         snap["ball_px"] = [px.x_px, px.y_px, px.r_px] if px is not None and px.valid else None
         snap["hand_seen"] = self.hand_seen

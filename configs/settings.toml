@@ -120,6 +120,15 @@ plate_yaw_deg = { value = 0.0, label = "uncalibrated default (NOT TESTED, expect
 use_calib = false
 calib_centre_mm = { value = [0.0, 0.0], label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 calib_yaw_deg = { value = 0.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+plate_track = false
+plate_search_mm = { value = 20, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+plate_edge_samples = { value = 24, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+plate_edge_width_mm = { value = 2.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+plate_edge_step = { value = 0.05, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+plate_edge_inlier_mm = { value = 1.5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+plate_edge_min_frac = { value = 0.5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+plate_shape_tol = { value = 0.03, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+plate_outline_period_s = { value = 0.2, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 velocity_span_frames = { value = 4, label = "sim-tuned (PR #79)" }
 bg_period_s = { value = 2.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 bg_frames = { value = 30, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
