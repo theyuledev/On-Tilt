@@ -1,8 +1,10 @@
+import math
 from dataclasses import replace
 
 from src.contracts import BallState, Intent, PlateCommand
 from src.control.guard import Guard
 from src.control.pid import Integral, integrate, pid, smooth
+from src.control.rest import Rest, pull_share
 from src.inputs.shaping import shape
 from src.modes.assist import goal_mm
 from src.modes.path import clip, target
@@ -30,25 +32,43 @@ class Balance:
     def __init__(self, cfg: dict):
         self.acc = Integral()
         self.vel: tuple[float, float] | None = None
+        self.rest = Rest()
 
     def __call__(self, ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
         c = cfg["control"]
         # the same loop about the target instead of the centre. a far ball is pulled as if only
         # balance_reach_mm away, so the brake outweighs the pull before it is too fast to stop
-        tx, ty = clip((ball.x_mm, ball.y_mm), held(cfg)["mm"], c["balance_reach_mm"])
+        goal = held(cfg)["mm"]
+        edge = cfg["rig"]["plate_inner_mm"] / 2 - max(abs(ball.x_mm), abs(ball.y_mm))
+        tx, ty = clip((ball.x_mm, ball.y_mm), goal, c["balance_reach_mm"])
         ball = replace(ball, x_mm=ball.x_mm - tx, y_mm=ball.y_mm - ty)
         dt = 0.0 if self.acc.t_s is None else max(ball.t_s - self.acc.t_s, 0.0)
-        self.acc = integrate(self.acc, ball, c)
+        wound = integrate(self.acc, ball, c)
         if not ball.valid:
-            self.vel = None
+            self.acc, self.vel, self.rest = wound, None, Rest()
             return LEVEL
         raw = (ball.vx_mm_s, ball.vy_mm_s)
         prev = self.vel or raw
         vx, vy = (smooth(p, v, dt, c["vel_ema_s"]) for p, v in zip(prev, raw, strict=True))
         self.vel = (vx, vy)
+        zone, far = self.rest.zone_mm(goal, c), math.hypot(ball.x_mm, ball.y_mm)
+        entered = self.rest.step(far, math.hypot(*raw), zone, c, edge)
+        if self.rest.on:
+            # a resting ball that rolled off went the way the held trim leaned: keep only a share,
+            # and with balance_rest_soft none of what was wound up on the way in
+            fresh = entered and c["balance_rest_soft"]
+            self.acc = Integral(t_s=ball.t_s) if fresh else replace(self.acc, t_s=ball.t_s)
+            keep = c["balance_rest_trim"]
+            bx, by = (vx, vy) if self.rest.brake(math.hypot(vx, vy), dt, c) else (0.0, 0.0)
+            return PlateCommand(
+                tilt_x_deg=pid(0.0, bx, keep * self.acc.x, c),
+                tilt_y_deg=pid(0.0, by, keep * self.acc.y, c),
+            )
+        self.acc = wound
+        k = pull_share(far, zone, c)
         return PlateCommand(
-            tilt_x_deg=pid(ball.x_mm, vx, self.acc.x, c),
-            tilt_y_deg=pid(ball.y_mm, vy, self.acc.y, c),
+            tilt_x_deg=pid(ball.x_mm * k, vx, self.acc.x, c),
+            tilt_y_deg=pid(ball.y_mm * k, vy, self.acc.y, c),
         )
 
 
