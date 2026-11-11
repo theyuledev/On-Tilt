@@ -53,6 +53,11 @@ def test_start_and_end_px_override_the_letters():
     assert m.s_px == (300, 300) and math.dist(m.path[0], (300, 300)) < 3
 
 
+def test_black_frame_reports_a_missing_board():
+    with pytest.raises(ValueError, match="no bright board"):
+        read(np.zeros((40, 60), np.uint8), PX_MM, vars(parser().parse_args(["x.png"])))
+
+
 def test_written_maze_has_the_game_keys_and_spaced_gates(tmp_path):
     img, _ = drawn_maze()
     frame, out = tmp_path / "f.png", tmp_path / "drawn.toml"

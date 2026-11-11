@@ -23,7 +23,9 @@ def _snap(clear: np.ndarray, p) -> int:
 
 def shortest_path(clear, a, b, cap_px: float) -> list[tuple[int, int]] | None:
     """(x, y) px from a to b where clear > 0; steps near walls cost more so it keeps central."""
-    w = clear.shape[1]
+    if not np.any(clear > 0):
+        return None
+    h, w = clear.shape
     cost = (1.0 / np.minimum(np.maximum(clear, 1e-3), cap_px)).ravel().tolist()
     ok = (clear > 0).ravel().tolist()
     src, dst = _snap(clear, a), _snap(clear, b)
@@ -34,8 +36,13 @@ def shortest_path(clear, a, b, cap_px: float) -> list[tuple[int, int]] | None:
             break
         if d > best[i]:
             continue
+        y, x = divmod(i, w)
         for dy, dx, step in STEPS:
+            if not (0 <= y + dy < h and 0 <= x + dx < w):
+                continue
             j = i + dy * w + dx
+            if dx and dy and (not ok[i + dx] or not ok[i + dy * w]):
+                continue
             if ok[j]:
                 nd = d + step * (cost[i] + cost[j]) / 2
                 if nd < best.get(j, math.inf):
