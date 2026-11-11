@@ -8,6 +8,7 @@ from mediapipe.tasks.python import BaseOptions, vision
 
 from src.inputs.hand import RECENTRE, HandIntent, asked, palm_angles, palm_center, send_intent
 from src.inputs.hand_view import JPEG_PERIOD_S, frame_jpg, publish
+from src.inputs.prediction import HandPredictor
 from src.io.camera import WARMUP_READS, CameraSource, find_camera, overhead_shape
 from src.io.settings import ROOT, load
 
@@ -35,23 +36,27 @@ def run(
 ) -> None:
     """Runs the model on the newest frame; frames that queued up while it ran are dropped."""
     shown, view_ok = float("-inf"), True
+    prediction = HandPredictor(stale_s=getattr(hand, "stale_s", None))
     while frames.running:
         frame = frames.read()
         if frame is None:
             time.sleep(0.001)
             continue
-        now = clock()
         msgs = [m.decode(errors="replace") for m in heard()]
         for mode in msgs:
             if mode in READINGS and mode != hand.mode:
                 hand.set_mode(mode)
-        intent = hand.update(detect(frame.image, now), now, RECENTRE.decode() in msgs)
+        recentre = RECENTRE.decode() in msgs
+        reading = detect(frame.image, frame.t_s)
+        intent = hand.update(reading, frame.t_s, recentre)
+        now = clock()
+        intent = prediction.update(intent, now, recentre=recentre)
         send(
             intent,
             seen=hand.seen,
             calibrating=hand.calibrating,
             progress=hand.progress,
-            lag_s=now - frame.t_s,
+            lag_s=max(0.0, now - frame.t_s),
             mode=hand.mode,
         )
         if now - shown >= JPEG_PERIOD_S:
@@ -74,7 +79,7 @@ def main() -> None:
     # a fresh capture can miss its first reads, and the grab thread stops on a miss
     if not any(cap.read()[0] for _ in range(WARMUP_READS)):
         raise RuntimeError("webcam sends no frames")
-    hand = HandIntent(inp)
+    hand = HandIntent(inp, stale_s=cfg["rig"]["stale_intent_s"])
     last = []
     landmarker = vision.HandLandmarker.create_from_options(
         vision.HandLandmarkerOptions(

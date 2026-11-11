@@ -4,11 +4,11 @@ import pytest
 from src.inputs.hand import HandIntent
 from src.inputs.one_euro import one_euro
 from src.inputs.shaping import shape
-from src.io.settings import load
+from src.io.settings import BASE, load
 
 pytestmark = pytest.mark.unit
 
-INPUT = load()["input"]
+INPUT = load(local=BASE)["input"]
 TILT = {**INPUT, "hand_mode": "tilt", "hand_tilt_span_deg": 25.0}
 DT = 1 / 30
 SPAN = TILT["hand_tilt_span_deg"]
@@ -64,7 +64,7 @@ def test_a_still_hand_shakes_less_than_with_the_old_ema():
 def test_a_quick_tilt_lands_within_100_ms():
     to = 20 / SPAN
     out = filtered([0.0] * 30 + [to] * 30)
-    t90 = DT * next(i for i in range(30, 60) if out[i] >= 0.9 * to) - DT * 30
+    t90 = DT * (next(i for i in range(30, 60) if out[i] >= 0.9 * to) - 30)
     assert t90 <= 0.1
 
 

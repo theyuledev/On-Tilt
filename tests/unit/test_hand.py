@@ -96,13 +96,16 @@ def test_seen_and_calibrating_follow_the_palm():
 def test_moving_your_hand_right_and_up_is_plus_x_plus_y():
     # the webcam looks down from above, so the player's right is image right
     hand, t = calibrated()
-    i = hand.update((0.5 + 0.125, 0.5 - 0.125), t)
+    at = (0.5 + 0.125, 0.5 - 0.125)
+    hand.update(at, t)
+    i = hand.update(at, t + 1 / 30)
     assert i.x == pytest.approx(0.5) and i.y == pytest.approx(0.5)
 
 
 def test_intent_clamps_at_one():
     hand, t = calibrated()
-    i = hand.update((1.0, 1.0), t)
+    hand.update((1.0, 1.0), t)
+    i = hand.update((1.0, 1.0), t + 1 / 30)
     assert (i.x, i.y) == (1.0, -1.0)
 
 

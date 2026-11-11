@@ -42,6 +42,17 @@ def draw(img, landmarks, neutral, angles, intent, mirror):
         out = cv2.flip(out, 1)
     top = "no hand" if angles is None else f"roll {angles[0]:+.0f}  pitch {angles[1]:+.0f}"
     for i, line in enumerate((top, f"intent x {intent.x:+.2f} y {intent.y:+.2f}")):
+        # Offset passes keep the outline when the renderer ignores thicker strokes.
+        for dx, dy in ((-2, -2), (0, -2), (2, -2), (-2, 0), (2, 0), (-2, 2), (0, 2), (2, 2)):
+            cv2.putText(
+                out,
+                line,
+                (10 + dx, 30 + 30 * i + dy),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (0, 0, 0),
+                2,
+            )
         cv2.putText(out, line, (10, 30 + 30 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.8, WHITE, 2)
     return out
 
