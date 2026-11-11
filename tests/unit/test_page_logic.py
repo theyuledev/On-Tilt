@@ -16,7 +16,7 @@ const fs = require("fs"), vm = require("vm");
 const box = {};
 vm.runInNewContext(fs.readFileSync(process.argv[1], "utf8"), box);
 const cases = JSON.parse(fs.readFileSync(0, "utf8"));
-console.log(JSON.stringify(cases.map(([s, ctx]) => box.guide(s, ctx))));
+console.log(JSON.stringify(cases.map(args => box[process.argv[2]](...args))));
 """
 
 ON = {"live": True, "watch": False, "hand": True, "lost": False}
@@ -24,16 +24,20 @@ BALL = {"ball": {"valid": True}}
 ARMED = {**BALL, "armed": True, "hand_seen": True}
 
 
-def guide(*cases):
-    cases = [(s, {**ON, **ctx}) for s, ctx in cases]
+def run(fn, cases):
     out = subprocess.run(
-        ["node", "-e", RUN, str(STATIC / "guide.js")],
+        ["node", "-e", RUN, str(STATIC / "guide.js"), fn],
         input=json.dumps(cases),
         capture_output=True,
         text=True,
         check=True,
     )
-    return [(g["text"], g["tone"]) for g in json.loads(out.stdout)]
+    return json.loads(out.stdout)
+
+
+def guide(*cases):
+    cases = [(s, {**ON, **ctx}) for s, ctx in cases]
+    return [(g["text"], g["tone"]) for g in run("guide", cases)]
 
 
 def race(state, **kw):
@@ -88,3 +92,14 @@ def test_stop_states_win_in_order_and_watch_still_sees_them():
         ("put the ball on the plate", ""),
         ("hold still... locking neutral", "warn"),
     ]
+
+
+def test_frame_is_killing_then_calibrating_then_armed_or_disarmed():
+    cases = [
+        ({**ARMED, "killing": True, "race": {"state": "calibrating"}}, "killing"),
+        ({"race": {"state": "calibrating"}}, "calibrating"),
+        (race("running"), "armed"),
+        ({**BALL, "race": None}, "disarmed"),
+        ({}, "disarmed"),
+    ]
+    assert run("frameState", [[s] for s, _ in cases]) == [want for _, want in cases]

@@ -24,3 +24,10 @@ function guide(s, ctx) {
   if (!s.hand_seen) return say("hand flat under the webcam, palm down");
   return say("tilt your hand to roll the ball, r to race");
 }
+
+// colour of the frame round the stage
+function frameState(s) {
+  if (s.killing) return "killing";
+  if (s.race && s.race.state === "calibrating") return "calibrating";
+  return s.armed ? "armed" : "disarmed";
+}

@@ -71,6 +71,52 @@ def test_banner_line_comes_from_guide_and_starts_on_connecting(client):
     assert hint + "font-size: 3vmin; color: #aaa; }" in css
 
 
+def test_stage_frame_follows_the_arm_state_and_never_sits_on_the_arena(client):
+    assert "function frameState(s)" in static(client, "guide.js")
+    js = static(client, "app.js")
+    show = js[js.index("function show(s) {") :]
+    assert show.index("document.body.dataset.state = frameState(s);") < show.index("\n}")
+    assert 'banner(null, false, false); document.body.dataset.state = "";' in js
+    css = static(client, "style.css")
+    assert "border: 6px solid transparent;" in css
+    frames = dict(disarmed="#555", armed="#2e7d32", killing="#c62828", calibrating="#ffb300")
+    for state, colour in frames.items():
+        assert f'body[data-state="{state}"] .stage {{ border-color: {colour}; }}' in css
+    # off path already blinks a border on the arena
+    assert '"] .arena' not in css
+
+
+def test_how_to_play_card_sits_in_the_side_panel_and_hides_while_armed(client):
+    page = client.get("/").text
+    steps = (
+        "put the ball on the plate",
+        "hand flat, palm down, under the webcam, hold still",
+        "click arm, then tilt to steer",
+    )
+    at = [page.index(f"<li>{s}</li>") for s in steps]
+    assert at == sorted(at)
+    order = ('id="handview"', 'id="results"', 'id="howto"', 'id="keys"', '<canvas id="strip"')
+    at = [page.index(i) for i in order]
+    assert at == sorted(at)
+    keys = (
+        "space stops everything · r races · c re-centres the hand neutral · arrows / wasd to tilt"
+    )
+    assert f'<p id="keys" class="dim">{keys}</p>' in page
+    hide = 'body[data-state="armed"] #howto, body[data-state="calibrating"] #howto'
+    assert hide + " { display: none; }" in static(client, "style.css")
+
+
+def test_tick_no_input_and_ball_pills_sit_in_a_quiet_row_under_the_buttons(client):
+    page = client.get("/").text
+    pills = page[page.index('class="row pills"') : page.index('class="stage"')]
+    assert all(f'id="{i}"' in pills for i in ("link", "armed", "board", "hand"))
+    assert not any(f'id="{i}"' in pills for i in ("beat", "stale", "ballpill"))
+    debug = page[page.index('class="row dim debug"') : page.index("</main>")]
+    assert all(f'id="{i}"' in debug for i in ("beat", "stale", "ballpill"))
+    assert page.index('id="kill"') < page.index('class="row dim debug"')
+    assert ".debug { font-size: 12px;" in static(client, "style.css")
+
+
 def test_hud_is_keyed_on_the_race_view(client):
     js = static(client, "hud.js")
     assert "function hud(s, maze)" in js and "hud(s, maze)" in static(client, "app.js")
