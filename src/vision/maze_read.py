@@ -32,6 +32,8 @@ def board_mask(gray: np.ndarray, stroke_px: int, frac: float) -> np.ndarray:
     bright = np.uint8(gray > frac * np.percentile(gray, 95))
     closed = cv2.morphologyEx(bright, cv2.MORPH_CLOSE, _disk(stroke_px))
     _, lab, stats, _ = cv2.connectedComponentsWithStats(closed)
+    if len(stats) == 1:
+        raise ValueError("no bright board found in the frame")
     board = np.uint8(lab == 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA]))
     cnts, _ = cv2.findContours(board, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cv2.drawContours(board, cnts, -1, 1, cv2.FILLED)
