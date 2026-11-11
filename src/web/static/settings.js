@@ -48,6 +48,11 @@ function make(tag, cls, text) {
 const saved = path => { const [s, k] = path.split("."); return data.sections[s][k]; };
 const now = path => (path in dirty ? dirty[path] : saved(path));
 const locked = path => data.armed || data.locked.includes(path.split(".")[0]);
+// a whole float keeps its point, 3 reads "3.0"
+const written = path => {
+  const v = saved(path);
+  return data.floats.includes(path) && Number.isInteger(v) ? v.toFixed(1) : shown(v);
+};
 
 function edit(path, value) {
   if (value !== undefined && shown(value) === shown(saved(path))) delete dirty[path];
@@ -73,14 +78,14 @@ function entry(path, name, unit) {
   input.setAttribute("aria-label", name);
   input.setAttribute("autocomplete", "off");
   input.setAttribute("spellcheck", "false");
-  input.value = shown(saved(path));
+  input.value = written(path);
   input.oninput = () => edit(path, typed(input.value, saved(path)));
   wrap.append(input);
   if (unit) wrap.append(make("span", "dim", unit));
   editors.push(() => {
     input.disabled = locked(path);
     wrap.className = path in dirty && dirty[path] === undefined ? "value bad" : "value";
-    if (!(path in dirty)) input.value = shown(saved(path));
+    if (!(path in dirty)) input.value = written(path);
   });
   return wrap;
 }

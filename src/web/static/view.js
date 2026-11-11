@@ -38,7 +38,8 @@ function drawView(ctx, cfg, maze, s) {
   const look = follow ? followLook(camSt.eye || [0, 0], cfg.ball_d_mm / 2) : TOP;
   ctx.canvas.className = follow ? "follow" : "";
   $("minimap").hidden = !follow;
-  $("viewtag").textContent = follow ? "FOLLOW CAM 3X" : view === "3d" ? SHOT_NAMES[camSt.shot] : "TOP VIEW";
+  $("viewtag").hidden = view === "top";
+  $("viewtag").textContent = follow ? "FOLLOW CAM 3X" : SHOT_NAMES[camSt.shot];
   if (view === "3d") return draw3d(ctx, cfg, maze, s, camSt.cam);
   draw(ctx, cfg, maze, s, look);
   if (follow) minimap(miniCtx, cfg, maze, s, look);

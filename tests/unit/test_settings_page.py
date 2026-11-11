@@ -35,6 +35,9 @@ def test_the_page_gets_every_setting_by_section_and_what_locks_them(page, loop):
     assert got["sections"] == load() and list(got["sections"]) == list(load())
     assert (got["armed"], got["locked"], got["mazes"]) == (False, ["rig"], ["square"])
     assert got["choices"]["steer"] == "hand" and got["target"] == "centre"
+    kinds = {p: type(load()[p.split(".")[0]][p.split(".")[1]]) for p in got["floats"]}
+    assert set(kinds.values()) == {float} and "rig.camera_exposure_ms" in kinds
+    assert not {"rig.center_x_us", "rig.actuator", "vision.plate_centre_px"} & set(kinds)
     loop.arm()
     assert page.get(URL).json()["armed"] is True
     assert "/static/settings.js" in page.get("/settings").text

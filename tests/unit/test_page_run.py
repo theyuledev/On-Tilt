@@ -441,19 +441,23 @@ V, T = ("down", ["KeyV", None]), ("down", ["KeyT", None])
 def looks(steps, **kw):
     out = run([OPEN, *steps], **kw)
     p = out["page"]
-    return p["viewtag"]["text"], p["race"]["cls"], p["minimap"]["hidden"], out["sent"]
+    tag = None if p["viewtag"]["hidden"] else p["viewtag"]["text"]
+    return tag, p["race"]["cls"], p["minimap"]["hidden"], out["sent"]
 
 
 def test_v_steps_through_the_views_t_is_top_down_at_once_and_nothing_is_sent():
     s = ("snap", snap())
     plain = looks([s])
-    assert plain[:3] == ("TOP VIEW", "", True)
+    assert plain[:3] == (None, "", True)
     assert looks([V, s])[:3] == ("FOLLOW CAM 3X", "follow", False)
     assert looks([V, V, s])[:3] == ("CAM 2 WIDE", "", True)
     assert looks([V, V, V, s])[:3] == plain[:3]
     assert looks([V, T, s])[:3] == plain[:3] and looks([V, V, T, s])[:3] == plain[:3]
-    assert looks([("click", "viewtag"), s])[:3] == ("FOLLOW CAM 3X", "follow", False)
+    assert looks([V, ("click", "viewtag"), s])[:3] == ("CAM 2 WIDE", "", True)
     assert looks([V, V, s, ("frame", None)])[3] == plain[3] + [{"x": 0, "y": 0}]
+    # each view draws the maze without a fault
+    drawn = run([OPEN, s, V, s, V, s])["out"]
+    assert [drawn[i] for i in (1, 3, 5)] == [None, None, None]
 
 
 def test_view_keys_work_on_a_watch_tab_and_stay_out_of_the_name_field():
@@ -461,7 +465,7 @@ def test_view_keys_work_on_a_watch_tab_and_stay_out_of_the_name_field():
     assert looks([V, s], query="?watch")[:3] == ("FOLLOW CAM 3X", "follow", False)
     done = ("snap", snap(race=DONE))
     typing = [done, ("wait", 1000), done, ("down", ["KeyV", "resname"]), done]
-    assert looks(typing)[0] == "TOP VIEW"
+    assert looks(typing)[0] is None
 
 
 def test_the_3d_tag_names_the_shot_the_camera_is_on():
