@@ -30,11 +30,24 @@ def test_follows_a_moving_ball_over_a_line_and_keeps_its_radius():
         assert out.r_px == pytest.approx(45, abs=2)
 
 
-def test_finds_the_ball_again_after_a_jump():
+def test_a_jump_across_the_plate_is_not_followed_but_found_fresh_once_the_track_drops():
+    tr = BallTracker(CFG)
+    n = lock(tr, [ball(plate(), 400 + 5 * i, 400, 45) for i in range(3)])
+    far = range(CFG["lost_after_misses"] + 1)
+    outs = [tr.update(ball(plate(), 900, 250, 45), (n + i) * DT) for i in far]
+    assert outs[0].valid and outs[0].x_px == pytest.approx(415, abs=2)
+    assert not outs[-2].valid
+    assert outs[-1].valid and outs[-1].x_px == pytest.approx(900, abs=2)
+
+
+def test_a_blob_across_the_plate_does_not_take_the_track_while_the_ball_is_hidden():
     tr = BallTracker(CFG)
     n = lock(tr, [ball(plate(), 400 + 5 * i, 400, 45) for i in range(3)])
     out = tr.update(ball(plate(), 900, 250, 45), n * DT)
-    assert out.valid and out.x_px == pytest.approx(900, abs=2)
+    assert out.valid and out.x_px == pytest.approx(415, abs=2)
+    both = ball(ball(plate(), 900, 250, 45), 420, 400, 45)
+    out = tr.update(both, (n + 1) * DT)
+    assert out.valid and out.x_px == pytest.approx(420, abs=2)
 
 
 def test_coasts_then_goes_lost_then_picks_up_a_new_ball():

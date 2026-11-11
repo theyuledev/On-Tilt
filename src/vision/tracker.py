@@ -133,6 +133,9 @@ class BallTracker:
             found = [c for c in round_blobs(gray, near, self.dark, b, level) if c.r_px >= lo]
             if b is not None:
                 found = [c for c in found if not cut_by(c, b, w, h)]
+            else:
+                # only to take whole a ball the box cut: a blob further off is something else
+                found = [c for c in found if abs(c.x_px - px) <= d and abs(c.y_px - py) <= d]
             if found:
                 return min(found, key=lambda c: (c.x_px - px) ** 2 + (c.y_px - py) ** 2)
         return None
