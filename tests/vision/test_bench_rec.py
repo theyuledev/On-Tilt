@@ -17,9 +17,9 @@ def snap(t_s: float, **more) -> dict:
     return {"t_s": t_s, "armed": True, "ball": {"valid": True}, "plate_lost": False, **more}
 
 
-def folder(tmp_path: Path, lines: list, frames: list[float], local: str = "") -> Path:
+def folder(tmp_path: Path, lines: list, frames: list[float], local: str = "", name="one") -> Path:
     """A recorder folder: lines are snapshots, or raw text for a line that will not parse."""
-    out = tmp_path / "2026-01-01_0000_drawn"
+    out = tmp_path / name
     (out / "frames").mkdir(parents=True)
     text = [x if isinstance(x, str) else json.dumps(x) for x in lines]
     (out / "snap.jsonl").write_text("".join(line + "\n" for line in text))
@@ -55,10 +55,20 @@ def test_a_folder_without_its_settings_is_refused(tmp_path):
 def test_rows_without_plate_lost_or_outline_still_read(tmp_path):
     old = {"t_s": 100.0, "armed": False, "ball": {"valid": False}}
     lost = snap(100.05, plate_lost=True, plate_outline_px=[[1.0, 2.0]])
-    got = rec.read(folder(tmp_path, [old, lost, snap(100.1)], [100.0]), GAP_S)
+    rows = [old, lost, snap(100.1), snap(100.15)]
+    got = rec.read(folder(tmp_path, rows, [100.0]), GAP_S)
     assert [s.snap for s in got.shots] == [old]
     assert got.counts["board not recorded"] == 1 and got.counts["board lost"] == 1
-    assert got.counts["armed"] == 2 and got.counts["seen"] == 2
+
+
+def test_ball_seen_is_a_share_of_the_armed_snapshots(tmp_path):
+    rows = [snap(100.0, armed=False), snap(100.05), snap(100.1, ball={"valid": False})]
+    out = folder(tmp_path, rows, [])
+    got = rec.read(out, GAP_S)
+    assert got.counts["armed"] == 2 and got.counts["seen"] == 1
+    assert "armed in 2 snapshots, ball seen in 50.0% of them" in rec.describe(out.name, got)
+    idle = rec.read(folder(tmp_path, rows[:1], [], name="idle"), GAP_S)
+    assert "armed in 0 snapshots, ball seen in - of them" in rec.describe("idle", idle)
 
 
 def test_a_gap_or_restart_starts_a_new_stretch(tmp_path):
@@ -89,10 +99,15 @@ def test_a_stray_file_among_the_frames_is_not_a_frame(tmp_path):
     assert got.frames == 1 and len(got.shots) == 1 and not got.skipped
 
 
-def test_a_folder_argument_prints_the_inventory_with_its_skipped_line(tmp_path, capsys):
-    out = folder(tmp_path, [snap(100.0), snap(100.05), snap(100.1)], [100.0])
-    replay_clip.main([str(out)])
-    text = capsys.readouterr().out
-    assert text.startswith(f"{out.name}: 1 frames, 3 snapshots, 0 torn lines, 1 stretches")
-    assert "1 frames paired, snapshot to next median 50 ms, longest 50 ms" in text
-    assert text.rstrip().endswith("skipped 0 of 1 frames")
+def test_folder_arguments_print_each_inventory_with_its_skipped_line(tmp_path, capsys):
+    rows = [snap(100.0), snap(100.05), snap(100.15)]
+    one = folder(tmp_path, rows, [100.0, 100.05])
+    # its own background period turns every step into a gap
+    two = folder(tmp_path, rows, [100.0], "[vision]\nbg_period_s = { value = 0.01 }\n", "two")
+    replay_clip.main([str(one), str(two)])
+    first, second = capsys.readouterr().out.split("two: ")
+    assert first.startswith("one: 2 frames, 3 snapshots, 0 torn lines, 1 stretches")
+    assert "2 frames paired, snapshot to next median 75 ms, longest 100 ms" in first
+    assert first.rstrip().endswith("skipped 0 of 2 frames")
+    assert second.startswith("1 frames, 3 snapshots, 0 torn lines, 3 stretches")
+    assert second.rstrip().endswith(f"skipped 1 of 1 frames: 1 {rec.NO_NEXT}")
