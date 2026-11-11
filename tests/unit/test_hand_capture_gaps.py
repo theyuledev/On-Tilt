@@ -84,3 +84,20 @@ def test_old_constructors_use_the_existing_neutral_window_for_capture_gaps():
     hand, before = ready_hand(stale_s=None)
     out = hand.update((15.0, 0.0), 2.5)
     assert out.valid and out.x == pytest.approx(before.x, abs=1e-5)
+
+
+def test_a_mode_switch_reads_like_a_hand_built_in_the_new_mode():
+    tilt = {**load()["input"], "hand_mode": "tilt"}
+    hand = HandIntent(tilt)
+    for i in range(3):
+        hand.update((15.0, 0.0), i / 30)
+    hand.set_mode("palm")
+    fresh = HandIntent({**tilt, "hand_mode": "palm"})
+    times = [(2 + i) / 30 for i in range(45)]
+
+    def hold(h):
+        return [(h.update((0.5, 0.5), t), h.progress) for t in times]
+
+    # no degrees left in the median and no old capture stamp holding frames back
+    assert hold(hand) == hold(fresh)
+    assert hand.neutral == fresh.neutral == pytest.approx((0.5, 0.5))
