@@ -77,7 +77,27 @@ MODES = {"hand": hand, "balance": Balance, "path": PathFollower, "assist": assis
 CLOSED_LOOP = ("balance", "path", "assist")
 
 
+def arm_block(exposure: str | None, mode: str) -> str | None:
+    # a wrong exposure smears the ball, so the modes steering on it wait for a fix
+    blocks = exposure and mode in CLOSED_LOOP and not exposure.startswith("exposure unverified")
+    return exposure if blocks else None
+
+
 def make_mode(name: str, cfg: dict):
     """The callable for one run of a mode; modes that keep state are classes built from cfg."""
     mode = MODES[name]
     return mode(cfg) if isinstance(mode, type) else mode
+
+
+def fade_in(cmd: PlateCommand, holding: bool, armed_s: float, rig: dict) -> PlateCommand:
+    """Level while holding, else the tilt fades in from level after an arm."""
+    if holding:
+        return LEVEL
+    fade_s = rig["arm_fade_s"]
+    k = 1.0 if fade_s <= 0 else min(1.0, armed_s / fade_s)
+    return PlateCommand(cmd.tilt_x_deg * k, cmd.tilt_y_deg * k)
+
+
+def fade_start(armed_s: float, holding: bool, armed: bool) -> float:
+    # arming from disarmed or out of a hold fades in again, a re-arm mid run doesn't
+    return 0.0 if holding or not armed else armed_s

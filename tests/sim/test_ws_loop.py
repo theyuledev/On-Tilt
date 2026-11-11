@@ -190,16 +190,10 @@ def handler(name):
     return js[start:]
 
 
-@pytest.mark.xfail(
-    strict=True, raises=AssertionError, reason="an arm clicked while offline goes out on reconnect"
-)
 def test_an_arm_clicked_while_offline_is_not_sent_on_reconnect():
     assert DROPS_ARM.search(handler("onclose"))
 
 
-@pytest.mark.xfail(
-    strict=True, raises=AssertionError, reason="arm stays clickable while the link is down"
-)
 def test_arm_is_disabled_while_the_link_is_down():
     assert re.search(ARM_DISABLED + r"\s*true\b", handler("onclose"))
     assert re.search(ARM_DISABLED + r"(?!=)", handler("onopen"))

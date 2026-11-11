@@ -1,4 +1,5 @@
 import json
+import math
 import socket
 import time
 from dataclasses import asdict
@@ -231,6 +232,23 @@ def test_loop_uses_a_fresh_hand_and_falls_back_to_keys():
 
     loop.hand.intent = Intent(0.5, 0.0, False, 10.02)
     assert loop.tick(10.03, 0.01).intent.x == -1.0
+
+
+def test_a_future_or_nan_stamp_is_stale_not_fresh_forever():
+    cfg = load()
+    loop = Loop(cfg, FakeHand(Intent(0.5, 0.0, True, 10.0)))
+    loop.keys._intent = Intent(-1.0, 0.0, True, 10.0)
+    assert loop.tick(10.0, 0.01).intent.x == 0.5
+    assert loop.tick(10.01, 0.01).intent.x == 0.5
+
+    for bad in (110.0, math.nan):
+        loop.hand.intent = Intent(0.5, 0.0, True, bad)
+        assert loop.tick(10.02, 0.01).intent.x == -1.0
+        assert not loop.snapshot()["hand_seen"]
+        loop.keys._intent = Intent(-1.0, 0.0, True, bad)
+        loop.tick(10.02, 0.01)
+        assert loop.stale
+        loop.keys._intent = Intent(-1.0, 0.0, True, 10.0)
 
 
 def test_snapshot_carries_the_hand_flags():
