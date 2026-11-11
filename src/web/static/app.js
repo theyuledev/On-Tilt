@@ -149,6 +149,8 @@ function lights(s) {
   nocam.textContent = s.camera_lost ? "camera lost" : "no camera";
   $("armed").textContent = s.killing ? "KILLING" : s.armed ? "ARMED" : "DISARMED";
   $("armed").className = "chip " + (s.killing ? "warn" : s.armed ? "on" : "");
+  // leaving the page would leave an armed plate with no kill key
+  $("settings").classList.toggle("off", !!s.armed);
 }
 
 function show(s) {

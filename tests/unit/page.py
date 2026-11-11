@@ -20,7 +20,7 @@ from src.web.server import STATIC, make_app
 RUN = r"""
 const fs = require("fs"), vm = require("vm"), path = require("path");
 const dir = process.argv[1], job = JSON.parse(fs.readFileSync(0, "utf8"));
-const els = {}, win = {}, sockets = [], scripts = [];
+const els = {}, win = {}, sockets = [], scripts = [], posts = [];
 let clock = 0, rafs = [];
 const VOID = new Set(["meta", "link", "img", "input"]);
 const pen = e => new Proxy({ canvas: e }, {
@@ -76,18 +76,25 @@ function parse(html) {
   if (stack.length !== 1) throw new Error("index.html tags do not balance");
 }
 
-parse(fs.readFileSync(path.join(dir, "index.html"), "utf8"));
+parse(fs.readFileSync(path.join(dir, job.page), "utf8"));
 const box = vm.createContext({
   document: { getElementById: id => els[id] ?? null, createElement: el, body: el("body") },
   location: { search: job.query || "", host: "page" },
   URLSearchParams, console, devicePixelRatio: 1,
   performance: { now: () => clock },
   requestAnimationFrame: fn => { rafs.push(fn); },
-  setTimeout: () => 0, clearTimeout: () => {},
+  setTimeout: () => 0, clearTimeout: () => {}, setInterval: () => 0,
   addEventListener: (type, fn) => { (win[type] ||= []).push(fn); },
-  fetch: url => Promise.resolve({
-    ok: job.routes[url] != null, status: 404, json: () => Promise.resolve(job.routes[url]),
-  }),
+  // a POST is kept for the test and answered by the "POST <url>" route, [status, body]
+  fetch: (url, opt) => {
+    if (!opt) {
+      const body = job.routes[url];
+      return Promise.resolve({ ok: body != null, status: 404, json: () => Promise.resolve(body) });
+    }
+    posts.push(JSON.parse(opt.body));
+    const [status, body] = job.routes[`POST ${url}`];
+    return Promise.resolve({ ok: status === 200, status, json: () => Promise.resolve(body) });
+  },
   WebSocket: class {
     constructor() { this.readyState = 1; this.sent = []; sockets.push(this); }
     send(text) { this.sent.push(JSON.parse(text)); }
@@ -117,7 +124,7 @@ const acts = {
   down: ([code, on]) => key("keydown", code, on),
   up: ([code, on]) => key("keyup", code, on),
   click: at => { const e = find(at); if (!e.disabled) e.onclick({ currentTarget: e }); },
-  type: ([id, text]) => { els[id].value = text; },
+  type: ([id, text]) => { els[id].value = text; if (els[id].oninput) els[id].oninput(); },
   // a click at u, v (0..1) across an element
   tap: ([id, u, v]) => {
     const e = els[id];
@@ -129,11 +136,15 @@ const view = e => ({
   attrs: e.attrs, data: e.dataset, style: e.style, kids: e.children.map(view),
 });
 
-setImmediate(() => {
-  const out = job.steps.map(([act, arg]) => acts[act](arg) ?? null);
+setImmediate(async () => {
+  const out = [];
+  for (const [act, arg] of job.steps) {
+    out.push(acts[act](arg) ?? null);
+    await new Promise(setImmediate);  // lets a fetch started by the step land
+  }
   const page = Object.fromEntries(Object.entries(els).map(([id, e]) => [id, view(e)]));
   const sent = sockets.flatMap(s => s.sent), body = box.document.body.className;
-  console.log(JSON.stringify({ out, page, sent, body }));
+  console.log(JSON.stringify({ out, page, sent, body, posts }));
 });
 """
 
@@ -164,12 +175,13 @@ def race(state, **over) -> dict:
     return {**real()["snap"]["race"], "state": state, **over}
 
 
-def run(steps, *, query="", config=None, **routes) -> dict:
+def run(steps, *, query="", config=None, page="index.html", urls=None, **routes) -> dict:
     """Loads the page, then plays steps: ["snap", {...}], ["down", ["Space", None]], ..."""
     served = {k: real()[k] for k in ("/config", "/race/maze")}
     served["/config"] = {**served["/config"], **(config or {})}
     served.update({f"/{k.replace('_', '/')}": v for k, v in routes.items()})
-    job = {"query": query, "routes": served, "steps": [list(s) for s in steps]}
+    served.update(urls or {})
+    job = {"query": query, "page": page, "routes": served, "steps": [list(s) for s in steps]}
     out = subprocess.run(
         ["node", "-e", RUN, str(STATIC)],
         input=json.dumps(job),

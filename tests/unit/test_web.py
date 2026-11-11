@@ -59,6 +59,13 @@ def test_both_fonts_are_served_from_static_and_nothing_loads_from_the_network(cl
             assert "http://" not in text and "https://" not in text and "//fonts" not in text, path
 
 
+def test_play_and_settings_pages_link_to_each_other(client):
+    assert '<a id="settings" class="pill" href="/settings">SETTINGS</a>' in client.get("/").text
+    page = client.get("/settings").text
+    assert '<a class="pill" href="/">BACK TO PLAY</a>' in page and "/static/settings.js" in page
+    assert ".pill.off { opacity: 0.4; pointer-events: none; }" in static(client, "style.css")
+
+
 def test_choice_controls_start_disabled_until_the_first_snapshot(client):
     page = client.get("/").text
     assert 'id="choices" class="locked"' in page and page.count("data-pick=") == 10

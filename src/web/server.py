@@ -6,7 +6,7 @@ from pathlib import Path
 
 import cv2
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from src import switches
@@ -14,6 +14,7 @@ from src.games import maze
 from src.inputs import hand_view
 from src.modes import spot
 from src.vision.cross import cross_mm
+from src.web import form
 
 STATIC = Path(__file__).parent / "static"
 JPEG_SCALE = 0.5  # 1280x800 camera -> 640x400 on the page
@@ -55,6 +56,25 @@ def make_app(loop) -> FastAPI:
             "px_per_mm": loop.cfg["vision"]["px_per_mm"],
             "camera_fps": rig["camera_fps"],
         }
+
+    @app.get("/settings")
+    def settings_page():
+        return FileResponse(STATIC / "settings.html")
+
+    @app.get("/settings.json")
+    def settings_view():
+        return form.view(loop)
+
+    @app.post("/settings.json")
+    async def settings_save(changes: dict):
+        # on the loop's own thread, so no tick runs between the armed check and the change
+        if loop.safety.armed:
+            return JSONResponse({"error": "armed, kill first"}, status_code=409)
+        try:
+            form.save(loop, changes)
+        except (ValueError, OSError) as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        return form.view(loop)
 
     @app.get("/race/maze")
     def race_maze():

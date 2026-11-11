@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>On-Tilt settings</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="tight">
+  <span class="logo">ON-TILT</span>
+  <span class="title">SETTINGS</span>
+  <span id="note" class="dim">Every value from the settings files. Locked while armed.</span>
+  <a class="pill" href="/">BACK TO PLAY</a>
+  <button id="revert" class="pill" type="button">REVERT</button>
+  <button id="save" type="button" disabled>SAVE</button>
+</header>
+<div class="settings">
+  <section>
+    <div class="head"><h2>HOW YOU PLAY</h2><span class="dim">The choices that change the game. Also on the play screen.</span></div>
+    <div class="grid wide">
+      <div class="field">
+        <span class="dim">MODE</span>
+        <div id="pickmode" class="seg three" role="group" aria-label="Mode">
+          <button type="button" data-pick="hand" aria-pressed="false">PLAY</button>
+          <button type="button" data-pick="balance" aria-pressed="false">BALANCE</button>
+          <button type="button" data-pick="path" aria-pressed="false">PATH</button>
+        </div>
+        <span class="dim">Play: you steer. Balance: holds a spot. Path: drives itself.</span>
+      </div>
+      <div class="field">
+        <span class="dim">STEER WITH</span>
+        <div id="picksteer" class="seg two" role="group" aria-label="Steer with">
+          <button type="button" data-pick="hand" aria-pressed="false" disabled>HAND</button>
+          <button type="button" data-pick="keys" aria-pressed="false" disabled>WASD</button>
+        </div>
+        <span class="dim">Hand: the webcam follows your palm. WASD: keys or arrows. Picked on the play screen.</span>
+      </div>
+      <div class="field">
+        <span class="dim">HAND MOVES BY</span>
+        <div id="pickhand" class="seg two" role="group" aria-label="Hand moves by">
+          <button type="button" data-pick="tilt" aria-pressed="false">TILT</button>
+          <button type="button" data-pick="palm" aria-pressed="false">DRAG</button>
+        </div>
+        <span class="dim">Only when steering by hand. Tilt: angle your palm. Drag: move your palm.</span>
+      </div>
+      <div class="field">
+        <span class="dim">MAZE</span>
+        <div id="pickmaze" class="seg three" role="group" aria-label="Maze">
+          <button type="button" data-pick="drawn" aria-pressed="false">BOARD</button>
+          <button type="button" data-pick="square" aria-pressed="false">SQUARE</button>
+          <button type="button" aria-pressed="false" disabled>NONE</button>
+        </div>
+        <span class="dim">Board: the maze read from the marker drawing. Loads on the next start.</span>
+      </div>
+      <div class="field">
+        <span class="dim">GHOST</span>
+        <div class="seg three" role="group" aria-label="Ghost">
+          <button type="button" aria-pressed="true" disabled>BEST</button>
+          <button type="button" aria-pressed="false" disabled>AUTO</button>
+          <button type="button" aria-pressed="false" disabled>OFF</button>
+        </div>
+        <span class="dim">Best: race the fastest saved lap.</span>
+      </div>
+      <div class="field">
+        <span class="dim">BALANCE TARGET</span>
+        <div id="picktarget" class="seg three" role="group" aria-label="Balance target">
+          <button type="button" data-pick="centre" aria-pressed="false" disabled>CENTRE</button>
+          <button type="button" data-pick="mouse" aria-pressed="false" disabled>MOUSE</button>
+          <button type="button" data-pick="marker" aria-pressed="false" disabled>MARKER X</button>
+        </div>
+        <span class="dim">Where balance mode holds the ball. Picked on the play screen.</span>
+      </div>
+      <div class="field">
+        <span class="dim">EDGE GUARD</span>
+        <button type="button" id="pickguard" class="switch" role="switch" aria-checked="false" aria-label="Edge guard" disabled><span></span></button>
+        <span class="dim">Invisible walls when you steer by hand or keys.</span>
+      </div>
+    </div>
+  </section>
+  <nav id="jump" aria-label="Sections"></nav>
+  <div id="sections"></div>
+</div>
+<script src="/static/settings.js"></script>
+</body>
+</html>
