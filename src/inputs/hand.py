@@ -157,6 +157,26 @@ def send_intent(
     sock.sendto(json.dumps(msg).encode(), ("127.0.0.1", port))
 
 
+def _parse(data: bytes) -> tuple | None:
+    try:
+        msg = json.loads(data)
+        if not all(math.isfinite(msg[k]) for k in ("x", "y", "t_s")):
+            return None
+        # an intent at all means a palm was there, older senders only send the intent
+        flags = (
+            msg.pop("seen", True),
+            msg.pop("calibrating", False),
+            msg.pop("progress", 0.0),
+            msg.pop("lag_s", None),
+        )
+        # "false" is truthy, so only a real bool counts
+        if not all(isinstance(v, bool) for v in (msg["valid"], *flags[:2])):
+            return None
+        return Intent(**msg), *flags
+    except (ValueError, KeyError, TypeError, OverflowError):
+        return None
+
+
 class HandInput:
     """App side: keeps the newest intent the hand process sent."""
 
@@ -170,6 +190,7 @@ class HandInput:
         self.seen = self.calibrating = False
         self.progress = 0.0
         self.lag_s: float | None = None
+        self.dropped = 0
 
     def latest(self) -> Intent:
         while True:
@@ -177,15 +198,11 @@ class HandInput:
                 data, self._peer = self.sock.recvfrom(1024)
             except BlockingIOError:
                 return self._intent
-            msg = json.loads(data)
-            if not (math.isfinite(msg["x"]) and math.isfinite(msg["y"])):
+            parsed = _parse(data)
+            if parsed is None:
+                self.dropped += 1
                 continue
-            # an intent at all means a palm was there, older senders only send the intent
-            self.seen = msg.pop("seen", True)
-            self.calibrating = msg.pop("calibrating", False)
-            self.progress = msg.pop("progress", 0.0)
-            self.lag_s = msg.pop("lag_s", None)
-            self._intent = Intent(**msg)
+            self._intent, self.seen, self.calibrating, self.progress, self.lag_s = parsed
 
     def recentre(self) -> None:
         if self._peer is not None:

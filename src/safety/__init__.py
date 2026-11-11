@@ -1,6 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
-from src.contracts import ServoCommand
+from src.contracts import BallState, ServoCommand
 from src.control.pulse_map import center
 
 LEVEL_HOLD_S = 0.04  # two 20 ms servo pwm periods, so the level pulse really goes out
@@ -32,6 +32,16 @@ def _toward(cur: float, target: float, max_step: float) -> float:
 
 def _clamp(v: float, lo: float, hi: float) -> float:
     return min(max(v, lo), hi)
+
+
+def aged(ball: BallState, now: float, rig: dict) -> BallState:
+    # an old frame says nothing about where the ball is now
+    return replace(ball, valid=False) if now - ball.t_s > rig["stale_intent_s"] else ball
+
+
+def page_quiet(armed: bool, page_t: float | None, now: float, quiet_s: float) -> bool:
+    # kill lives on the page, so a page gone quiet while armed levels like a stale intent
+    return armed and page_t is not None and now - page_t > quiet_s
 
 
 def limits(rig: dict) -> tuple[float, float, float, float]:

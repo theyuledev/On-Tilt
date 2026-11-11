@@ -94,12 +94,17 @@ def make_app(loop) -> FastAPI:
                 try:
                     if msg.get("kill"):
                         loop.kill()
-                    if "x" in msg and "y" in msg:
+                    page = "x" in msg and "y" in msg  # a watch tab sends {}
+                    if page:
                         x, y = float(msg["x"]), float(msg["y"])
                         if math.isfinite(x + y):
                             loop.keys.set(x, y)
                     if msg.get("arm") and not msg.get("kill"):
                         loop.arm()
+                    if msg.get("hold") and not msg.get("kill"):
+                        loop.hold()
+                    if page:
+                        loop.page_seen(time.monotonic())
                     game = getattr(loop, "game", None)
                     if game is not None and msg.get("race") == "start":
                         game.start()
