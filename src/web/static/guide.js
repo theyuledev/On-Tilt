@@ -5,7 +5,7 @@ function guide(s, ctx) {
   const say = (text, tone = "") => ({ text, tone });
   if (!ctx.live) return say("connecting...", "warn");
   if (s.board_lost) return say("board lost, check the usb cable", "stop");
-  if (s.camera_lost) return say("camera lost", "stop");
+  if (s.camera_lost) return say("camera lost, press restart", "stop");
   if (s.killing || (!s.armed && s.stopped_by))
     return say(s.stopped_by ? "stopped: " + s.stopped_by : "stopped", "stop");
   if (ctx.watch) return say("");
