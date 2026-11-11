@@ -75,6 +75,23 @@ watch_deaf_s = { value = 1.5, label = "uncalibrated default (NOT TESTED, expecte
 watch_deaf_deg = { value = 1.8, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 watch_deaf_frac = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 balance_reach_mm = { value = 80, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+# balance stops correcting within rest_mm of the target once slower than rest_mm_s, until the ball
+# is rest_out_mm away. rest_mm 0 = never rests. while resting the plate holds rest_trim of its trim (0 = level)
+balance_rest_mm = { value = 0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+balance_rest_mm_s = { value = 10, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+balance_rest_out_mm = { value = 8, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+balance_rest_trim = { value = 1.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+# mm the rest zone widens per mm the target sits from the middle of the board (0 = same everywhere)
+balance_rest_grow = { value = 0.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+# inside the zone the brake also stops once the ball has been slower than rest_still_mm_s for
+# rest_still_s (0 = the brake never stops), and returns above rest_move_mm_s
+balance_rest_still_mm_s = { value = 0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+balance_rest_still_s = { value = 0.3, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+balance_rest_move_mm_s = { value = 12, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+# true: the trim is dropped on coming into the zone and the pull outside is measured from the zone's edge
+balance_rest_soft = false
+# no rest zone for a ball whose centre is closer than this to the edge of the board
+balance_rest_edge_mm = { value = 25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 vel_ema_s = { value = 0.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 guard_on = { value = false, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 guard_margin_mm = { value = 8, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }

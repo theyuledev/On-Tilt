@@ -6,6 +6,7 @@ from src.modes import make_mode
 pytestmark = pytest.mark.unit
 
 CFG = {
+    "rig": {"plate_inner_mm": 300.0},
     "control": {
         "kp_deg_mm": 0.1,
         "kd_deg_s_mm": 0.01,
@@ -15,7 +16,17 @@ CFG = {
         "i_err_max_mm": 30,
         "vel_ema_s": 0.0,
         "balance_reach_mm": 500,
-    }
+        "balance_rest_mm": 0,
+        "balance_rest_mm_s": 10,
+        "balance_rest_out_mm": 8,
+        "balance_rest_trim": 1.0,
+        "balance_rest_grow": 0.0,
+        "balance_rest_still_mm_s": 0,
+        "balance_rest_still_s": 0.3,
+        "balance_rest_move_mm_s": 12,
+        "balance_rest_soft": False,
+        "balance_rest_edge_mm": 25,
+    },
 }
 NO_INTENT = Intent(0.0, 0.0, valid=False, t_s=0.0)
 
