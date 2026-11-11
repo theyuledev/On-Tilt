@@ -9,7 +9,6 @@ from statistics import median
 from typing import NamedTuple
 
 from src.io.settings import load
-from src.vision.calib import load_calib
 
 NO_STAMP = "no snapshot of its stamp"
 NO_NEXT = "no snapshot right after it"
@@ -38,15 +37,6 @@ def settings(folder: Path) -> dict:
     return load(local=local)
 
 
-def calibrated(cfg: dict, calib: Path) -> dict:
-    """cfg with the calibration handed over inside the vision settings, so a Pipeline built
-    from it reads nothing from this checkout's local files."""
-    vision = cfg["vision"]
-    if not vision["use_calib"]:
-        return cfg
-    return {**cfg, "vision": {**vision, "use_calib": False, "calib": load_calib(calib)}}
-
-
 def _rows(folder: Path, counts: Counter) -> Iterator[dict]:
     with (folder / "snap.jsonl").open() as f:
         for line in f:
@@ -69,7 +59,7 @@ def _rows(folder: Path, counts: Counter) -> Iterator[dict]:
 def read(folder: Path, gap_s: float) -> Recording:
     """Pairs pictures with snapshots. A step back in time or a gap over gap_s starts a new
     stretch; a picture whose next snapshot lies across one has no bracket and is left out."""
-    names = {p.name: p for p in (folder / "frames").iterdir()}
+    names = {p.name: p for p in (folder / "frames").glob("*.jpg")}
     frames = len(names)
     shots: list[Shot] = []
     counts: Counter = Counter()

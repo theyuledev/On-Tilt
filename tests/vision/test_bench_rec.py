@@ -6,8 +6,6 @@ import pytest
 
 from src.io.settings import load
 from src.vision.bench import rec
-from src.vision.pipeline import Pipeline
-from tests.unit.test_plate_find import CALIB
 from tools import replay_clip
 
 pytestmark = pytest.mark.unit
@@ -84,17 +82,11 @@ def test_skipped_frames_are_counted_with_a_reason(tmp_path):
     assert "1 torn lines" in text
 
 
-def test_the_catalogue_calibration_reaches_the_pipeline_without_the_local_file(tmp_path):
-    out = folder(tmp_path, [], [], "[vision]\nuse_calib = true\nplate_track = true\n")
-    calib = tmp_path / "calib_of_that_day.json"
-    calib.write_text(json.dumps(CALIB))
-    cfg = rec.settings(out)
-    with pytest.raises(FileNotFoundError):
-        Pipeline(cfg)  # this checkout has no calibration of its own
-    pipeline = Pipeline(rec.calibrated(cfg, calib))
-    assert pipeline.cfg["calib"] == CALIB and pipeline.plate is not None
-    flat = {**cfg, "vision": {**cfg["vision"], "use_calib": False}}
-    assert rec.calibrated(flat, tmp_path / "missing.json") is flat
+def test_a_stray_file_among_the_frames_is_not_a_frame(tmp_path):
+    out = folder(tmp_path, [snap(100.0), snap(100.05)], [100.0])
+    (out / "frames" / ".DS_Store").touch()
+    got = rec.read(out, GAP_S)
+    assert got.frames == 1 and len(got.shots) == 1 and not got.skipped
 
 
 def test_a_folder_argument_prints_the_inventory_with_its_skipped_line(tmp_path, capsys):
