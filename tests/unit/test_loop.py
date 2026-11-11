@@ -10,6 +10,7 @@ from src.io.ports import Frame
 from src.io.settings import ROOT, load
 from src.loop import LEVEL, Loop
 from src.modes import CLOSED_LOOP, MODES, make_mode
+from src.safety.watch import STOP
 from src.vision.pipeline import Observation, Pipeline
 from src.vision.tracker import BallPx
 
@@ -241,3 +242,29 @@ def test_the_loop_tracks_a_replayed_clip_at_clip_time():
     half = cfg["rig"]["plate_inner_mm"] / 2
     assert all(abs(b.x_mm) < half and abs(b.y_mm) < half for b in valid)
     assert loop.snapshot()["est"] is not None
+
+
+def held_ball(mode, push):
+    """4 s armed in mode with a ball that sits 50 mm out whatever the plate does."""
+    cam, hand, cfg = Cam(), Hand(push), load()
+    cfg["rig"]["ball_d_mm"] = 16.0  # small enough that 50 mm out is clear of the walls
+    loop = Loop(cfg, hand, frames=cam)
+    loop.mode = mode
+    loop.arm()
+    for i in range(400):
+        hand.t = t = 1.0 + i * 0.01
+        cam.see(50.0, t)
+        loop.tick(t, 0.01)
+    return loop
+
+
+def test_balance_pushing_a_ball_that_never_moves_stops_itself_and_says_why():
+    loop = held_ball("balance", 0.0)
+    assert not loop.last.armed and loop.snapshot()["stopped_by"] in STOP
+    loop.arm()
+    assert loop.safety.armed and loop.snapshot()["stopped_by"] is None
+
+
+def test_a_player_holding_full_tilt_is_not_stopped():
+    loop = held_ball("hand", 1.0)
+    assert loop.last.armed and loop.snapshot()["stopped_by"] is None

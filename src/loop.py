@@ -11,6 +11,7 @@ from src.io.ports import Frame, FrameSource, InputSource, TiltActuator
 from src.io.serial_link import LinkError
 from src.modes import CLOSED_LOOP, make_mode
 from src.modes.spot import held
+from src.safety.watch import Watch
 from src.sim.ball import roll
 from src.sim.plate import SimActuator
 from src.vision.tracker import BallPx
@@ -36,6 +37,7 @@ class Loop:
         self.frames = frames
         self.frame: Frame | None = None
         self.safety = safety.SafetyState()
+        self.watch = Watch()
         self.band = start(cfg["rig"])
         self.actuator = actuator or SimActuator(cfg["rig"], cfg["control"])
         self.board_lost = False
@@ -69,6 +71,8 @@ class Loop:
     def arm(self) -> None:
         if not self.board_lost and not self.arm_blocked:
             self.step = make_mode(self.mode, self.cfg)
+            if not self.safety.armed:
+                self.watch = Watch()
             self.safety.arm()
 
     def kill(self) -> None:
@@ -112,6 +116,8 @@ class Loop:
             plate_state=plate_state,
         )
         self.last = rec
+        if self.watch.see(rec, self.camera_lost, self.cfg):
+            self.kill()
         self.bus.publish("tick", rec)
         return rec
 
@@ -185,6 +191,7 @@ class Loop:
     def snapshot(self) -> dict:
         snap = self.last.to_dict() if self.last else {}
         snap["killing"] = self.safety.killing
+        snap["stopped_by"] = self.watch.reason
         snap["stale"] = self.stale
         snap["board_lost"] = self.board_lost
         snap["camera_lost"] = self.camera_lost
