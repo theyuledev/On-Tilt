@@ -1,10 +1,12 @@
 import json
+import math
 import shutil
 import subprocess
 
 import pytest
 
 from src.web.server import STATIC
+from tests.unit import scene3d
 
 pytestmark = [
     pytest.mark.unit,
@@ -28,7 +30,7 @@ def project(cam, points, tilt=FLAT):
     make = f"projector({json.dumps(shot)}, {json.dumps(tilt)}, {HALF}, {PX})"
     asked = [f"{make}({x}, {y}, {z})" for x, y, z in points]
     out = subprocess.run(
-        ["node", "-e", RUN, str(STATIC / "plate3d.js")],
+        ["node", "-e", RUN, str(STATIC / "lens.js")],
         input=json.dumps(asked),
         capture_output=True,
         text=True,
@@ -83,3 +85,52 @@ def test_a_positive_tilt_drops_that_axis_plus_edge():
 def test_a_point_behind_the_eye_stays_a_finite_number():
     out = project({"pitch": 72, "zoom": 2.4, "cy": 135}, [(0, -135, 60)])
     assert all(isinstance(v, int | float) and abs(v) < 1e6 for v in out[0])
+
+
+# one stroke between the camera and a ball in the middle of the plate
+WALLED = {"points": [[-100, 0], [100, 0]], "checkpoints": [1], "walls": [[[-60, -30], [60, -30]]]}
+
+
+def test_the_ball_is_painted_after_everything_that_stands():
+    for name, cam in scene3d.shots().items():
+        drawn = scene3d.draw(WALLED, scene3d.snap(), cam)
+        ball = drawn.index(["fillStyle=", "gradient"])
+        # walls, rim and slab are the closed shapes, the tag after the ball is a round box
+        assert max(i for i, call in enumerate(drawn) if call[0] == "closePath") < ball, name
+
+
+def test_the_position_tag_never_meets_the_ball_and_stays_on_the_canvas():
+    w, hgt = 220, 28
+    balls = [[x, y, rad] for x in range(0, 901, 100) for y in range(0, 901, 100) for rad in (8, 45)]
+    for (_, sy, rad), (x, y) in zip(
+        balls, scene3d.run(*[("tagAt", [b, w, hgt, PX]) for b in balls]), strict=True
+    ):
+        assert w / 2 <= x <= PX - w / 2 and hgt / 2 <= y <= PX - hgt / 2
+        assert abs(y - sy) - hgt / 2 > rad
+    # straight down the tag used to land on the ball
+    at = (40, -30)
+    drawn = scene3d.draw(None, scene3d.snap(ball=at), scene3d.shots(at)["tower"])
+    sx, sy, rad = next(call[1:4] for call in reversed(drawn) if call[0] == "arc")
+    left, top, wide, tall = next(call[1:5] for call in drawn if call[0] == "roundRect")
+    nearest = (min(max(sx, left), left + wide), min(max(sy, top), top + tall))
+    assert math.dist(nearest, (sx, sy)) > rad
+
+
+def test_the_rim_stands_up_round_the_board():
+    wide = scene3d.shots()["wide"]
+    drawn = scene3d.draw(None, scene3d.snap(valid=False), wide)
+    (rim,) = scene3d.run(("() => RIM_PX", []))
+    points = [call[1:3] for call in drawn if call[0] in ("moveTo", "lineTo")]
+    tops = project(wide, [(x, y, rim) for x in (-HALF, HALF) for y in (-HALF, HALF)])
+    assert rim > 0
+    for x, y, *_ in tops:
+        assert any(math.dist((x, y), p) < 0.01 for p in points)
+
+
+def test_walls_stand_well_below_the_top_of_the_ball_in_every_shot():
+    (wall,) = scene3d.run(("() => WALL_PX", []))
+    r, up = scene3d.BALL_R, scene3d.BALL_R * 270 / HALF
+    for name, cam in scene3d.shots().items():
+        (_, top, _, _), (_, mid, _, k) = project(cam, [(0, -r, wall), (0, 0, up)])
+        # how far up the ball a wall touching its near side reaches on screen
+        assert (mid + up * k - top) / (2 * up * k) < 0.25, name

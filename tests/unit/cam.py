@@ -36,7 +36,7 @@ def frame(t, x, y, valid=True, phase="run", run_s=None, gate=None, path=None, ga
 
 def play(frames, half=None) -> list[dict]:
     out = subprocess.run(
-        ["node", "-e", RUN, str(STATIC / "cam.js"), str(STATIC / "plate3d.js")],
+        ["node", "-e", RUN, str(STATIC / "cam.js"), str(STATIC / "lens.js")],
         input=json.dumps({"frames": list(frames), "half": half}),
         capture_output=True,
         text=True,
