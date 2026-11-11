@@ -389,6 +389,25 @@ def test_play_mode_keeps_the_race_readouts_and_the_steering_row():
     assert p["race"]["style"]["cursor"] == "" and p["handnone"]["text"] == "no hand"
 
 
+def test_an_old_race_result_leaves_the_board_when_the_mode_changes():
+    gate = race("running", elapsed_s=5.0, reached=1, **GHOST)
+    dnf = race("dnf", elapsed_s=5.2, reached=1, reason="ball lost", **GHOST)
+    ended = [snap(armed=True, race=gate), snap(race=dnf)]
+    assert not show(*ended)["result"]["hidden"]
+    for mode in ("balance", "path"):
+        away = snap(race=dnf, choices=picked(mode=mode))
+        p = show(*ended, away)
+        assert p["result"]["hidden"] and [k["text"] for k in p["result"]["kids"]] == ["", ""]
+        # coming back to play does not bring it back
+        assert show(*ended, away, snap(race=dnf))["result"]["hidden"]
+    # the next race that ends shows its own result
+    count = race("countdown", elapsed_s=-2.4, **GHOST)
+    again = [snap(armed=True, race=count), snap(armed=True, race=gate), snap(race=dnf)]
+    p = show(*ended, away, snap(race=dnf), *again)
+    assert [k["text"] for k in p["result"]["kids"]] == ["DNF", "ball lost\narm, then R"]
+    assert not p["result"]["hidden"]
+
+
 def targets(steps, **kw):
     return [m["target"] for m in run([OPEN, *steps], **kw)["sent"] if "target" in m]
 

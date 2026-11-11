@@ -3,7 +3,7 @@ const AHEAD = "#3EE6E0";
 const BEHIND = "#E69F00";
 const PRE = ["calibrating", "staging"];
 const LIVE = [...PRE, "countdown", "running"];
-let prev = null;
+let prev = null, modeWas = null, dropped = false;
 
 function restart(el, cls) {
   el.className = "hud";
@@ -126,8 +126,11 @@ function hud(s, maze) {
   $("racebtn").textContent = live ? "ABORT" : "RACE";
   $("racebtn").classList.toggle("abort", live);
   readouts(s, r, maze);
+  // a result from before a mode change is about another game, it stays off until a new race
+  dropped = !!r && !live && (dropped || (modeWas !== null && s.choices.mode !== modeWas));
+  modeWas = s.choices.mode;
   // no race text before the countdown
-  if (!r || PRE.includes(r.state)) {
+  if (!r || PRE.includes(r.state) || dropped) {
     prev = r;
     $("count").textContent = $("split").textContent = $("pen").textContent = "";
     for (const el of $("result").children) el.textContent = "";
