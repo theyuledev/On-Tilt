@@ -6,7 +6,7 @@ import cv2
 import mediapipe as mp
 from mediapipe.tasks.python import BaseOptions, vision
 
-from src.inputs.hand import HandIntent, palm_angles, palm_center, recentre_asked, send_intent
+from src.inputs.hand import RECENTRE, HandIntent, asked, palm_angles, palm_center, send_intent
 from src.inputs.hand_view import JPEG_PERIOD_S, frame_jpg, publish
 from src.io.camera import WARMUP_READS, CameraSource, find_camera, overhead_shape
 from src.io.settings import ROOT, load
@@ -29,7 +29,7 @@ def run(
     detect,
     hand: HandIntent,
     send,
-    recentre=lambda: False,
+    heard=lambda: (),
     clock=time.monotonic,
     show=lambda img, intent: None,
 ) -> None:
@@ -41,13 +41,18 @@ def run(
             time.sleep(0.001)
             continue
         now = clock()
-        intent = hand.update(detect(frame.image, now), now, recentre())
+        msgs = [m.decode(errors="replace") for m in heard()]
+        for mode in msgs:
+            if mode in READINGS and mode != hand.mode:
+                hand.set_mode(mode)
+        intent = hand.update(detect(frame.image, now), now, RECENTRE.decode() in msgs)
         send(
             intent,
             seen=hand.seen,
             calibrating=hand.calibrating,
             progress=hand.progress,
             lag_s=now - frame.t_s,
+            mode=hand.mode,
         )
         if now - shown >= JPEG_PERIOD_S:
             shown = now
@@ -63,7 +68,7 @@ def run(
 def main() -> None:
     cfg = load()
     inp = cfg["input"]
-    read = reading_for(inp["hand_mode"])
+    reading_for(inp["hand_mode"])  # a bad setting stops here, not on the first frame
     overhead = overhead_shape(cfg["rig"])
     cap = cv2.VideoCapture(find_camera(lambda s: s != overhead, "a webcam picture"))
     # a fresh capture can miss its first reads, and the grab thread stops on a miss
@@ -85,11 +90,11 @@ def main() -> None:
             mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), int(t * 1000)
         )
         last[:] = [result]
-        return read(result) if result.hand_landmarks else None
+        return READINGS[hand.mode](result) if result.hand_landmarks else None
 
     def view(img, intent):
         # the tilt neutral is two angles, not a place in the image
-        spot = hand.neutral if inp["hand_mode"] == "palm" else None
+        spot = hand.neutral if hand.mode == "palm" else None
         publish(frame_jpg(img, last[0], spot, intent, inp["hand_flip_x"]))
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -103,7 +108,7 @@ def main() -> None:
             detect,
             hand,
             partial(send_intent, sock, port=inp["hand_port"]),
-            partial(recentre_asked, sock),
+            partial(asked, sock),
             show=view,
         )
     except KeyboardInterrupt:

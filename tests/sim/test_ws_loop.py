@@ -138,6 +138,28 @@ def test_quiet_page_goes_stale_and_the_plate_ramps_level(page):
     assert snap["stale"] and snap["armed"] and snap["plate_state"]["sent_x_deg"] == 0
 
 
+def test_choices_over_ws_only_stick_while_disarmed(page):
+    snap = say(page, {"set": {"mode": "balance", "steer": "keys"}})
+    assert (snap["choices"]["mode"], snap["choices"]["steer"]) == ("balance", "keys")
+    say(page, {"arm": True})
+    assert run(page, 1, RIGHT)[-1].mode == "balance"
+    assert say(page, {"set": {"mode": "path"}, **RIGHT})["choices"]["mode"] == "balance"
+    assert run(page, 1, RIGHT)[-1].mode == "balance"
+
+
+def test_a_choice_and_arm_in_one_message_arms_in_the_new_mode(page):
+    say(page, {"set": {"mode": "balance"}, "arm": True})
+    assert page.loop.safety.armed and run(page, 1, RIGHT)[-1].mode == "balance"
+
+
+def test_a_bad_choice_is_dropped_and_the_socket_stays_open(page):
+    before = say(page, {})["choices"]
+    for bad in ({"mode": "assist"}, {"steer": 3}, {"guard": "on"}, "balance", None):
+        assert say(page, {"set": bad})["choices"] == before
+    say(page, {"arm": True})
+    assert say(page, {"kill": True, "set": {"mode": "nope"}, **RIGHT})["killing"]
+
+
 def page_reads():
     reads = set()
     for js in STATIC.glob("*.js"):
@@ -156,7 +178,7 @@ def test_every_snapshot_field_the_page_reads_is_sent(page):
     run(page, 1)
     snap = say(page, {})
     reads = page_reads()
-    seen = {"armed", "t_s", "intent", "mode", "ball.x_mm", "ball.valid", "plate_state.sent_y_deg"}
+    seen = {"armed", "t_s", "intent", "choices.steer", "ball.x_mm", "plate_state.sent_y_deg"}
     assert seen <= reads
     assert not NOT_SENT.keys() & snap.keys(), "sent now, drop it from NOT_SENT"
     for read in reads | {"intent.x", "intent.y"}:  # padDot gets s.intent

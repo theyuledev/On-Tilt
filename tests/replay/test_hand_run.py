@@ -23,6 +23,7 @@ class Replayed:
     seen = True
     calibrating = False
     progress = 1.0
+    mode = None
 
     def __init__(self):
         self.intent = Intent(x=0.0, y=0.0, valid=False, t_s=0.0)

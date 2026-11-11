@@ -93,23 +93,23 @@
       <div class="field">
         <span class="dim">MODE</span>
         <div id="modes" class="seg three" role="group" aria-label="Mode">
-          <button type="button" data-mode="hand" aria-pressed="false" disabled>PLAY</button>
-          <button type="button" data-mode="balance" aria-pressed="false" disabled>BALANCE</button>
-          <button type="button" data-mode="path" aria-pressed="false" disabled>PATH</button>
+          <button type="button" data-pick="hand" aria-pressed="false" disabled>PLAY</button>
+          <button type="button" data-pick="balance" aria-pressed="false" disabled>BALANCE</button>
+          <button type="button" data-pick="path" aria-pressed="false" disabled>PATH</button>
         </div>
       </div>
       <div class="field">
         <span class="dim">STEER WITH</span>
         <div id="steers" class="seg two" role="group" aria-label="Steer with">
-          <button type="button" data-steer="hand" aria-pressed="false" disabled><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 13 V6 M10.5 12 V4 M14 12 V5 M17.5 13 V8 M7 13 L4.5 11 M4.5 11 C3 12 5 17 8 20 H15 C17 18 17.5 16 17.5 13"></path></svg>HAND</button>
-          <button type="button" data-steer="keys" aria-pressed="false" disabled><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="8.5" y="3" width="7" height="7" rx="1.5"></rect><rect x="1" y="13" width="7" height="7" rx="1.5"></rect><rect x="8.5" y="13" width="7" height="7" rx="1.5"></rect><rect x="16" y="13" width="7" height="7" rx="1.5"></rect></svg>WASD</button>
+          <button type="button" data-pick="hand" aria-pressed="false" disabled><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 13 V6 M10.5 12 V4 M14 12 V5 M17.5 13 V8 M7 13 L4.5 11 M4.5 11 C3 12 5 17 8 20 H15 C17 18 17.5 16 17.5 13"></path></svg>HAND</button>
+          <button type="button" data-pick="keys" aria-pressed="false" disabled><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="8.5" y="3" width="7" height="7" rx="1.5"></rect><rect x="1" y="13" width="7" height="7" rx="1.5"></rect><rect x="8.5" y="13" width="7" height="7" rx="1.5"></rect><rect x="16" y="13" width="7" height="7" rx="1.5"></rect></svg>WASD</button>
         </div>
-        <div class="sub">
+        <div id="handrow" class="sub">
           <svg class="elbow" viewBox="0 0 20 28" aria-hidden="true" fill="none" stroke="#5A6699" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2 V16 H17"></path></svg>
           <span class="dim">HAND MOVES BY</span>
           <div id="handmodes" class="seg two small" role="group" aria-label="Hand moves by">
-            <button type="button" data-hand="tilt" aria-pressed="false" disabled><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M3 16 L21 8"></path><path d="M5 6 A9 9 0 0 1 12 3"></path></svg>TILT</button>
-            <button type="button" data-hand="palm" aria-pressed="false" disabled><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="2.5"></circle><path d="M12 2 V6 M12 18 V22 M2 12 H6 M18 12 H22"></path></svg>DRAG</button>
+            <button type="button" data-pick="tilt" aria-pressed="false" disabled><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M3 16 L21 8"></path><path d="M5 6 A9 9 0 0 1 12 3"></path></svg>TILT</button>
+            <button type="button" data-pick="palm" aria-pressed="false" disabled><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="2.5"></circle><path d="M12 2 V6 M12 18 V22 M2 12 H6 M18 12 H22"></path></svg>DRAG</button>
           </div>
         </div>
       </div>

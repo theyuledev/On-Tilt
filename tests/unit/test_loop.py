@@ -44,6 +44,7 @@ class Cam:
 class Hand:
     seen = calibrating = False
     progress = 0.0
+    mode = None
 
     def __init__(self, x=0.0):
         self.x, self.t = x, 0.0

@@ -22,10 +22,13 @@ class InputSource(Protocol):
     seen: bool
     calibrating: bool
     progress: float
+    mode: str | None
 
     def latest(self) -> Intent: ...
 
     def recentre(self) -> None: ...
+
+    def set_mode(self, mode: str) -> None: ...
 
 
 class TiltActuator(Protocol):

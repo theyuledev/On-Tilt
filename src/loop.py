@@ -1,6 +1,6 @@
-from dataclasses import replace
+from dataclasses import asdict, replace
 
-from src import safety
+from src import safety, switches
 from src.bus import Bus
 from src.contracts import BallState, Intent, PlateCommand, PlateState, RunLogRecord, ServoCommand
 from src.control.deadband import invert, start
@@ -31,6 +31,7 @@ class Loop:
         self.bus = Bus()
         self.keys = KeyboardInput(cfg["input"])
         self.hand = hand
+        self.keys_only = False
         self.frames = frames
         self.frame: Frame | None = None
         self.safety = safety.SafetyState()
@@ -119,7 +120,7 @@ class Loop:
         if self.hand is not None:
             hand = self.hand.latest()
             fresh = now - hand.t_s <= rig["stale_intent_s"]
-            if hand.valid and fresh:
+            if hand.valid and fresh and not self.keys_only:
                 intent = hand
             # a dead hand process must not leave the page saying the hand is live
             self.hand_seen = fresh and self.hand.seen
@@ -195,6 +196,7 @@ class Loop:
         snap["est"] = [e.x_mm, e.y_mm, e.vx_mm_s, e.vy_mm_s] if e is not None and e.valid else None
         snap["exposure"] = self.exposure
         snap["arm_blocked"] = self.arm_blocked
+        snap["choices"] = asdict(switches.view(self))
         if self.game is not None:
             snap["race"] = self.game.view()
         return snap
