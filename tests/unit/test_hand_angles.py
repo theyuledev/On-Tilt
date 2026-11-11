@@ -4,8 +4,9 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from src.inputs.hand import HandIntent, palm_angles, palm_center
+from src.inputs.hand import HandIntent
 from src.inputs.hand_process import reading_for
+from src.inputs.palm import PALM, palm_angles, palm_center
 from tests.unit.test_hand import CFG
 
 pytestmark = pytest.mark.unit
@@ -16,6 +17,7 @@ TILT = {**CFG, "hand_mode": "tilt"}
 FLAT = np.zeros((21, 3))
 FLAT[5] = (0.03, -0.08, 0.0)
 FLAT[9] = (0.01, -0.09, 0.0)
+FLAT[13] = (-0.01, -0.085, 0.0)
 FLAT[17] = (-0.03, -0.07, 0.0)
 
 
@@ -99,6 +101,45 @@ def test_flips_negate_their_own_axis():
 
 def test_a_palm_with_no_normal_reads_as_no_hand():
     assert palm_angles(world(np.zeros((21, 3)))) is None
+
+
+@pytest.mark.parametrize("bad", [math.nan, math.inf, -math.inf])
+def test_a_non_finite_palm_reads_as_no_hand(bad):
+    pts = FLAT.copy()
+    pts[9, 2] = bad
+    assert palm_angles(world(pts)) is None
+
+
+def test_a_collinear_palm_reads_as_no_hand():
+    pts = np.zeros((21, 3))
+    pts[list(PALM), 0] = np.arange(len(PALM))
+    assert palm_angles(world(pts)) is None
+
+
+@pytest.mark.parametrize("flat", [FLAT, mirror(FLAT)], ids=["right hand", "left hand"])
+def test_simultaneous_tilt_matches_the_palm_normal(flat):
+    rotation = rot_y(-15) @ rot_x(-20)
+    pts = flat @ rotation.T
+    normal = rotation @ np.array([0.0, 0.0, -1.0])
+    expected = np.degrees(np.arctan2(normal[:2], -normal[2]))
+    assert palm_angles(world(pts)) == pytest.approx(expected, abs=1e-6)
+
+
+@pytest.mark.parametrize("rotation", [rot_y(-15), rot_x(-20)], ids=["roll", "pitch"])
+def test_all_finger_bases_reduce_synthetic_landmark_noise(rotation):
+    rng = np.random.default_rng(42)
+    pts = FLAT @ rotation.T
+    expected = np.array(palm_angles(world(pts)))
+    fitted, triangle = [], []
+    for _ in range(1000):
+        noisy = pts.copy()
+        noisy[list(PALM)] += rng.normal(0.0, 0.002, (len(PALM), 3))
+        fitted.append(np.array(palm_angles(world(noisy))) - expected)
+        normal = np.cross(noisy[5] - noisy[0], noisy[17] - noisy[0])
+        if normal[2] > 0:
+            normal = -normal
+        triangle.append(np.degrees(np.arctan2(normal[:2], -normal[2])) - expected)
+    assert (np.std(fitted, axis=0) < np.std(triangle, axis=0)).all()
 
 
 def test_hand_mode_picks_the_reading_and_a_bad_one_stops_at_startup():

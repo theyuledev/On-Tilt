@@ -1,34 +1,16 @@
 import json
 import math
 import socket
+from collections import deque
 from dataclasses import asdict
-
-import numpy as np
+from statistics import median
 
 from src.contracts import Intent
 from src.inputs.one_euro import one_euro
+from src.inputs.palm import PALM, palm_angles, palm_center  # noqa: F401
 
-PALM = (0, 5, 9, 13, 17)  # wrist + the base of each finger
 RECENTRE = b"c"
 SPAN = {"tilt": "hand_tilt_span_deg", "palm": "hand_span"}
-
-
-def palm_center(landmarks) -> tuple[float, float]:
-    xs = [landmarks[i].x for i in PALM]
-    ys = [landmarks[i].y for i in PALM]
-    return sum(xs) / len(xs), sum(ys) / len(ys)
-
-
-def palm_angles(world) -> tuple[float, float] | None:
-    """Roll and pitch in degrees of the palm normal, 0, 0 when the palm faces the camera."""
-    o, a, b = (np.array([world[i].x, world[i].y, world[i].z]) for i in (0, 5, 17))
-    n = np.cross(a - o, b - o)
-    if np.linalg.norm(n) == 0:
-        return None
-    # the two hands wind the other way, so turn the normal to face the camera
-    if n[2] > 0:
-        n = -n
-    return math.degrees(math.atan2(n[0], -n[2])), math.degrees(math.atan2(n[1], -n[2]))
 
 
 def _clamp(v: float) -> float:
@@ -45,8 +27,9 @@ def _signs(cfg: dict) -> tuple[float, float]:
 class HandIntent:
     """Palm tilt in degrees or palm spot in the image -> intent from -1 to 1."""
 
-    def __init__(self, cfg: dict):
+    def __init__(self, cfg: dict, *, stale_s: float | None = None):
         self.cfg = cfg
+        self.stale_s = cfg["neutral_s"] if stale_s is None else stale_s
         self.seen = False
         self.set_mode(cfg["hand_mode"])
 
@@ -56,7 +39,9 @@ class HandIntent:
         self.neutral: tuple[float, float] | None = None
         self._samples: list[tuple[float, float, float]] = []
         self._last_seen: float | None = None
+        self._last_capture: float | None = None
         self._euro = (None, None)
+        self._readings = deque(maxlen=3)
         self._appear = 0.0
 
     @property
@@ -76,20 +61,27 @@ class HandIntent:
         self, reading: tuple[float, float] | None, t: float, recentre: bool = False
     ) -> Intent:
         cfg = self.cfg
+        if not math.isfinite(t):
+            return Intent(0.0, 0.0, False, self._last_seen or 0.0)
+        if self._last_capture is not None and t <= self._last_capture:
+            return Intent(0.0, 0.0, False, t)
+        self._last_capture = t
+        if reading is not None and not all(math.isfinite(v) for v in reading):
+            reading = None
+        if reading is not None and self._last_seen is not None:
+            if t - self._last_seen > self.stale_s:
+                self._lost(t)
+                self._samples = []
         was_seen, self.seen = self.seen, reading is not None
         if reading is None:
-            self._euro = (None, None)
-            gone = t - self._last_seen if self._last_seen is not None else 0.0
-            if gone > cfg["neutral_s"]:
-                self._samples = []
-            # a short dropout keeps the neutral so the player does not hold still again
-            if gone > cfg["neutral_keep_s"]:
-                self.neutral = None
-            return Intent(x=0.0, y=0.0, valid=False, t_s=t)
+            return self._lost(t)
 
         self._last_seen = t
         if not was_seen:
             self._appear = t
+        if recentre:
+            self._euro = (None, None)
+            self._readings.clear()
         at = self._smooth(reading, t)
         if recentre:
             self._set_neutral(at, t)
@@ -106,7 +98,22 @@ class HandIntent:
         y = _clamp(sy * (at[1] - self.neutral[1]) / self.span) * ramp
         return Intent(x=x, y=y, valid=True, t_s=t)
 
+    def _lost(self, t: float) -> Intent:
+        self.seen = False
+        self._euro = (None, None)
+        self._readings.clear()
+        gone = t - self._last_seen if self._last_seen is not None else 0.0
+        if gone > self.cfg["neutral_s"]:
+            self._samples = []
+        # a short dropout keeps the neutral so the player does not hold still again
+        if gone > self.cfg["neutral_keep_s"]:
+            self.neutral = None
+        return Intent(x=0.0, y=0.0, valid=False, t_s=t)
+
     def _smooth(self, reading: tuple[float, float], t: float) -> tuple[float, float]:
+        self._readings.append(reading)
+        if len(self._readings) == self._readings.maxlen:
+            reading = tuple(median(vs) for vs in zip(*self._readings, strict=True))
         # filtered in spans so hand_beta means the same in both modes
         out = [
             one_euro(s, v / self.span, t, self.cfg)
