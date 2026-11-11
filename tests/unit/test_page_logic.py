@@ -46,6 +46,7 @@ def test_each_branch_says_one_next_step():
         ("board lost, check the usb cable", "stop"): ({"board_lost": True}, {}),
         ("camera lost", "stop"): ({"camera_lost": True}, {}),
         ("stopped", "stop"): ({"killing": True}, {}),
+        ("stopped: camera lost", "stop"): ({"stopped_by": "camera lost"}, {}),
         ("", ""): ({}, {"watch": True}),
         ("mode needs a hand", "warn"): ({"arm_blocked": "mode needs a hand"}, {}),
         ("no input, plate levelled", "warn"): ({**ARMED, "stale": True}, {}),
