@@ -4,7 +4,7 @@ const keymap = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowD
                  KeyA: [-1, 0], KeyD: [1, 0], KeyW: [0, 1], KeyS: [0, -1] };
 let pending = {};
 let ws, cfg, maze, lastT, lastSeen, handWasSeen = false;
-let armedNow = false;
+let armedNow = false, balancing = false, askedX = -Infinity;
 const $ = id => document.getElementById(id);
 const cam = $("cam"), nocam = $("nocam"), ctx = $("race").getContext("2d");
 const padCtx = $("pad").getContext("2d");
@@ -31,7 +31,7 @@ if (watch) {
     if (e.code === "KeyC" && !e.metaKey && !e.ctrlKey) { pending.recentre = true; return; }
     if (keymap[e.code]) { held.add(e.code); e.preventDefault(); }
     if (e.code === "KeyR" && !(e.repeat || e.metaKey || e.ctrlKey || e.altKey || typing(e))) {
-      pending.race = raceCmd();
+      if (!$("racebtn").disabled) pending.race = raceCmd();
     }
   });
   addEventListener("keyup", e => { if (!typing(e) && clickKeys.has(e.code)) e.preventDefault(); held.delete(e.code); });
@@ -45,6 +45,11 @@ if (watch) {
   $("guard").onclick = e => {
     pick("guard", e.currentTarget.getAttribute("aria-checked") !== "true");
     e.currentTarget.blur();
+  };
+  for (const b of $("targets").children) b.onclick = e => { pending.target = b.dataset.pick; e.currentTarget.blur(); };
+  $("race").onclick = e => {
+    const c = e.currentTarget;
+    if (balancing) pending.target = plateMm(e.offsetX / c.clientWidth, e.offsetY / c.clientHeight, cfg);
   };
 }
 cam.onload = () => { cam.hidden = false; nocam.hidden = true; nextCam(); };
@@ -89,9 +94,30 @@ function choices(s) {
   }
   $("choices").classList.toggle("locked", locked);
   $("handrow").hidden = c.steer === "keys";
-  $("guard").setAttribute("aria-checked", c.guard === true);
-  // a build without the edge guard has nothing to switch
-  $("guard").disabled = locked || c.guard === null;
+  // the guard only works on a player, and a build without one has nothing to switch
+  $("guardsay").textContent = c.mode === "hand" ? "invisible walls" : `off in ${c.mode}`;
+  $("guard").setAttribute("aria-checked", c.guard === true && c.mode === "hand");
+  $("guard").disabled = locked || c.guard === null || c.mode !== "hand";
+}
+
+// balance swaps steering for the target picker; the target may move while armed
+function targets(s) {
+  const t = s.target;
+  balancing = s.choices.mode === "balance";
+  $("targetfield").hidden = !balancing;
+  $("steerfield").hidden = balancing;
+  $("race").style.cursor = balancing && !watch ? "crosshair" : "";
+  $("sub").textContent = balancing ? "BALANCE · CLICK THE BOARD TO MOVE THE TARGET" : subtitle(maze);
+  handnone.textContent = balancing ? "not used" : "no hand";
+  for (const b of $("targets").children) {
+    b.setAttribute("aria-pressed", b.dataset.pick === t.src);
+    b.disabled = watch;
+  }
+  // keep looking for the X until the camera has one
+  if (balancing && !watch && t.src === "marker" && !t.found && performance.now() - askedX > 1000) {
+    askedX = performance.now();
+    pending.target = "marker";
+  }
 }
 
 function ring(px) {
@@ -139,8 +165,9 @@ function show(s) {
   $("tiltx").textContent = `X ${signed(p.sent_x_deg)}°`;
   $("tilty").textContent = `Y ${signed(p.sent_y_deg)}°`;
   $("arm").disabled = watch || !!s.armed;
-  $("racebtn").disabled = watch || s.race === undefined;
+  $("racebtn").disabled = watch || s.race === undefined || s.choices.mode === "balance";
   choices(s);
+  targets(s);
   ring(s.ball_px);
   strip(cfg, s);
   hud(s, maze);
@@ -181,7 +208,6 @@ const json = url => fetch(url).then(r => r.ok ? r.json() : Promise.reject(new Er
 Promise.all([json("/config"), json("/race/maze").catch(() => null)]).then(([c, m]) => {
   cfg = c;
   maze = m;
-  $("sub").textContent = subtitle(maze);
   $("scale").textContent = `1 px = ${(1 / cfg.px_per_mm).toFixed(2)} mm · ${cfg.camera_fps} fps`;
   connect();
   beat();

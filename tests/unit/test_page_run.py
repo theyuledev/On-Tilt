@@ -306,14 +306,13 @@ def off(page, *groups):
 
 
 def test_choice_buttons_show_what_is_live_and_lock_while_armed():
-    live = picked(mode="balance", hand_mode="palm", guard=True)
+    live = picked(mode="path", hand_mode="palm")
     p = show(snap(choices=live), config={"hand": True})
-    assert pressed(p, "modes") == ["false", "true", "false"]
+    assert pressed(p, "modes") == ["false", "false", "true"]
     assert pressed(p, "steers") == ["true", "false"] and pressed(p, "handmodes") == [
         "false",
         "true",
     ]
-    assert p["guard"]["attrs"]["aria-checked"] == "true" and not p["guard"]["disabled"]
     assert not any(off(p, "modes", "steers", "handmodes")) and p["choices"]["cls"] == ""
     assert not p["handrow"]["hidden"]
     p = show(snap(armed=True, choices=live), config={"hand": True})
@@ -328,11 +327,17 @@ def test_hand_row_hides_on_keys_and_hand_needs_a_hand_source():
     assert pressed(p, "steers") == ["false", "true"]
 
 
-def test_guard_switch_is_off_limits_on_a_build_without_a_guard():
-    p = show(snap(choices=picked(guard=None)))
-    assert p["guard"]["disabled"] and p["guard"]["attrs"]["aria-checked"] == "false"
-    p = show(snap(choices=picked(guard=False)))
-    assert not p["guard"]["disabled"] and p["guard"]["attrs"]["aria-checked"] == "false"
+def guard(page):
+    g = page["guard"]
+    return g["attrs"]["aria-checked"], g["disabled"], page["guardsay"]["text"]
+
+
+def test_guard_switch_needs_a_build_with_a_guard_and_a_player_steering():
+    assert guard(show(snap(choices=picked(guard=None)))) == ("false", True, "invisible walls")
+    assert guard(show(snap(choices=picked(guard=False)))) == ("false", False, "invisible walls")
+    assert guard(show(snap(choices=picked(guard=True)))) == ("true", False, "invisible walls")
+    held = picked(mode="balance", guard=True)
+    assert guard(show(snap(choices=held))) == ("false", True, "off in balance")
 
 
 def test_clicked_choices_go_out_once_in_one_set_message():
@@ -353,3 +358,73 @@ def test_an_armed_page_and_a_watch_tab_send_no_choices():
             all(off(out["page"], "modes", "steers", "handmodes"))
             and out["page"]["guard"]["disabled"]
         )
+
+
+BALANCE = picked(mode="balance")
+AT = {"src": "mouse", "mm": [60.0, -40.0], "found": True}
+
+
+def test_balance_swaps_the_race_readouts_for_distance_speed_and_tilt():
+    ball = {"x_mm": 0.0, "y_mm": 0.0, "vx_mm_s": 30.0, "vy_mm_s": -40.0, "valid": True, "t_s": 1}
+    tilt = {"sent_x_deg": 0.3, "sent_y_deg": -0.4, "est_x_deg": 0.0, "est_y_deg": 0.0}
+    p = show(snap(armed=True, choices=BALANCE, target=AT, ball=ball, plate_state=tilt))
+    assert (p["timelabel"]["text"], p["timer"]["text"]) == ("DISTANCE FROM TARGET", "72.1 MM")
+    assert (p["speed"]["text"], p["tiltnow"]["text"]) == ("50", "0.50°")
+    assert p["scores"]["hidden"] and p["gates"]["hidden"] and p["nomaze"]["hidden"]
+    assert (
+        not p["balance"]["hidden"] and not p["targetfield"]["hidden"] and p["steerfield"]["hidden"]
+    )
+    assert pressed(p, "targets") == ["false", "true", "false"] and not any(off(p, "targets"))
+    assert p["racebtn"]["disabled"] and p["race"]["style"]["cursor"] == "crosshair"
+    assert p["sub"]["text"] == "BALANCE · CLICK THE BOARD TO MOVE THE TARGET"
+    assert p["banner"]["text"] == "click the board or draw an x"
+    assert p["handnone"]["text"] == "not used"
+    gone = {**ball, "valid": False}
+    assert show(snap(choices=BALANCE, target=AT, ball=gone))["timer"]["text"] == "--.- MM"
+
+
+def test_play_mode_keeps_the_race_readouts_and_the_steering_row():
+    p = show(snap())
+    assert p["balance"]["hidden"] and p["targetfield"]["hidden"] and not p["steerfield"]["hidden"]
+    assert p["race"]["style"]["cursor"] == "" and p["handnone"]["text"] == "no hand"
+
+
+def targets(steps, **kw):
+    return [m["target"] for m in run([OPEN, *steps], **kw)["sent"] if "target" in m]
+
+
+def test_a_click_on_the_board_sends_the_spot_in_plate_mm_only_in_balance():
+    held = ("snap", snap(armed=True, choices=BALANCE, target=AT))
+    # the picture is the plate plus 17 mm of scale all round, +y up
+    half = 305 / 2 + 17
+    sent = targets([held, ("tap", ["race", 0.75, 0.25]), ("frame", None)])
+    assert sent == [[pytest.approx(half / 2), pytest.approx(half / 2)]]
+    assert targets([held, ("tap", ["race", 0.5, 1.0]), ("frame", None)]) == [[0, -half]]
+    assert targets([("snap", snap()), ("tap", ["race", 0.75, 0.25]), ("frame", None)]) == []
+
+
+def test_target_buttons_send_their_source_and_r_does_not_race_in_balance():
+    held = ("snap", snap(armed=True, choices=BALANCE, target=AT))
+    clicks = [
+        ("click", "targets/0"),
+        ("frame", None),
+        held,
+        ("click", "targets/2"),
+        ("frame", None),
+    ]
+    out = run([OPEN, held, *clicks, held, ("down", ["KeyR", None]), ("frame", None)])
+    assert [m["target"] for m in out["sent"] if "target" in m] == ["centre", "marker"]
+    assert not [m for m in out["sent"] if "race" in m]
+
+
+def test_the_page_keeps_asking_for_the_x_once_a_second_until_it_is_found():
+    lost = ("snap", snap(choices=BALANCE, target={"src": "marker", "mm": [0, 0], "found": False}))
+    found = ("snap", snap(choices=BALANCE, target={"src": "marker", "mm": [5, 5], "found": True}))
+    step = [("frame", None), ("wait", 600)]
+    assert targets([lost, *step, lost, *step, lost, *step, lost, *step]) == ["marker", "marker"]
+    assert targets([found, *step, ("wait", 2000), found, *step]) == []
+    assert targets([lost, *step, ("wait", 2000), lost, *step], query="?watch") == []
+    p = show(lost[1])
+    assert (p["banner"]["text"], p["banner"]["data"]["tone"]) == ("click arm to start", "")
+    p = show(snap(armed=True, choices=BALANCE, target=lost[1]["target"]))
+    assert p["banner"]["text"] == "no x on the board yet, draw one"

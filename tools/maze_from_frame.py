@@ -12,7 +12,7 @@ import numpy as np
 
 from src.io.settings import ROOT, load
 from src.vision.maze_path import checkpoints, length, maze_toml, polyline
-from src.vision.maze_read import read
+from src.vision.maze_read import STROKES, read
 from src.vision.px_to_mm import plate_mm
 
 
@@ -23,11 +23,15 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, help="default configs/mazes/<name>.toml")
     p.add_argument("--start", type=float, nargs=2, help="S in frame px, skips the letter search")
     p.add_argument("--end", type=float, nargs=2, help="E in frame px")
-    p.add_argument("--stroke-mm", type=float, default=3.0)
-    p.add_argument("--board", type=float, default=0.85, help="board is brighter than this x top")
-    p.add_argument("--dark", type=float, default=0.6, help="stroke is darker than this x board")
+    p.add_argument("--stroke-mm", type=float, default=STROKES["stroke_mm"])
+    p.add_argument(
+        "--board", type=float, default=STROKES["board"], help="board is brighter than this x top"
+    )
+    p.add_argument(
+        "--dark", type=float, default=STROKES["dark"], help="stroke is darker than this x board"
+    )
     p.add_argument("--margin-mm", type=float, default=2.0, help="keep the path off the strokes")
-    p.add_argument("--letter-mm", type=float, nargs=2, default=[7.0, 20.0])
+    p.add_argument("--letter-mm", type=float, nargs=2, default=list(STROKES["letter_mm"]))
     p.add_argument("--cap-mm", type=float, default=10.0, help="clearance worth chasing")
     p.add_argument("--tol-mm", type=float, default=3.0)
     p.add_argument("--step-mm", type=float, default=30.0)

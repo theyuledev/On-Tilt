@@ -1,3 +1,4 @@
+import math
 import re
 from dataclasses import replace
 from itertools import pairwise
@@ -8,15 +9,18 @@ from fastapi.testclient import TestClient
 
 from src.control.pulse_map import center
 from src.inputs import keyboard
+from src.io.ports import Frame
 from src.io.settings import load
 from src.loop import Loop
 from src.safety import LEVEL_HOLD_S, limits
 from src.web.server import STATIC, make_app
+from tests.unit.test_cross import PX_MM, board, strokes
 
 pytestmark = pytest.mark.sim
 
 DT = 0.01
 RIGHT = {"x": 1, "y": 0}
+HANDS_OFF = {"x": 0, "y": 0}
 # snapshot fields the page reads that the bare loop does not send
 NOT_SENT = {
     "race": "only there once a game is wired",
@@ -158,6 +162,39 @@ def test_a_bad_choice_is_dropped_and_the_socket_stays_open(page):
         assert say(page, {"set": bad})["choices"] == before
     say(page, {"arm": True})
     assert say(page, {"kill": True, "set": {"mode": "nope"}, **RIGHT})["killing"]
+
+
+def test_a_clicked_target_moves_the_balanced_ball_there_and_centre_brings_it_back(page):
+    say(page, {"set": {"mode": "balance"}})
+    snap = say(page, {"target": [60, -40]})
+    assert snap["target"] == {"src": "mouse", "mm": [60.0, -40.0], "found": True}
+    say(page, {"arm": True, **HANDS_OFF})
+    run(page, 1000, HANDS_OFF)
+    b = page.loop.ball
+    # the servo dead band leaves it a few mm off, same as at the centre
+    assert math.hypot(b.x_mm - 60, b.y_mm + 40) < 10 and math.hypot(b.vx_mm_s, b.vy_mm_s) < 10
+    # the target may move while armed, that is the point of it
+    assert say(page, {"target": "centre", **HANDS_OFF})["target"]["src"] == "centre"
+    run(page, 1000, HANDS_OFF)
+    assert math.hypot(page.loop.ball.x_mm, page.loop.ball.y_mm) < 10
+
+
+def test_marker_needs_a_camera_frame_with_an_x_on_it(page):
+    say(page, {"target": [10, 10]})
+    lost = {"src": "marker", "mm": [10.0, 10.0], "found": False}
+    assert say(page, {"target": "marker"})["target"] == lost
+    page.loop.frame = Frame(board(), 0.0)
+    assert say(page, {"target": "marker"})["target"] == lost
+    at = (640 + 60 * PX_MM, 400 - 45 * PX_MM)
+    page.loop.frame = Frame(strokes(board(), at), 0.0)
+    got = say(page, {"target": "marker"})["target"]
+    assert got["src"] == "marker" and got["found"] and got["mm"] == pytest.approx([60, 45], abs=1)
+
+
+def test_a_target_that_is_not_a_point_is_dropped(page):
+    before = say(page, {"target": [10, 10]})["target"]
+    for bad in ([1], ["a", "b"], "left", None, {"x": 1}):
+        assert say(page, {"target": bad})["target"] == before
 
 
 def page_reads():
