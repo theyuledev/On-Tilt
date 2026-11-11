@@ -42,7 +42,11 @@ def test_parse_keeps_what_the_page_may_pick_and_refuses_the_rest():
 
 def test_snapshot_carries_the_choices_from_settings():
     cfg = load()
-    plain = {"mode": cfg["control"]["mode"], "hand_mode": cfg["input"]["hand_mode"], "guard": None}
+    plain = {
+        "mode": cfg["control"]["mode"],
+        "hand_mode": cfg["input"]["hand_mode"],
+        "guard": cfg["control"]["guard_on"],
+    }
     assert Loop(cfg).snapshot()["choices"] == {**plain, "steer": "keys"}
     assert Loop(cfg, Hand()).snapshot()["choices"] == {**plain, "steer": "hand"}
 
@@ -95,10 +99,10 @@ def test_hand_mode_goes_to_the_hand_source_and_the_view_shows_what_it_runs():
 def test_guard_only_switches_on_a_build_that_has_one():
     loop = Loop(load())
     choose(loop, Choices(guard=True))
-    assert view(loop).guard is None and "guard_on" not in loop.cfg["control"]
-    loop.cfg["control"]["guard_on"] = False
-    choose(loop, Choices(guard=True))
     assert view(loop).guard is True and loop.cfg["control"]["guard_on"] is True
+    del loop.cfg["control"]["guard_on"]
+    choose(loop, Choices(guard=False))
+    assert view(loop).guard is None and "guard_on" not in loop.cfg["control"]
 
 
 def test_a_mode_that_cant_be_built_changes_nothing():

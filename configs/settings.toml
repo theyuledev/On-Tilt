@@ -67,6 +67,21 @@ db_comp_us = { value = 14, label = "uncalibrated default (NOT TESTED, expected p
 db_flip_us = { value = 2, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 inverter_on = { value = false, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 vel_ema_s = { value = 0.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+guard_on = { value = false, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+guard_margin_mm = { value = 8, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+guard_band_mm = { value = 15, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+guard_brake_frac = { value = 0.45, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+guard_attack_s = { value = 0.03, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+guard_release_s = { value = 0.8, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+guard_blind_s = { value = 0.1, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+guard_lp_s = { value = 0.05, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+guard_hold_in_mm = { value = 7, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+guard_hold_band_mm = { value = 25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+guard_hold_k_deg_mm = { value = 0.1, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+guard_hold_kd_deg_s_mm = { value = 0.02, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+guard_speed_ema_s = { value = 0.1, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+guard_w_floor = { value = 0.02, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+player_max_deg = { value = 2.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 
 [game]
 heartbeat_stale_s = { value = 0.25, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
@@ -93,6 +108,9 @@ predict_dt_max_s = { value = 0.017, label = "uncalibrated default (NOT TESTED, e
 px_per_mm = { value = 2.37, label = "measured (2026-11-07)" }
 plate_centre_px = { value = [640, 400], label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 plate_yaw_deg = { value = 0.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+use_calib = false
+calib_centre_mm = { value = [0.0, 0.0], label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+calib_yaw_deg = { value = 0.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 velocity_span_frames = { value = 4, label = "sim-tuned (PR #79)" }
 bg_period_s = { value = 2.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 bg_frames = { value = 30, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }

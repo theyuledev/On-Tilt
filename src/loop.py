@@ -201,4 +201,5 @@ class Loop:
         snap["target"] = held(self.cfg)
         if self.game is not None:
             snap["race"] = self.game.view()
+        snap["guard"] = self.step.guard_view() if hasattr(self.step, "guard_view") else None
         return snap

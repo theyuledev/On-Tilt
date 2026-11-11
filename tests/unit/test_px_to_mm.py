@@ -1,7 +1,9 @@
+import json
+
 import pytest
 
 from src.contracts import BallState
-from src.vision.px_to_mm import ball_state
+from src.vision.px_to_mm import ball_state, plate_mm, with_calib
 from src.vision.tracker import BallPx
 
 pytestmark = pytest.mark.unit
@@ -59,3 +61,31 @@ def test_lost_ball_is_invalid_and_velocity_restarts_from_the_last_good_fix():
     assert not lost.valid and (lost.vx_mm_s, lost.vy_mm_s) == (0.0, 0.0)
     back = ball_state(seen(660, 400, 0.03), [*states, lost], CFG)
     assert back.valid and back.vx_mm_s == pytest.approx(10 / 0.03)
+
+
+# a lens with no distortion looking straight down: 2 px per mm at the plate, image y down
+CALIB = {
+    "model": "standard",
+    "K": [[800.0, 0.0, 640.0], [0.0, 800.0, 400.0], [0.0, 0.0, 1.0]],
+    "D": [0.0] * 5,
+    "H": [[400.0, 0.0, 0.0], [0.0, -400.0, 0.0], [0.0, 0.0, 1.0]],
+}
+CALIBRATED = {**CFG, "calib": CALIB, "calib_centre_mm": [10.0, 0.0], "calib_yaw_deg": 90.0}
+
+
+def test_calibrated_route_goes_through_the_map_then_the_board_centre_and_axes():
+    assert plate_mm(660, 400, CALIBRATED) == pytest.approx((0.0, 0.0))
+    assert plate_mm(720, 400, CALIBRATED) == pytest.approx((0.0, 30.0))
+    assert plate_mm(660, 360, CALIBRATED) == pytest.approx((-20.0, 0.0))
+
+
+def test_the_calibrated_route_wins_over_the_flat_numbers():
+    off = {**CALIBRATED, "px_per_mm": 9.0, "plate_centre_px": [0, 0], "plate_yaw_deg": 45.0}
+    assert plate_mm(720, 400, off) == pytest.approx(plate_mm(720, 400, CALIBRATED))
+
+
+def test_the_saved_calibration_is_only_loaded_when_use_calib_is_on(tmp_path):
+    (tmp_path / "calib.local.json").write_text(json.dumps(CALIB))
+    off = {**CFG, "use_calib": False}
+    assert with_calib(off) is off
+    assert with_calib({**CFG, "use_calib": True})["calib"] == CALIB

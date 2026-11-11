@@ -122,7 +122,7 @@ def test_how_you_play_shows_what_runs_and_only_offers_what_has_code_behind_it(se
     assert pressed(page, "pickmaze") == [("false", True), ("true", False), ("false", True)]
     assert pressed(page, "picksteer") == [("false", True), ("true", True)]
     assert pressed(page, "picktarget") == [("true", True), ("false", True), ("false", True)]
-    assert page["pickguard"]["disabled"]
+    assert not page["pickguard"]["disabled"]
     page = play({**served, "mazes": ["drawn", "square"]}, [("click", "pickmaze/0")])["page"]
     assert pressed(page, "pickmaze") == [("true", False), ("false", False), ("false", True)]
 

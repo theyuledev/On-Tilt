@@ -30,11 +30,24 @@ def test_follows_a_moving_ball_over_a_line_and_keeps_its_radius():
         assert out.r_px == pytest.approx(45, abs=2)
 
 
-def test_finds_the_ball_again_after_a_jump():
+def test_a_jump_across_the_plate_is_not_followed_but_found_fresh_once_the_track_drops():
+    tr = BallTracker(CFG)
+    n = lock(tr, [ball(plate(), 400 + 5 * i, 400, 45) for i in range(3)])
+    far = range(CFG["lost_after_misses"] + 1)
+    outs = [tr.update(ball(plate(), 900, 250, 45), (n + i) * DT) for i in far]
+    assert outs[0].valid and outs[0].x_px == pytest.approx(415, abs=2)
+    assert not outs[-2].valid
+    assert outs[-1].valid and outs[-1].x_px == pytest.approx(900, abs=2)
+
+
+def test_a_blob_across_the_plate_does_not_take_the_track_while_the_ball_is_hidden():
     tr = BallTracker(CFG)
     n = lock(tr, [ball(plate(), 400 + 5 * i, 400, 45) for i in range(3)])
     out = tr.update(ball(plate(), 900, 250, 45), n * DT)
-    assert out.valid and out.x_px == pytest.approx(900, abs=2)
+    assert out.valid and out.x_px == pytest.approx(415, abs=2)
+    both = ball(ball(plate(), 900, 250, 45), 420, 400, 45)
+    out = tr.update(both, (n + 1) * DT)
+    assert out.valid and out.x_px == pytest.approx(420, abs=2)
 
 
 def test_coasts_then_goes_lost_then_picks_up_a_new_ball():
@@ -62,6 +75,20 @@ def test_glare_blob_on_whiteboard_never_locks_when_balls_are_dark():
     tr = BallTracker({**CFG, "ball_dark": True})
     assert not any(tr.update(img, i * DT).valid for i in range(3))
     assert BallTracker(ANY_SHADE).update(img, 0.0).valid
+
+
+def test_the_spot_a_reflection_left_is_not_a_ball_and_a_real_one_is_still_found():
+    tr = BallTracker(CFG)
+    period = CFG["bg_period_s"]
+    glare = ball(plate(level=150), 500, 400, 30, shade=255)
+    for i in range(BG_MIN_SAMPLES):
+        assert not tr.update(glare, i * period).valid
+    t = BG_MIN_SAMPLES * period
+    # the lamp or the plate moved: the remembered bright spot is bare plate now
+    moved = ball(plate(level=150), 620, 430, 30, shade=255)
+    assert not any(tr.update(moved, t + i * DT).valid for i in range(5))
+    out = tr.update(ball(moved.copy(), 800, 300, 19), t + 6 * DT)
+    assert out.valid and out.x_px == pytest.approx(800, abs=2)
 
 
 def test_resting_ball_stays_out_of_the_background_and_found_for_a_minute():
