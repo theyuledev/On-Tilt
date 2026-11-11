@@ -6,9 +6,11 @@ import numpy as np
 import pytest
 
 from src.io.settings import load
+from src.vision import calib
 from src.vision.maze_path import checkpoints
 from src.vision.maze_read import read
 from src.vision.px_to_mm import plate_mm
+from tests.unit.test_px_to_mm import LENS
 from tools.maze_from_frame import main, parser
 
 pytestmark = pytest.mark.unit
@@ -86,3 +88,21 @@ def test_gates_keep_their_distance_on_a_line_that_doubles_back():
     near = [0, *gates]
     assert all(math.dist(pts[a], pts[b]) >= 60 for a in near for b in near if a < b)
     assert all(b - a >= 2 for a, b in zip(gates[:-1], gates[1:], strict=True))
+
+
+def test_a_lens_maps_the_walls_like_the_tracker_maps_the_ball(tmp_path, monkeypatch):
+    img, _ = drawn_maze()
+    frame = tmp_path / "f.png"
+    cv2.imwrite(str(frame), img)
+    lens = tmp_path / "calib.local.json"
+    monkeypatch.setattr(calib, "CALIB_PATH", lens)
+    main([str(frame), "--out", str(tmp_path / "flat.toml")])
+    calib.save_calib(LENS, lens)
+    main([str(frame), "--out", str(tmp_path / "bent.toml")])
+    flat, bent = (tomllib.loads((tmp_path / f"{n}.toml").read_text()) for n in ("flat", "bent"))
+    vis = load()["vision"]
+    (cx, cy), s = vis["plate_centre_px"], vis["px_per_mm"]
+    for fw, bw in zip(flat["walls"], bent["walls"], strict=True):
+        px = [(cx + x * s, cy - y * s) for x, y in fw]
+        assert np.allclose([plate_mm(u, v, vis, LENS) for u, v in px], bw, atol=0.5)
+    assert not np.allclose(flat["walls"], bent["walls"], atol=1)
