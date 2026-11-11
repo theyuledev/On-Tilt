@@ -103,6 +103,11 @@ def test_play_and_settings_pages_link_to_each_other(client):
     assert ".pill.off { opacity: 0.4; pointer-events: none; }" in static(client, "style.css")
 
 
+def test_both_pages_carry_an_empty_icon_so_the_browser_never_asks_for_one(client):
+    for url in ("/", "/settings"):
+        assert '<link rel="icon" href="data:,">' in client.get(url).text
+
+
 def test_choice_controls_start_disabled_until_the_first_snapshot(client):
     page = client.get("/").text
     assert 'id="choices" class="locked"' in page and page.count("data-pick=") == 10
