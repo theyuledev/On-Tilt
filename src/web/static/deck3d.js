@@ -1,6 +1,6 @@
 // what lies on the 3D plate under the ball: the path, the marker strokes, a course's start and
 // gate rings and the numbers over them (uses plate3d.js trace, race.js colours, gates.js GATE /
-// GATE_LIT / NUM_FONT / startOpen)
+// GATE_LIT / NUM_FONT / startOpen / startInk)
 const LABEL_PX = 56;  // how high a gate's number hangs over the plate
 const RING = Array.from({ length: 25 }, (_, i) => [Math.cos((i * Math.PI) / 12), Math.sin((i * Math.PI) / 12)]);
 
@@ -25,18 +25,19 @@ function flat(ctx, P, path, maze, k) {
 function rings(ctx, P, maze, race, takeR, k) {
   const reached = race && race.state ? race.reached : 0;
   ctx.lineWidth = 2 * k;
-  if (startOpen(race)) {
-    ctx.strokeStyle = GATE;
-    ctx.setLineDash([6 * k, 6 * k]);
-    ring3(ctx, P, maze.start, takeR);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
   maze.checkpoints.forEach((i, n) => {
     ctx.strokeStyle = n < reached ? GATE_LIT : n === reached ? PATH : GATE;
     ring3(ctx, P, maze.points[i], takeR);
     ctx.stroke();
   });
+  // after the gates: a lap's last gate sits on the start and would cover its ring
+  if (startOpen(race)) {
+    ctx.strokeStyle = startInk(race);
+    ctx.setLineDash([6 * k, 6 * k]);
+    ring3(ctx, P, maze.start, takeR);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
 }
 
 function gateSigns(ctx, P, maze, race) {

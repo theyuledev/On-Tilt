@@ -49,8 +49,9 @@ function zone(ctx, at, r, color, dash = []) {
   ctx.setLineDash([]);
 }
 
-// the start ring shows until the race clock runs
+// the start ring shows until the race clock runs, path-coloured while the ball is wanted in it
 const startOpen = race => !race || !["running", "finished"].includes(race.state);
+const startInk = race => (race && ["staging", "countdown"].includes(race.state) ? PATH : GATE);
 
 // takeR is how close takes a gate, the small numbered ring in its middle scales with the ball
 function gates(ctx, maze, ballR, race, takeR) {
@@ -60,8 +61,6 @@ function gates(ctx, maze, ballR, race, takeR) {
   const pulse = 0.6 + 0.4 * Math.cos((2 * Math.PI * now) / GATE_PULSE_MS);
   if (reached > gatesHit) gateHitAt = now;
   gatesHit = reached;
-  const waiting = !!race && ["staging", "countdown"].includes(race.state);
-  if (startOpen(race)) zone(ctx, maze.start, takeR, waiting ? PATH : GATE, [3, 3]);
   maze.checkpoints.forEach((i, n) => {
     const next = live && n === reached, hit = n < reached;
     ctx.globalAlpha = next ? pulse : 1;
@@ -69,6 +68,8 @@ function gates(ctx, maze, ballR, race, takeR) {
     gate(ctx, maze.points[i], r, n, hit, next, n === finish);
   });
   ctx.globalAlpha = 1;
+  // after the gates: a lap's last gate sits on the start and would cover its ring
+  if (startOpen(race)) zone(ctx, maze.start, takeR, startInk(race), [3, 3]);
   const since = now - gateHitAt;
   if (reached && since < GATE_FLASH_MS) {
     ctx.strokeStyle = GATE_LIT;
