@@ -70,8 +70,8 @@ def main(argv=None) -> str:
 
 
 def _line(gray: np.ndarray, cfg: dict) -> str:
-    half, edge = cfg["rig"]["plate_inner_mm"] / 2, cfg["rig"]["ball_d_mm"] / 2
-    pts, why = find_line(gray, with_calib(cfg["vision"]), half, edge)
+    vis = with_calib(cfg["vision"])
+    pts, why = find_line(gray, vis, cfg["rig"]["plate_inner_mm"] / 2, vis["line_edge_mm"])
     out = why or f"line {length(pts):.0f} mm in {len(pts)} points\npoints = {pts}"
     print(out)
     return out

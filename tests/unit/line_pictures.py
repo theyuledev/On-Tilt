@@ -12,13 +12,22 @@ from src.vision.tracker import BallPx
 
 CFG = load()
 VIS, RIG = CFG["vision"], CFG["rig"]
-HALF, EDGE = RIG["plate_inner_mm"] / 2, RIG["ball_d_mm"] / 2
+HALF, BIG = RIG["plate_inner_mm"] / 2, RIG["ball_d_mm"] / 2
+EDGE = VIS["line_edge_mm"]
 TURNED = {**VIS, "plate_yaw_deg": 7.0, "plate_centre_px": [668.0, 383.0]}
 STEP = VIS["line_step_mm"]
 
 STRAIGHT = [(-90.0, -20.0), (60.0, 30.0)]
 S_CURVE = [(x, 45 * math.sin(math.pi * x / 95)) for x in np.linspace(-95, 95, 60)]
 CORNER = [(-80.0, -70.0), (-80.0, 60.0), (70.0, 60.0)]
+# 40 px between turns, the owner's spiral
+TURN_MM = 40 / VIS["px_per_mm"]
+SPIRAL = [
+    (r * math.cos(a), r * math.sin(a))
+    for a in np.linspace(0, 4 * math.pi, 240)
+    for r in [12 + TURN_MM * a / (2 * math.pi)]
+]
+FAINT = round(0.9 * 205)
 
 
 def picture(cfg, lines, width=6, ball=None, cut_x_mm=None, glare=None, shade=55):

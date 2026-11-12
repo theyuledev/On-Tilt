@@ -1,21 +1,19 @@
 """The centre of one marker line drawn on the board, as a path in plate mm, or why there is none."""
 
 import math
-from collections import deque
 from typing import NamedTuple
 
 import cv2
 import numpy as np
 
 from src.vision.balls import downsample, plate_level
+from src.vision.line_graph import chains, drawn, lines, links, longest_walk, walk_px
 from src.vision.maze_path import length
-from src.vision.maze_read import solid_mask
 from src.vision.px_to_mm import outline_px, plate_mm
 from src.vision.tracker import BallPx
 
-NONE, MANY, OFF = "no line found", "more than one line", "line runs off the board"
+NONE, MANY = "no line found", "more than one line"
 BRANCH, SHORT = "line branches or crosses itself", "line too short"
-STEPS = [(dx, dy) for dy in (-1, 0, 1) for dx in (-1, 0, 1) if dx or dy]
 
 
 class LinePath(NamedTuple):
@@ -23,96 +21,90 @@ class LinePath(NamedTuple):
     reason: str
 
 
-def ink(gray: np.ndarray, cfg: dict, stroke: int):
-    """Marker ink: darker than line_ink x the plate around it and joined to a part darker than
-    line_core, minus blobs too thick to be a stroke, which come back as the second mask."""
-    level = cv2.resize(plate_level(downsample(gray, cfg), cfg, True), gray.shape[::-1])
-    weak = gray < cfg["line_ink"] * level
+def ink(gray: np.ndarray, cfg: dict, wide: int) -> np.ndarray:
+    """Thin marks darker than the board right around them, kept where part of them is clearly
+    dark. wide (px) is more than the broadest stroke."""
+    b = cv2.GaussianBlur(gray, (3, 3), 0).astype(np.float32)
+    disk = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (wide, wide))
+    board = cv2.resize(plate_level(downsample(gray, cfg), cfg, False), gray.shape[::-1])
+    # capped just above the bare board so a reflection's edge can't pass for ink
+    shut = np.minimum(cv2.morphologyEx(b, cv2.MORPH_CLOSE, disk), (1 + cfg["line_glare"]) * board)
+    # in grey levels: glare adds light to ink and board alike, so a ratio would fade the line
+    dark = (shut - b) / max(float(np.median(board)), 1.0)
+    weak = dark > cfg["line_weak"]
     _, lab = cv2.connectedComponents(np.uint8(weak))
-    dark = np.isin(lab, np.unique(lab[gray < cfg["line_core"] * level])) & weak
-    solid = solid_mask(dark, stroke)
-    return np.uint8(dark & ~solid), solid
+    marks = np.uint8(np.isin(lab, np.unique(lab[dark > cfg["line_core"]])) & weak)
+    gap = round(cfg["line_gap_mm"] * cfg["px_per_mm"] / 2)
+    joint = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * gap + 1,) * 2)
+    return cv2.morphologyEx(marks, cv2.MORPH_CLOSE, joint) > 0
 
 
-def _blobs(mask: np.ndarray, end: bool) -> list:
-    n, _, stats, cent = cv2.connectedComponentsWithStats(np.uint8(mask))
-    area = stats[:, cv2.CC_STAT_AREA]
-    return [(*cent[i], math.sqrt(area[i] / math.pi), end) for i in range(1, n)]
+def pieces(marks: np.ndarray, stroke: int, web: float = 0.0):
+    """Chains of the marks' skeleton, with specks and short spurs dropped. Where three forks or
+    more sit within web px of each other (a scribble, not a line) the marks are wiped and read
+    again; the wiped area comes back too (None when nothing was wiped)."""
+    found = chains(cv2.ximgproc.thinning(np.uint8(marks) * 255) > 0, 3 * stroke)
+    degree: dict[int, int] = {}
+    at = {}
+    for c in found:
+        for e, node in enumerate(c.nodes):
+            degree[node] = degree.get(node, 0) + 1
+            at[node] = c.px[-e]
+    forks = np.array([at[n] for n, d in degree.items() if d >= 3]).reshape(-1, 2)
+    close = np.linalg.norm(forks[:, None] - forks[None], axis=-1) <= web
+    wipe = forks[close.sum(1) >= 3] if web else forks[:0]
+    if len(wipe):
+        wiped = np.zeros_like(marks)
+        for x, y in wipe:
+            cv2.circle(wiped, (round(x), round(y)), round(web / 2), 1, -1)
+        return pieces(marks & (1 - wiped), stroke)[0], wiped
+    return [c for c in found if c.length >= stroke or min(degree[n] for n in c.nodes) > 1], None
 
 
-def holes(gray, solid, ball: BallPx | None, stroke: int) -> list:
-    """Discs that hide the ink, (x, y, r px, a line may end there): the ball, or with no ball
-    the blobs too thick to be ink, and glare that clips the camera."""
-    if ball is None:
-        found = _blobs(solid, True)
-    else:
-        found = [(ball.x_px, ball.y_px, ball.r_px + stroke, True)]
-    return found + _blobs(gray == 255, False)
+def through(found: list, wiped: np.ndarray, reach: int, joined: dict) -> dict:
+    """In each wiped scribble, the two longest chains that end within reach px of it are joined
+    through it, in place of whatever their ends were joined to."""
+    _, zones = cv2.connectedComponents(cv2.dilate(wiped, np.ones((2 * reach + 1,) * 2, np.uint8)))
+    h, w = zones.shape
+    by: dict[int, list] = {}
+    for i, c in enumerate(found):
+        for e in (0, 1):
+            x, y = np.clip(np.round(c.px[-e]).astype(int), 0, [w - 1, h - 1])
+            if zones[y, x]:
+                by.setdefault(zones[y, x], []).append((c.length, i, e))
+    out = dict(joined)
+    for ends in by.values():
+        top = sorted(ends, reverse=True)
+        if len(top) >= 2 and top[0][1] != top[1][1]:
+            a, b = top[0][1:], top[1][1:]
+            for end in (a, b):
+                out.pop(out.pop(end, None), None)
+            out[a], out[b] = b, a
+    return out
 
 
-def bridge(marks: np.ndarray, found: list, stroke: int) -> np.ndarray:
-    """Pieces of ink that run into the same hole are joined through its centre, and a piece that
-    runs into the ball goes on to its centre."""
-    for x, y, r, end in found:
-        if end:
-            cv2.circle(marks, (round(x), round(y)), round(r), 0, -1)
-    _, lab, stats, _ = cv2.connectedComponentsWithStats(marks)
-    for x, y, r, end in found:
-        reach = r + stroke
-        x0, y0 = max(0, int(x - reach)), max(0, int(y - reach))
-        win = lab[y0 : int(y + reach) + 1, x0 : int(x + reach) + 1]
-        yy, xx = np.indices(win.shape)
-        ring = (np.hypot(xx + x0 - x, yy + y0 - y) <= reach) & (win > 0)
-        near = [k for k in np.unique(win[ring]) if stats[k, 2:4].max() >= 2 * stroke]
-        if len(near) > 1 or (near and end):
-            for k in near:
-                m = ring & (win == k)
-                at = (round(xx[m].mean()) + x0, round(yy[m].mean()) + y0)
-                cv2.line(marks, at, (round(x), round(y)), 1, 3)
-    return marks
-
-
-def one_line(marks: np.ndarray, region: np.ndarray, stroke: int, gap: int, min_px: float):
-    """The one stroke at least min_px across once small gaps are closed, or why not."""
-    disk = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * gap + 1,) * 2)
-    closed = cv2.morphologyEx(marks, cv2.MORPH_CLOSE, disk) & region
-    n, lab, stats, _ = cv2.connectedComponentsWithStats(closed)
-    big = [i for i in range(1, n) if stats[i, 2:4].max() >= min_px]
-    if len(big) != 1:
-        return None, MANY if big else NONE
-    line = lab == big[0]
-    rim = region & ~cv2.erode(region, None, borderType=cv2.BORDER_CONSTANT, borderValue=0)
-    return (None, OFF) if (line & rim.astype(bool)).any() else (line, "")
-
-
-def _far_end(on: set, w: int, start: int):
-    steps = [dy * w + dx for dx, dy in STEPS]
-    prev, todo, last = {start: start}, deque([start]), start
-    while todo:
-        last = todo.popleft()
-        for s in steps:
-            if last + s in on and last + s not in prev:
-                prev[last + s] = last
-                todo.append(last + s)
-    return last, prev
-
-
-def centre_line(line: np.ndarray) -> list[tuple[int, int]]:
-    """The longest walk along the stroke's skeleton, end to end, as (x, y) px."""
-    on = set(np.flatnonzero(cv2.ximgproc.thinning(np.uint8(line) * 255)).tolist())
-    w = line.shape[1]
-    a, _ = _far_end(on, w, next(iter(on)))
-    b, prev = _far_end(on, w, a)
-    chain = [b]
-    while chain[-1] != a:
-        chain.append(prev[chain[-1]])
-    return [(i % w, i // w) for i in chain]
-
-
-def covers(chain, line: np.ndarray, stroke: int) -> bool:
-    away = np.ones(line.shape, np.uint8)
-    cv2.polylines(away, [np.int32(chain)], False, 0)
-    return not (cv2.distanceTransform(away, cv2.DIST_L2, 3)[line] > stroke).any()
+def best_run(found: list, wiped, cfg: dict, stroke: int, ball):
+    """The longest smooth walk and the drawn length of the longest run left over. A ball given
+    picks the walk that reaches it; that walk is the line whatever else is drawn (0 left over)."""
+    reach = cfg["line_bridge_mm"] * cfg["px_per_mm"]
+    bend = cfg["line_bend_deg"]
+    hole = None if ball is None else (*ball[:2], ball[2] + stroke)
+    joined = links(found, reach, bend, stroke, hole)
+    if wiped is not None:
+        joined = through(found, wiped, round(cfg["line_web_mm"] * cfg["px_per_mm"] / 2), joined)
+    every = [(i, e) for i in range(len(found)) for e in (0, 1)]
+    cost = cfg["line_turn_mm"] * cfg["px_per_mm"]
+    best = longest_walk(found, joined, bend, cost, every)
+    if ball is not None:
+        at = [(i, e) for i, e in every if math.dist(found[i].px[-e], ball[:2]) <= ball[2] + stroke]
+        if at and not {i for i, _ in best} & {i for i, _ in at}:
+            best = longest_walk(found, joined, bend, cost, at)
+        if {i for i, _ in best} & {i for i, _ in at}:
+            return best, 0.0
+    used = {i for i, _ in best}
+    rest = [c for i, c in enumerate(found) if i not in used]
+    other = lines(rest, links(rest, reach, bend, stroke))
+    return best, drawn(rest, other[0]) if other else 0.0
 
 
 def resample(pts, step: float) -> list[list[float]]:
@@ -125,30 +117,38 @@ def resample(pts, step: float) -> list[list[float]]:
 def find_line(
     image: np.ndarray, cfg: dict, half_mm: float, edge_mm: float, ball: BallPx | None = None
 ) -> LinePath:
-    """cfg is the board map (the vision settings the tracker maps with); the line must stay
+    """cfg is the board map (the vision settings the tracker maps with); the board is read up to
     edge_mm inside the plate's half_mm square. A ball given and seen is not read as ink."""
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
     region = np.zeros(gray.shape, np.uint8)
     cv2.fillPoly(region, [np.int32(np.round(outline_px(half_mm - edge_mm, cfg)))], 1)
     x0, y0, w, h = cv2.boundingRect(region)
-    stroke = round(cfg["line_stroke_mm"] * cfg["px_per_mm"])
+    px = cfg["px_per_mm"]
+    stroke = round(cfg["line_stroke_mm"] * px)
     if min(w, h) <= 2 * stroke:
         return LinePath([], NONE)
     crop = gray[y0 : y0 + h, x0 : x0 + w]
-    px = cfg["px_per_mm"]
-    seen = ball if ball is not None and ball.valid else None
-    if seen is not None:
-        seen = seen._replace(x_px=seen.x_px - x0, y_px=seen.y_px - y0)
-    region = region[y0 : y0 + h, x0 : x0 + w]
-    marks, solid = ink(crop, cfg, stroke)
-    marks = bridge(marks, holes(crop, solid, seen, stroke), stroke)
-    gap = round(cfg["line_gap_mm"] * px / 2)
-    line, why = one_line(marks, region, stroke, gap, cfg["line_min_mm"] * px / 2)
-    if line is None:
-        return LinePath([], why)
-    chain = centre_line(line)
-    if not covers(chain, line, stroke):
+    marks = np.uint8(ink(crop, cfg, 2 * stroke + 1) & (region[y0 : y0 + h, x0 : x0 + w] > 0))
+    seen = None
+    if ball is not None and ball.valid:
+        seen = (ball.x_px - x0, ball.y_px - y0, ball.r_px + stroke)
+        cv2.circle(marks, (round(seen[0]), round(seen[1])), round(seen[2]), 0, -1)
+    found, wiped = pieces(marks, stroke, cfg["line_web_mm"] * px)
+    if not found:
+        return LinePath([], NONE)
+    best, other = best_run(found, wiped, cfg, stroke, seen)
+    total, chain = drawn(found, best), walk_px(found, best)
+    if total < cfg["line_min_mm"] * px:
+        return LinePath([], SHORT)
+    if math.dist(chain[0], chain[-1]) < stroke and total > 4 * stroke:
         return LinePath([], BRANCH)
+    if other >= cfg["line_similar"] * total:
+        return LinePath([], MANY)
+    if seen is not None:
+        near = [math.dist(p, seen[:2]) <= seen[2] + stroke for p in (chain[0], chain[-1])]
+        chain = np.vstack(
+            [[seen[:2]], chain] if near[0] else [chain, [seen[:2]]] if near[1] else [chain]
+        )
     keep = cv2.approxPolyDP(np.float32(chain).reshape(-1, 1, 2), 1.0, False).reshape(-1, 2)
     mm = [plate_mm(x + x0, y + y0, cfg) for x, y in keep]
     if length(mm) < cfg["line_min_mm"]:
