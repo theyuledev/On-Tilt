@@ -63,7 +63,8 @@ def test_both_fonts_are_served_from_static_and_nothing_loads_from_the_network(cl
 def test_page_has_the_view_tag_the_board_map_and_loads_the_camera_before_the_views(client):
     page = client.get("/").text
     assert all(f'id="{i}"' in page for i in ("viewtag", "minimap", "mini"))
-    order = ("race", "gates", "cam", "lens", "plate3d", "follow", "view", "choices", "app")
+    order = ("race", "gates", "cam", "lens", "plate3d", "deck3d", "follow", "view", "choices")
+    order += ("app",)
     at = [page.index(f"/static/{f}.js") for f in order]
     assert at == sorted(at)
     assert "drawView(ctx, cfg, maze, s);" in static(client, "app.js")
@@ -148,9 +149,9 @@ def test_hud_is_keyed_on_the_race_view(client):
 
 def test_race_js_lights_reached_gates_and_pulses_the_next(client):
     js = static(client, "gates.js")
-    assert "function gates(ctx, maze, ballR, race)" in js
+    assert "function gates(ctx, maze, ballR, race, takeR)" in js
     assert "race.reached" in js and "GATE_PULSE_MS" in js and "GATE_FLASH_MS" in js
-    assert "gates(ctx, maze, r, s.race)" in static(client, "race.js")
+    assert "gates(ctx, maze, r, s.race, cfg.checkpoint_r_mm)" in static(client, "race.js")
 
 
 def test_r_key_and_race_button_send_a_one_shot_start_or_abort(client):
@@ -408,6 +409,7 @@ def test_config_gives_plate_ball_and_stale_limit_from_settings(client):
         "px_per_mm": cfg["vision"]["px_per_mm"],
         "camera_fps": cfg["rig"]["camera_fps"],
         "checkpoint_r_mm": cfg["game"]["checkpoint_r_mm"],
+        "path_mm": cfg["control"]["path_mm"],
     }
     with_hand = TestClient(make_app(SimpleNamespace(cfg=cfg, hand=object())))
     assert with_hand.get("/config").json()["hand"] is True
@@ -461,17 +463,19 @@ def test_page_still_connects_and_draws_the_plate_without_a_maze(client):
     assert 'json("/race/maze").catch(() => null)]).then(' in app
     assert "if (maze) lamps(maze.checkpoints.length" in static(client, "hud.js")
     js = static(client, "race.js")
-    assert "if (maze) {\n    if (maze.walls) (look.tall ? tallWalls : walls)(ctx, maze);" in js
-    assert js.index("if (maze) {") < js.index("gates(ctx, maze, r, s.race)")
+    assert "if (maze && maze.walls) (look.tall ? tallWalls : walls)(ctx, maze);" in js
+    assert "course = !!maze && path === maze.points" in js
+    assert "if (course) gates(ctx, maze, r, s.race, cfg.checkpoint_r_mm);" in js
 
 
 def test_race_js_draws_walls_under_the_race_line_only_when_the_maze_has_them(client):
     js = static(client, "race.js")
     assert "function walls(ctx, maze, color = MARKER, width = 3.2)" in js
     assert "maze.walls.forEach((w) => polyline(ctx, w))" in js
-    guarded = js.index("if (maze.walls) (look.tall ? tallWalls : walls)(ctx, maze);")
+    guarded = js.index("if (maze && maze.walls) (look.tall ? tallWalls : walls)(ctx, maze);")
     # the S and the E are marker too: over the walls, under the race line
-    assert guarded < js.index("    ends(ctx, maze, h, r);") < js.index("    route(ctx, maze);")
+    ends = js.index("  if (course) ends(ctx, maze, h, r);")
+    assert guarded < ends < js.index("  if (path) route(ctx, path);")
 
 
 def test_race_js_draws_the_plate_in_mm_with_a_ball_trail(client):

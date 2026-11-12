@@ -88,7 +88,12 @@ def test_a_point_behind_the_eye_stays_a_finite_number():
 
 
 # one stroke between the camera and a ball in the middle of the plate
-WALLED = {"points": [[-100, 0], [100, 0]], "checkpoints": [1], "walls": [[[-60, -30], [60, -30]]]}
+WALLED = {
+    "points": [[-100, 0], [100, 0]],
+    "checkpoints": [1],
+    "start": [-100, 0],
+    "walls": [[[-60, -30], [60, -30]]],
+}
 
 
 def test_the_ball_is_painted_after_everything_that_stands():

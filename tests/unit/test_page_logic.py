@@ -59,6 +59,10 @@ def test_each_branch_says_one_next_step():
         ("roll the ball into the start ring", ""): (race("staging"), {}),
         ("put the ball on the plate", ""): ({"ball": {"valid": False}}, {}),
         ("click arm to start", ""): (BALL, {}),
+        ("the plate rolls the ball round the path", ""): (
+            {**ARMED, "choices": {"mode": "path"}},
+            {"hand": False},
+        ),
         ("arrows / wasd to tilt, r to race", ""): (ARMED, {"hand": False}),
         ("hold still... locking neutral", "warn"): ({**ARMED, "hand_calibrating": True}, {}),
         ("hand flat under the webcam, palm down", ""): ({**ARMED, "hand_seen": False}, {}),

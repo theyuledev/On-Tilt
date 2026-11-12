@@ -1,15 +1,13 @@
 // the plate as a tray in perspective for the 3D view, drawn through lens.js with the camera from
-// cam.js (uses race.js fit and colours, gates.js GATE / GATE_LIT / GATE_R / NUM_FONT, follow.js
-// WALL_TOP, hud.js signed)
+// cam.js (uses deck3d.js for what lies on the plate, race.js fit, shownPath and colours,
+// follow.js WALL_TOP, hud.js signed)
 const WALL_PX = 10;  // how high a marker stroke stands, well under the top of the ball
 const RIM_PX = 10;  // how high the rim stands round the board
 const SLAB_PX = 18;  // how thick the tray is under the board
-const LABEL_PX = 56;  // how high a gate's number hangs over the plate
 const TAG_MIN_PX = 18;  // the ball's tag text never gets smaller than this on screen
 const SHADOW = { dark: 0.45, blur: 40, drop: 18 };  // the tray's shadow on the ground, scene px
 const SLAB = ["#B4966B", "#BC9E73", "#C4A77D", "#BC9E73"];
 const WALL_SIDE = "rgba(27, 27, 27, 0.9)";
-const RING = Array.from({ length: 25 }, (_, i) => [Math.cos((i * Math.PI) / 12), Math.sin((i * Math.PI) / 12)]);
 
 function trace(ctx, P, pts, close) {
   ctx.beginPath();
@@ -42,30 +40,6 @@ function tray(ctx, P, h, f) {
   ctx.fill();
 }
 
-function ring3(ctx, P, [x, y], r, z = 1) {
-  trace(ctx, P, RING.map(([c, s]) => [x + r * c, y + r * s, z]), true);
-}
-
-// what lies flat on the plate: the path, the marker strokes and the gate rings
-function flat(ctx, P, maze, r, race, k) {
-  const reached = race && race.state ? race.reached : 0;
-  ctx.strokeStyle = PATH;
-  ctx.lineWidth = 2 * k;
-  ctx.setLineDash([6 * k, 6 * k]);
-  trace(ctx, P, maze.points.map(([x, y]) => [x, y, 1]));
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.strokeStyle = MARKER;
-  ctx.lineWidth = 7 * k;
-  (maze.walls || []).forEach(w => { trace(ctx, P, w.map(([x, y]) => [x, y, 1])); ctx.stroke(); });
-  ctx.lineWidth = 3 * k;
-  maze.checkpoints.forEach((i, n) => {
-    ctx.strokeStyle = n < reached ? GATE_LIT : n === reached ? PATH : GATE;
-    ring3(ctx, P, maze.points[i], r * GATE_R);
-    ctx.stroke();
-  });
-}
-
 // one upright strip from a to b with a line along its top, and the depth it is sorted by
 function fence(ctx, P, [ax, ay], [bx, by], top, fill, edge) {
   return [P((ax + bx) / 2, (ay + by) / 2)[2], () => {
@@ -86,19 +60,6 @@ function standing(ctx, P, maze, h) {
   const wall = (a, b) => fence(ctx, P, a, b, WALL_PX, WALL_SIDE, WALL_TOP);
   const strokes = (maze && maze.walls) || [];
   return [...rim, ...strokes.flatMap(w => w.slice(1).map((b, i) => wall(w[i], b)))];
-}
-
-function gateSigns(ctx, P, maze, race) {
-  const reached = race && race.state ? race.reached : 0, last = maze.checkpoints.length - 1;
-  return maze.checkpoints.map((i, n) => {
-    const [x, y, deep, k] = P(...maze.points[i], LABEL_PX);
-    return [deep, () => {
-      ctx.font = `${12 * k}px ${NUM_FONT}`;
-      ctx.textAlign = "center";
-      ctx.fillStyle = n < reached ? GATE_LIT : n === reached ? PATH : GATE;
-      ctx.fillText(n === last ? "FIN" : String(n + 1), x, y);
-    }];
-  });
 }
 
 function orb(ctx, P, [x, y], r, u, paint) {
@@ -166,13 +127,15 @@ function draw3d(ctx, cfg, maze, s, cam) {
   const px = fit(ctx.canvas), h = cfg.plate_inner_mm / 2, r = cfg.ball_d_mm / 2, u = PLATE_PX / h;
   const tilt = [s.plate_state.sent_x_deg, s.plate_state.sent_y_deg], P = projector(cam, tilt, h, px);
   const k = P(cam.cx, cam.cy)[3], at = [s.ball.x_mm, s.ball.y_mm], g = s.race && s.race.ghost_mm;
+  const path = shownPath(maze, cfg, s), course = !!maze && path === maze.points;
   const up = standing(ctx, P, maze, h);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, px, px);
   ctx.lineJoin = ctx.lineCap = "round";
   tray(ctx, P, h, px / SCENE_PX);
-  if (maze) {
-    flat(ctx, P, maze, r, s.race, k);
+  flat(ctx, P, path, maze, k);
+  if (course) {
+    rings(ctx, P, maze, s.race, cfg.checkpoint_r_mm, k);
     up.push(...gateSigns(ctx, P, maze, s.race));
   }
   if (s.choices.mode === "balance") {
