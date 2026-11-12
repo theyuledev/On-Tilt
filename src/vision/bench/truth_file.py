@@ -34,6 +34,9 @@ def by_disc(cfg: dict) -> Second:
 
 
 def _jsonl(path: Path, left_out: Counter) -> Iterator[dict]:
+    """The rows of one of the folder's logs, none when the run never wrote it."""
+    if not path.exists():
+        return
     with path.open() as f:
         for line in f:
             try:
@@ -49,9 +52,8 @@ def build(folder: Path, cfg: dict, second: Second | None = None) -> Built:
     # longer than the tracker coasts, and it could have lost the ball and found something else
     hole_s = vision["lost_after_misses"] / cfg["rig"]["camera_fps"]
     found = tracks(_jsonl(folder / "run.jsonl", left_out), bench["top_speed_mm_s"], hole_s)
-    trials = folder / "trials.jsonl"
-    rows = _jsonl(trials, left_out) if trials.exists() else []
-    arrived = arrivals(rows, found, bench["at_target_mm"])
+    trials = _jsonl(folder / "trials.jsonl", left_out)
+    arrived = arrivals(trials, found, bench["at_target_mm"])
     got = labels(recording.shots, found, arrived.tracks, bench, second)
     return Built(recording, got, arrived, left_out["torn"])
 
@@ -61,6 +63,19 @@ def write(path: Path, built: Built) -> None:
         for shot, got in zip(built.recording.shots, built.labels, strict=True):
             row = {"skip": got} if isinstance(got, str) else got._asdict()
             f.write(json.dumps({"frame": shot.path.name, **row}) + "\n")
+
+
+def read(path: Path) -> dict[str, Label | str]:
+    """What write() wrote, by picture name."""
+    out: dict[str, Label | str] = {}
+    with path.open() as f:
+        for row in map(json.loads, f):
+            name = row.pop("frame")
+            if "skip" in row:
+                out[name] = row["skip"]
+            else:
+                out[name] = Label(**{**row, "a": tuple(row["a"]), "b": tuple(row["b"])})
+    return out
 
 
 def _listed(counts: Counter) -> str:

@@ -60,6 +60,17 @@ def test_rows_of_one_camera_frame_stay_joined_unless_the_ball_moved():
     assert len(tracks(moved, TOP, HOLE)) == 2
 
 
+def test_a_hole_in_the_camera_clock_breaks_the_chain_too():
+    # the loop wrote its rows on time while the camera stalled
+    def stalled(for_s: float) -> list[dict]:
+        return [row(100.0, 5.0, frame_t_s=0.0), row(100.01, 5.0, frame_t_s=for_s)]
+
+    assert len(tracks(stalled(HOLE), TOP, HOLE)) == 1
+    assert len(tracks(stalled(HOLE + 0.001), TOP, HOLE)) == 2
+    # a hole of exactly the coast time on both clocks is still one track
+    assert len(tracks([row(0.0, 5.0), row(HOLE, 5.0)], TOP, HOLE)) == 1
+
+
 def test_holding_wants_one_track_over_the_whole_span():
     got = tracks(rolling([0.0, 1.0, 2.0, 9.0, 10.0]), TOP, HOLE)
     a, b = got

@@ -74,6 +74,12 @@ class BallTracker:
         self.misses = 0
         self.track: list[tuple[float, float, float]] = []
 
+    def seed(self, x_px: float, y_px: float, r_px: float, dark: bool, t_s: float) -> None:
+        """Starts locked on a ball known to be here, as if this tracker had just found it."""
+        self.r, self.dark = r_px, dark
+        self.hits, self.misses = 1, 0
+        self.track = [(t_s, x_px, y_px)]
+
     def reset_background(self) -> None:
         """For when the scene changes, e.g. a whiteboard goes onto the plate."""
         self.background.reset()

@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from src.vision.bench import rec, truth_file
-from src.vision.bench.track import ARRIVED, NEVER, NO_TRAVEL, Arrivals
+from src.vision.bench.track import ARRIVED, BROKEN, NEVER, NO_TRAVEL, Arrivals
 from src.vision.bench.truth import ARRIVAL, DISPUTED, SECOND, UNREADABLE, UNSEEN, Label
 from tools import replay_clip
 
@@ -116,6 +116,27 @@ def test_a_folder_without_trials_is_labelled_by_the_second_detector_alone(tmp_pa
     got = [g if isinstance(g, str) else g.support for g in built.labels]
     assert got == [SECOND, DISPUTED, UNSEEN]
     assert not built.arrived.trials
+
+
+def test_a_folder_without_a_run_log_is_labelled_by_the_second_detector_alone(tmp_path):
+    folder = recorded(tmp_path)
+    (folder / "run.jsonl").unlink()
+    built = by_disc(folder)
+    got = [g if isinstance(g, str) else (g.support, g.at_rest) for g in built.labels]
+    # no log, so no track: nothing arrived anywhere and nothing is known to lie at rest
+    assert got == [(SECOND, False), DISPUTED, UNSEEN]
+    assert built.arrived.trials == Counter({BROKEN: 2}) and built.torn == 0
+
+
+def test_read_gives_back_what_write_wrote(tmp_path):
+    built = by_disc(recorded(tmp_path))
+    moving = Label((1.5, 2.0), (3.0, 4.5), 19.0, ARRIVAL, False, None)
+    built = built._replace(labels=[moving, *built.labels[1:]])
+    truth_file.write(tmp_path / "one.jsonl", built)
+    names = [shot.path.name for shot in built.recording.shots]
+    got = truth_file.read(tmp_path / "one.jsonl")
+    assert got == dict(zip(names, built.labels, strict=True))
+    assert [type(g) for g in got.values()] == [Label, Label, str]
 
 
 def test_a_picture_that_will_not_open_is_skipped_as_unreadable(tmp_path):
