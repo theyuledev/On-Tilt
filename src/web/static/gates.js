@@ -53,8 +53,9 @@ function zone(ctx, at, r, color, dash = []) {
 const startOpen = race => !race || !["running", "finished"].includes(race.state);
 const startInk = race => (race && ["staging", "countdown"].includes(race.state) ? PATH : GATE);
 
-// takeR is how close takes a gate, the small numbered ring in its middle scales with the ball
-function gates(ctx, maze, ballR, race, takeR) {
+// takeR is how close takes a gate, the small numbered ring in its middle scales with the ball.
+// badge draws that small ring, the 3D view brings its own
+function gates(ctx, maze, ballR, race, takeR, badge = gate) {
   const r = ballR * GATE_R, finish = maze.checkpoints.length - 1, now = performance.now();
   const reached = race && race.state ? race.reached : 0;
   const live = race && (race.state === "countdown" || race.state === "running");
@@ -65,7 +66,7 @@ function gates(ctx, maze, ballR, race, takeR) {
     const next = live && n === reached, hit = n < reached;
     ctx.globalAlpha = next ? pulse : 1;
     zone(ctx, maze.points[i], takeR, hit ? GATE_LIT : next ? PATH : GATE);
-    gate(ctx, maze.points[i], r, n, hit, next, n === finish);
+    badge(ctx, maze.points[i], r, n, hit, next, n === finish);
   });
   ctx.globalAlpha = 1;
   // after the gates: a lap's last gate sits on the start and would cover its ring
@@ -96,9 +97,9 @@ function letter(ctx, [x, y], strokes) {
   ctx.restore();
 }
 
-// a lap that ends where it starts has only the S
-function ends(ctx, maze, h, r) {
+// a lap that ends where it starts has only the S. put draws one letter, the 3D view brings its own
+function ends(ctx, maze, h, r, put = letter) {
   const a = maze.start, b = maze.points[maze.points.length - 1];
-  letter(ctx, letterAt(a, h, r), S_STROKES);
-  if (b[0] !== a[0] || b[1] !== a[1]) letter(ctx, letterAt(b, h, r), E_STROKES);
+  put(ctx, letterAt(a, h, r), S_STROKES);
+  if (b[0] !== a[0] || b[1] !== a[1]) put(ctx, letterAt(b, h, r), E_STROKES);
 }

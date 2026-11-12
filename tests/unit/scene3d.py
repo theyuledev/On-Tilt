@@ -4,6 +4,7 @@ A call is ["name", ...args], a property set is ["name=", value] with "gradient" 
 """
 
 import json
+import math
 import subprocess
 
 from src.web.server import STATIC
@@ -71,3 +72,24 @@ def shots(at=(0, 0)):
 
 def draw(maze, s, cam, px=PX):
     return run(("draw3d", ["PEN", CFG, maze, s, cam]), px=px)[0]
+
+
+def frames(maze, cam, *ss, view="draw3d"):
+    """Several frames one after the other on the same page: what the last one drew."""
+    look = cam if view == "draw3d" else {"x": 0, "y": 0, "zoom": 1, "tall": False}
+    job = f"(pen, cfg, maze, look, ...ss) => ss.forEach(s => {view}(pen, cfg, maze, s, look))"
+    drawn = run((job, ["PEN", CFG, maze, look, *ss]))[0]
+    return drawn[max(i for i, call in enumerate(drawn) if call[0] == "clearRect") :]
+
+
+def lines(drawn):
+    return [call[1:3] for call in drawn if call[0] in ("moveTo", "lineTo")]
+
+
+def joined(drawn, p, q):
+    """Is a line drawn from p to q."""
+    pts = lines(drawn)
+    return any(
+        math.dist(a, p) < 0.01 and math.dist(b, q) < 0.01
+        for a, b in zip(pts, pts[1:], strict=False)
+    )

@@ -128,26 +128,18 @@ function draw3d(ctx, cfg, maze, s, cam) {
   const tilt = [s.plate_state.sent_x_deg, s.plate_state.sent_y_deg], P = projector(cam, tilt, h, px);
   const k = P(cam.cx, cam.cy)[3], at = [s.ball.x_mm, s.ball.y_mm], g = s.race && s.race.ghost_mm;
   const path = shownPath(maze, cfg, s), course = !!maze && path === maze.points;
-  const up = standing(ctx, P, maze, h);
+  const up = standing(ctx, P, maze, h), mm = k * u;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, px, px);
   ctx.lineJoin = ctx.lineCap = "round";
   tray(ctx, P, h, px / SCENE_PX);
-  flat(ctx, P, path, maze, k);
-  if (course) {
-    rings(ctx, P, maze, s.race, cfg.checkpoint_r_mm, k);
-    up.push(...gateSigns(ctx, P, maze, s.race));
-  }
-  if (s.choices.mode === "balance") {
-    ctx.strokeStyle = PATH;
-    ctx.lineWidth = 3 * k;
-    ring3(ctx, P, s.target.mm, 1.25 * r);
-    ctx.stroke();
-  }
+  trails(s);
+  deck(ctx, P, cfg, maze, s, path, mm);
   if (g) up.push(orb(ctx, P, g, r, u, ghostPaint(ctx)));
   if (s.ball.valid) mark(ctx, P, at, h, r, k);
   // far things first so near ones cover them
   up.sort((a, b) => b[0] - a[0]).forEach(([, paint]) => paint());
+  if (course) nextGate(ctx, P, maze, s.race, cfg.checkpoint_r_mm, mm);
   if (!s.ball.valid) return;
   // the ball and its tag go on last, no wall or rim ever hides them
   const [sx, sy, , kb] = P(...at, r * u);
