@@ -72,6 +72,11 @@ def test_path_mode_draws_its_own_path_and_leaves_the_courses_gates_and_letters_o
     corners = scene3d.run(*[(AT, [cam, *p]) for p in OWN_PATH])
     assert all(any(math.dist(c, p) < 0.01 for p in lines(drawn)) for c in corners)
     assert not any(call[0] == "fillText" for call in drawn)
+    assert not any(call[0] == "stroke" and len(call) > 1 for call in drawn)
+    # a race that is over does not turn the plate's own path into a driven one
+    done = scene3d.draw(COURSE, scene3d.snap(valid=False, mode="path", race=FINISHED), cam)
+    green = done.index(["strokeStyle=", scene3d.run((INK, []))[0][2]])
+    assert not lines(done[green : green + done[green:].index(["stroke"])])
 
 
 def test_gate_rings_and_the_start_ring_have_the_real_radius_in_the_flat_and_the_3d_view():

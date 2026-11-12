@@ -91,15 +91,18 @@ def test_the_path_splits_at_the_ball_between_the_last_gate_and_the_next():
         (split, [path, COURSE, race("running"), ball(120, 80)]),
         # a stretch with no length has nowhere to cut
         (split, [[[0, 0], [0, 0]], {"checkpoints": [1]}, race("running"), ball(5, 5)]),
+        # a ball lost for a moment keeps what was driven up to the last gate taken
+        (split, [path, COURSE, race("running", reached=1), ball(75, 0, False)]),
     )
-    idle, done, first, second, beside, lost, early, past, flat = cuts
-    assert idle == [[], path] and lost == [[], path] and done == [path, []]
+    idle, done, first, second, beside, lost, early, past, flat, gone = cuts
+    assert idle == [[], path] and done == [path, []]
+    assert lost == [[[-80, 80]], path] and gone == [[[-80, 80], [80, 80]], [[80, 80], [80, -80]]]
     assert first == [[[-80, 80], [0, 80]], [[0, 80], [80, 80], [80, -80]]]
     assert second == [[[-80, 80], [80, 80], [80, 0]], [[80, 0], [80, -80]]]
     assert beside == [[[-80, 80], [80, 80], [80, 79]], [[80, 79], [80, -80]]]
     assert early == [[[-80, 80], [79, 80]], [[79, 80], [80, 80], [80, -80]]]
     assert past == [[[-80, 80], [80, 80]], [[80, 80], [80, 80], [80, -80]]]
-    assert flat == [[], [[0, 0], [0, 0]]]
+    assert flat == [[[0, 0]], [[0, 0], [0, 0]]]
 
 
 def test_the_3d_plate_carries_s_e_and_the_numbered_gates_and_no_floating_signs():
@@ -184,6 +187,7 @@ def test_the_next_gate_is_drawn_again_over_what_stands():
 
     assert rings(scene3d.snap(valid=False, race=race("idle")), first) == 1
     assert rings(scene3d.snap(valid=False, race=race("running")), first) == 2
+    assert rings(scene3d.snap(valid=False, race=race("countdown")), first) == 2
     # one gate on it is the second gate's ring
     on = scene3d.snap(valid=False, race=race("running", reached=1))
     assert rings(on, first) == 1 and rings(on, second) == 2
@@ -196,3 +200,5 @@ def test_the_next_gate_is_drawn_again_over_what_stands():
     shut = max(i for i, call in enumerate(drawn[:ball]) if call[0] == "closePath")
     start = max(i for i, call in enumerate(drawn[:shut]) if call[0] == "moveTo")
     assert math.dist(drawn[start][1:3], first) < 0.01
+    ink = next(call[1] for call in reversed(drawn[:start]) if call[0] == "strokeStyle=")
+    assert ink == scene3d.run(("() => PATH", []))[0]

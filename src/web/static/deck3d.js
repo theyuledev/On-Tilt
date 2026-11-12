@@ -41,14 +41,16 @@ function decal(ctx, P, [x, y], paint) {
 }
 
 // the path cut at the ball: [driven, still to go]. in a race the ball is looked for only between
-// the last gate taken and the next, so a lane beside an earlier one cannot take it
+// the last gate taken and the next, so a lane beside an earlier one cannot take it. while the ball
+// is lost the cut stays at the last gate taken
 function pathSplit(path, maze, race, ball) {
   const st = race && race.state;
   if (st === "finished") return [path, []];
-  if (st !== "running" || !ball.valid) return [[], path];
+  if (st !== "running") return [[], path];
   const cps = maze.checkpoints, from = race.reached ? cps[race.reached - 1] : 0;
-  const hit = nearest(path, [ball.x_mm, ball.y_mm], from, cps[race.reached] ?? path.length - 1);
-  return hit ? [[...path.slice(0, hit.i + 1), hit.at], [hit.at, ...path.slice(hit.i + 1)]] : [[], path];
+  const hit = ball.valid && nearest(path, [ball.x_mm, ball.y_mm], from, cps[race.reached]);
+  if (!hit) return [path.slice(0, from + 1), path.slice(from)];
+  return [[...path.slice(0, hit.i + 1), hit.at], [hit.at, ...path.slice(hit.i + 1)]];
 }
 
 function ribbon(pen, [done, togo]) {
@@ -67,7 +69,7 @@ function deck(ctx, P, cfg, maze, s, path, mm) {
   guardLine(pen, s, h);
   if (maze && maze.walls) walls(pen, maze);
   if (course) ends(ctx, maze, h, r, (_, at, strokes) => decal(ctx, P, at, () => letter(ctx, at, strokes)));
-  if (path) ribbon(pen, pathSplit(path, maze, s.race, s.ball));
+  if (path) ribbon(pen, course ? pathSplit(path, maze, s.race, s.ball) : [[], path]);
   if (course) {
     const badge = (_, at, ...rest) => decal(ctx, P, at, () => gate(ctx, at, ...rest));
     gates(pen, maze, r, s.race, cfg.checkpoint_r_mm, badge);
@@ -79,6 +81,7 @@ function deck(ctx, P, cfg, maze, s, path, mm) {
 
 // the next gate's ring once more, over whatever stands in front of it
 function nextGate(ctx, P, maze, race, takeR, mm) {
-  const i = race && race.state === "running" ? maze.checkpoints[race.reached] : undefined;
+  const live = race && ["countdown", "running"].includes(race.state);
+  const i = live ? maze.checkpoints[race.reached] : undefined;
   if (i !== undefined) zone(flatPen(ctx, P, mm), maze.points[i], takeR, PATH);
 }
