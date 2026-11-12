@@ -14,8 +14,14 @@ from src.modes.spot import held
 LOCKED = ("rig", "bench")
 HIDDEN = ("bench",)  # what the tracker is scored against, not the game's to show
 LABEL = "player-tuned (settings page)"
-# divided by while the app runs
-POSITIVE = (("vision", "px_per_mm"), ("control", "sim_tick_hz"))
+# divided by or used as a size while the app runs
+POSITIVE = (
+    ("vision", "px_per_mm"),
+    ("vision", "line_stroke_mm"),
+    ("vision", "line_min_mm"),
+    ("vision", "line_step_mm"),
+    ("control", "sim_tick_hz"),
+)
 ONE_OF = {
     ("control", "mode"): tuple(MODES),
     ("input", "hand_mode"): switches.ALLOWED["hand_mode"],

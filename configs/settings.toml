@@ -132,6 +132,12 @@ lost_after_misses = { value = 5, label = "uncalibrated default (NOT TESTED, expe
 predict_dt_min_s = { value = 0.004, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 predict_dt_max_s = { value = 0.017, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 px_per_mm = { value = 2.37, label = "measured (2026-11-07)" }
+line_ink = { value = 0.6, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+line_core = { value = 0.45, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+line_stroke_mm = { value = 6.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+line_gap_mm = { value = 3.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+line_min_mm = { value = 40.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+line_step_mm = { value = 10.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 plate_centre_px = { value = [640, 400], label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 plate_yaw_deg = { value = 0.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 use_calib = false
