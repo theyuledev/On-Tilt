@@ -65,13 +65,12 @@ def recorded(tmp_path: Path) -> Path:
     (folder / "settings.local.toml").write_text("[rig]\nball_d_mm = { value = 16 }\n")
     times = [100.0, 100.05, 100.1, 100.15]
     snaps = [*map(snap, times), snap(100.2, False), snap(100.25, False)]
-    level = {"tilt_x_deg": 0.0, "tilt_y_deg": 0.0}
     # in from 60 mm out at 40 mm/s, then on the target; the log loses it at 100.17
     log = []
     for t in np.arange(95.0, 100.3, 0.01).tolist():
         x = min(-60 + 40 * (t - 95.0), 0.0)
         ball = {"x_mm": x, "y_mm": 0.0, "valid": t < 100.17, "t_s": t}
-        log.append({"t_s": t, "plate_cmd": level, "ball": ball})
+        log.append({"t_s": t, "ball": ball})
     trials = [
         {"target": [0, 0], "t_start": 95.0, "reached_s": 1.5, "ball_lost": False},
         # the next target is 10 mm from where it lies: no travel to speak of
@@ -103,26 +102,6 @@ def test_build_cuts_tracks_at_the_bench_top_speed_and_the_coast_time(tmp_path, m
     truth_file.build(folder, cfg)
     coast_s = cfg["vision"]["lost_after_misses"] / cfg["rig"]["camera_fps"]
     assert asked == {"top_mm_s": cfg["bench"]["top_speed_mm_s"], "hole_s": coast_s}
-
-
-def test_build_notes_when_the_plate_was_asked_to_tilt(tmp_path, monkeypatch):
-    seen = {}
-
-    def spy(shots, found, arrived, tilted, bench, second):
-        seen["tilted"] = list(tilted)
-        return [UNSEEN] * len(shots)
-
-    monkeypatch.setattr(truth_file, "labels", spy)
-    folder = recorded(tmp_path)
-    rows = [json.loads(x) for x in (folder / "run.jsonl").read_text().splitlines()[:-1]]
-    for i, deg in (7, 0.4), (3, -0.2):
-        rows[i]["plate_cmd"] = {"tilt_x_deg": 0.0, "tilt_y_deg": deg}
-    early, late = rows[3]["t_s"], rows[7]["t_s"]
-    # a clock that stepped back: the later row comes first in the file
-    rows[3], rows[7] = rows[7], rows[3]
-    (folder / "run.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
-    truth_file.build(folder, rec.settings(folder))
-    assert seen["tilted"] == [early, late]
 
 
 def test_the_labels_command_writes_a_row_a_picture_and_what_it_skipped(tmp_path, capsys):

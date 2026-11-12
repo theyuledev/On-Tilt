@@ -10,7 +10,6 @@ from src.vision.bench.truth import (
     ARRIVAL,
     DISPUTED,
     SECOND,
-    STILL,
     UNREADABLE,
     UNSEEN,
     Label,
@@ -23,7 +22,6 @@ BENCH = {"rest_mm_s": 5.0, "rest_mm": 3.0, "rest_s": 3.0}
 A, B = (100.0, 100.0), (140.0, 100.0)
 R = 20.0
 GONE = {"valid": False, "px": None}
-LEVEL = np.array([])
 
 
 def snap(t_s: float, mm=(0.0, 0.0), px=A, v: float = 0.0, valid: bool = True, r=R) -> dict:
@@ -31,10 +29,10 @@ def snap(t_s: float, mm=(0.0, 0.0), px=A, v: float = 0.0, valid: bool = True, r=
     return {"t_s": t_s, "ball": ball, "ball_px": [*px, r] if px else None}
 
 
-def shot(t_s: float = 100.0, stretch: int = 0, b_px=None, **ball) -> rec.Shot:
+def shot(t_s: float = 100.0, b_px=None, **ball) -> rec.Shot:
     """A picture between two snapshots 50 ms apart, the ball at b_px by the second one."""
     after = snap(t_s + 0.05, **{**ball, "px": b_px or ball.get("px", A)})
-    return rec.Shot(Path(f"{t_s:010.3f}.jpg"), snap(t_s, **ball), after, stretch)
+    return rec.Shot(Path(f"{t_s:010.3f}.jpg"), snap(t_s, **ball), after, 0)
 
 
 def lying(start: float = 90.0, end: float = 110.0) -> Track:
@@ -42,8 +40,8 @@ def lying(start: float = 90.0, end: float = 110.0) -> Track:
     return Track(t, np.zeros((len(t), 2)))
 
 
-def mark(shots, found, arrived=(), second=None, tilted=LEVEL) -> list:
-    return labels(shots, found, set(arrived), tilted, BENCH, second)
+def mark(shots, found, arrived=(), second=None) -> list:
+    return labels(shots, found, set(arrived), BENCH, second)
 
 
 def at(x: float, y: float, r: float = R):
@@ -107,39 +105,11 @@ def test_at_rest_needs_a_slow_ball_that_stayed_put():
     assert not rest(shot(), drift)
     # seen for two and a half seconds only
     assert not rest(shot(), lying(start=97.5))
-
-
-def test_a_still_ball_between_agreeing_sightings_is_labelled_while_unseen():
-    # seen until 101.5, lost for two seconds, then seen again; a picture every second
-    seen = [lying(90.0, 101.5), lying(103.5, 110.0)]
-
-    def gap(found=seen, arrived=(0, 1), tilted=LEVEL, last=((1.0, 0.0), 0.0), stretch=0, **before):
-        shots = [
-            shot(100.0),
-            shot(101.0, **before),
-            shot(102.0, **GONE),
-            shot(103.0, **GONE),
-            shot(104.0, stretch, mm=last[0], v=last[1], px=(101.0, 100.0)),
-            shot(105.0, stretch),
-        ]
-        return mark(shots, found, arrived, tilted=tilted)[2:4]
-
-    # at the place it was last seen
-    still = [Label(A, A, R, STILL, True, None)] * 2
-    lost = [UNSEEN] * 2
-    assert gap() == still
-    # afterwards it lies somewhere else
-    assert gap(last=((3.0, 0.0), 0.0)) == lost
-    # it was rolling when last seen, or when found again
-    assert gap(v=5.0) == lost
-    assert gap(last=((1.0, 0.0), 5.0)) == lost
-    # the sighting before has nothing behind it, or the one after
-    assert gap(arrived=(1,)) == lost
-    assert gap(arrived=(0,)) == lost
-    # the plate was asked to tilt while the ball was out of sight; before or after is no matter
-    assert gap(tilted=np.array([102.5])) == lost
-    assert gap(tilted=np.array([100.5, 104.5])) == still
-    # found again, but tracked for two and a half seconds only
-    assert gap(found=[seen[0], lying(103.5, 106.0)]) == lost
-    # the recording itself has a gap in between
-    assert gap(stretch=1) == lost
+    # anywhere on the plate
+    away = lying()
+    away.xy[:] = (50.0, 30.0)
+    assert rest(shot(), away)
+    # 2 mm one way, then 2 mm the other: 4 mm from where it ends up
+    swung = lying()
+    swung.xy[:, 0] = np.select([swung.t < 98.0, swung.t < 99.0], [0.0, -2.0], 2.0)
+    assert not rest(shot(), swung)

@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import NamedTuple
 
 import cv2
-import numpy as np
 
 from src.vision.bench import rec
 from src.vision.bench.second import disc
@@ -43,27 +42,17 @@ def _jsonl(path: Path, left_out: Counter) -> Iterator[dict]:
                 left_out["torn"] += 1
 
 
-def _watched(rows: Iterator[dict], tilted: list[float]) -> Iterator[dict]:
-    """The log rows as they come, noting when the plate was asked to tilt."""
-    for row in rows:
-        if any(row["plate_cmd"].values()):
-            tilted.append(row["t_s"])
-        yield row
-
-
 def build(folder: Path, cfg: dict, second: Second | None = None) -> Built:
     bench, vision = cfg["bench"], cfg["vision"]
     recording = rec.read(folder, vision["bg_period_s"])
     left_out: Counter = Counter()
-    tilted: list[float] = []
     # longer than the tracker coasts, and it could have lost the ball and found something else
     hole_s = vision["lost_after_misses"] / cfg["rig"]["camera_fps"]
-    log = _watched(_jsonl(folder / "run.jsonl", left_out), tilted)
-    found = tracks(log, bench["top_speed_mm_s"], hole_s)
+    found = tracks(_jsonl(folder / "run.jsonl", left_out), bench["top_speed_mm_s"], hole_s)
     trials = folder / "trials.jsonl"
     rows = _jsonl(trials, left_out) if trials.exists() else []
     arrived = arrivals(rows, found, bench["at_target_mm"])
-    got = labels(recording.shots, found, arrived.tracks, np.sort(tilted), bench, second)
+    got = labels(recording.shots, found, arrived.tracks, bench, second)
     return Built(recording, got, arrived, left_out["torn"])
 
 
