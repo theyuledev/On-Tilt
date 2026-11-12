@@ -7,6 +7,10 @@ Windows are frame numbers, end excluded. No window means the whole clip.
     uv run python -m tools.replay_clip data/recordings/<folder> [...]
 
 Recorder folders instead of a clip: what each holds and what a replay would skip.
+
+    uv run python -m tools.replay_clip --labels <out folder> data/recordings/<folder> [...]
+
+Writes where the ball is in each picture, as far as something other than the tracker backs it.
 """
 
 import sys
@@ -19,7 +23,7 @@ import numpy as np
 
 from src.io.camera import ClipSource
 from src.io.settings import load
-from src.vision.bench import rec
+from src.vision.bench import rec, truth_file
 from src.vision.tracker import BallTracker
 
 Window = tuple[int, int]
@@ -77,6 +81,15 @@ def spans(frames: list[int]) -> str:
 
 def main(argv: list[str]) -> None:
     path, *args = argv
+    if path == "--labels":
+        out = Path(args[0])
+        out.mkdir(parents=True, exist_ok=True)
+        for folder in map(Path, args[1:]):
+            cfg = rec.settings(folder)
+            built = truth_file.build(folder, cfg, truth_file.by_disc(cfg))
+            truth_file.write(out / f"{folder.name}.jsonl", built)
+            print(truth_file.describe(folder.name, built))
+        return
     if Path(path).is_dir():
         for folder in map(Path, argv):
             # a gap longer than the background's own sampling period is a new scene

@@ -32,8 +32,9 @@ def local() -> dict:
 
 def test_the_page_gets_every_setting_by_section_and_what_locks_them(page, loop):
     got = page.get(URL).json()
-    assert got["sections"] == load() and list(got["sections"]) == list(load())
-    assert (got["armed"], got["locked"], got["mazes"]) == (False, ["rig"], ["square"])
+    shown = {s: sec for s, sec in load().items() if s != "bench"}
+    assert "bench" in load() and got["sections"] == shown and list(got["sections"]) == list(shown)
+    assert (got["armed"], got["locked"], got["mazes"]) == (False, ["rig", "bench"], ["square"])
     assert got["choices"]["steer"] == "hand" and got["target"] == "centre"
     kinds = {p: type(load()[p.split(".")[0]][p.split(".")[1]]) for p in got["floats"]}
     assert set(kinds.values()) == {float} and "rig.camera_exposure_ms" in kinds
@@ -81,6 +82,7 @@ def test_an_armed_loop_takes_no_settings(page, loop):
         ("rig.kill_ramp_us_s", 9000, "read only"),
         ("rig.actuator", "real", "read only"),
         ("rig.startup_flag", False, "read only"),
+        ("bench.top_speed_mm_s", 9000, "read only"),
         ("control.nope", 1, "not a setting"),
         ("control.target", {"mm": [0, 0]}, "not a setting"),
         ("nope", 1, "not a setting"),

@@ -161,3 +161,10 @@ marker_min_count = { value = 2, label = "uncalibrated default (NOT TESTED, expec
 marker_refine_win_px = { value = 5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 marker_thresh_win_px = { value = 23, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 marker_min_perimeter_rate = { value = 0.03, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+
+[bench]
+top_speed_mm_s = { value = 530, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+rest_mm_s = { value = 5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+rest_mm = { value = 3, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+rest_s = { value = 3, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+at_target_mm = { value = 24, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
