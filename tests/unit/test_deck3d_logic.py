@@ -42,7 +42,7 @@ def test_the_flat_pen_sends_every_point_through_the_lens_and_scales_widths_and_d
     assert all(has(drawn, p) for p in at(cam, *mm))
     # nothing reaches the canvas in plate mm, and the rectangle is stroked as a canvas would
     assert not any(call[0] in ("arc", "strokeRect") for call in drawn)
-    assert drawn[-1] == ["stroke"]
+    assert drawn[-1] == ["stroke"] and [c[0] for c in drawn].count("closePath") == 2
 
 
 def test_the_flat_pen_calls_the_canvas_as_the_canvas_like_a_browser_demands():
@@ -142,6 +142,9 @@ def test_the_3d_view_keeps_the_trail_and_shows_the_guard_line_and_the_whole_targ
     cam = scene3d.shots()["wide"]
     first, second = scene3d.snap(ball=(0, 0)), {**scene3d.snap(ball=(20, 10)), "t_s": 1.1}
     assert joined(frames(None, cam, first, second), *at(cam, [0, 0], [20, 10]))
+    # where a lost ball was last reported is no part of the trail
+    lost = {**scene3d.snap(ball=(40, 40), valid=False), "t_s": 1.2}
+    assert not joined(frames(None, cam, first, second, lost), *at(cam, [20, 10], [40, 40]))
     guarded = {**scene3d.snap(valid=False), "guard": {"w": [0.4, 0], "side": [1, -1]}}
     edge = HALF - 13
     drawn = scene3d.draw(None, guarded, cam)
@@ -186,6 +189,7 @@ def test_the_next_gate_is_drawn_again_over_what_stands():
         return sum(math.dist(ring, p) < 0.01 for p in starts)
 
     assert rings(scene3d.snap(valid=False, race=race("idle")), first) == 1
+    assert rings(scene3d.snap(valid=False, race=race("staging")), first) == 1
     assert rings(scene3d.snap(valid=False, race=race("running")), first) == 2
     assert rings(scene3d.snap(valid=False, race=race("countdown")), first) == 2
     # one gate on it is the second gate's ring
