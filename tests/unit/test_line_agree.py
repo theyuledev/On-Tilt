@@ -3,7 +3,7 @@ import time
 import numpy as np
 import pytest
 
-from src.vision.line_path import DIFFER, agree
+from src.vision.line_path import DIFFER, LinePath, agree
 from tests.unit.line_pictures import STRAIGHT, VIS, follows, picture, run
 
 pytestmark = pytest.mark.unit
@@ -34,3 +34,21 @@ def test_reads_that_do_not_agree_are_refused():
     assert agree(reads + [run(picture(VIS, []))], VIS) == ([], DIFFER)
     blank = run(picture(VIS, []))
     assert agree([blank] * 3 + reads[:2], VIS) == ([], "no line found")
+
+
+def test_two_reads_whose_middle_differs_by_a_spiral_turn_do_not_agree():
+    base = [[x, 0.0] for x in range(-100, 101, 10)]
+    moved = [[x, 17.0 if -10 <= x <= 10 else 0.0] for x, _ in base]
+    assert agree([LinePath(base, ""), LinePath(moved, "")], VIS).reason == DIFFER
+
+
+def test_reads_whose_ends_wander_still_agree():
+    base = [[x, 0.0] for x in range(-100, 101, 10)]
+    wander = [[x, 30.0 if abs(x) == 100 else 0.0] for x, _ in base]
+    assert agree([LinePath(base, ""), LinePath(wander, "")], VIS).reason == ""
+
+
+def test_a_grid_is_not_a_line():
+    grid = [[(k, -120.0), (k, 120.0)] for k in range(-120, 121, 40)]
+    grid += [[(-120.0, k), (120.0, k)] for k in range(-120, 121, 40)]
+    assert run(picture(VIS, grid, 4)).reason != ""

@@ -83,9 +83,9 @@ def through(found: list, wiped: np.ndarray, reach: int, joined: dict) -> dict:
 
 
 def best_run(found: list, wiped, cfg: dict, stroke: int, ball):
-    """The longest smooth walk, and the drawn length of the longest run left over with whether
-    it hangs off the walk. A ball given picks the walk that reaches it; that walk is the line
-    whatever else is drawn."""
+    """The longest smooth walk, and the drawn length of the runs left over that are at least
+    line_min_mm, with whether the longest of them hangs off the walk. A ball given picks the
+    walk that reaches it; that walk is the line whatever else is drawn."""
     reach = cfg["line_bridge_mm"] * cfg["px_per_mm"]
     bend = cfg["line_bend_deg"]
     hole = None if ball is None else (*ball[:2], ball[2] + stroke)
@@ -105,11 +105,12 @@ def best_run(found: list, wiped, cfg: dict, stroke: int, ball):
     idx = [i for i in range(len(found)) if i not in used]
     rest = [found[i] for i in idx]
     other = lines(rest, links(rest, reach, bend))
-    if not other:
+    big = [r for r in other if drawn(rest, r) >= cfg["line_min_mm"] * cfg["px_per_mm"]]
+    if not big:
         return best, 0.0, False
     walked = {n for i in used for n in found[i].nodes}
-    hangs = any(n in walked for j, _ in other[0] for n in rest[j].nodes)
-    return best, drawn(rest, other[0]), hangs
+    hangs = any(n in walked for j, _ in big[0] for n in rest[j].nodes)
+    return best, sum(drawn(rest, r) for r in big), hangs
 
 
 def resample(pts, step: float) -> list[list[float]]:
@@ -143,11 +144,7 @@ def find_line(
         seen = (ball.x_px - x0, ball.y_px - y0, ball.r_px + stroke)
         cv2.circle(marks, (round(seen[0]), round(seen[1])), round(seen[2]), 0, -1)
     found, wiped = pieces(marks, stroke, cfg["line_web_mm"] * px)
-    # more pieces than fit the board a bridge apart is noise, not a drawing
-    if (
-        not found
-        or len(found) * cfg["line_bridge_mm"] * cfg["line_stroke_mm"] > region.sum() / px**2
-    ):
+    if not found:
         return LinePath([], NONE)
     best, other, hangs = best_run(found, wiped, cfg, stroke, seen)
     total, chain = drawn(found, best), walk_px(found, best)
@@ -168,23 +165,35 @@ def find_line(
     return LinePath(resample(mm, cfg["line_step_mm"]), "")
 
 
-def _near(a: np.ndarray, b: np.ndarray, tol: float) -> float:
-    """Share of a's points within tol of the polyline b."""
+def _gaps(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Distance from each of a's points to the polyline b."""
     p, s, e = a[:, None], b[:-1], b[1:]
     seg = e - s
     t = np.clip(((p - s) * seg).sum(-1) / np.maximum((seg * seg).sum(-1), 1e-9), 0, 1)
-    return float((np.linalg.norm(p - s - t[..., None] * seg, axis=-1).min(1) <= tol).mean())
+    return np.linalg.norm(p - s - t[..., None] * seg, axis=-1).min(1)
+
+
+def _inner(a: np.ndarray, keep: float) -> np.ndarray:
+    along = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(a, axis=0), axis=1))])
+    return a[(along > keep) & (along < along[-1] - keep)]
+
+
+def _apart(a: np.ndarray, b: np.ndarray, keep: float) -> float:
+    """Farthest either path strays from the other, away from its ends."""
+    return max(_gaps(_inner(a, keep), b).max(initial=0), _gaps(_inner(b, keep), a).max(initial=0))
 
 
 def agree(reads: list[LinePath], cfg: dict) -> LinePath:
-    """The path most of several reads of the same board agree on: two agree when all but
-    line_similar of each one's points lie within half a step of the other. Too few agreeing
-    gives the refusal most reads gave, or DIFFER."""
+    """The path most of several reads of the same board agree on. Two agree when every point of
+    each, more than line_bridge_mm from its ends (where the ends wander), lies within half a step
+    of the other; of the most agreed on, the one closest to the rest. Too few agreeing gives the
+    refusal most reads gave, or DIFFER."""
     paths = [np.array(r.points) for r in reads if not r.reason]
-    tol, need = cfg["line_step_mm"] / 2, 1 - cfg["line_similar"]
-    votes = [sum(min(_near(a, b, tol), _near(b, a, tol)) >= need for b in paths) for a in paths]
+    tol, keep = cfg["line_step_mm"] / 2, cfg["line_bridge_mm"]
+    gap = [[_apart(a, b, keep) for b in paths] for a in paths]
+    votes = [sum(g <= tol for g in row) for row in gap]
     if votes and 2 * max(votes) > len(reads):
-        best = max(range(len(paths)), key=lambda k: (votes[k], len(paths[k])))
+        best = min(range(len(paths)), key=lambda k: (-votes[k], sum(gap[k])))
         return LinePath(paths[best].tolist(), "")
     said = Counter(r.reason for r in reads if r.reason).most_common(1)
     return LinePath([], said[0][0] if said and 2 * said[0][1] > len(reads) else DIFFER)

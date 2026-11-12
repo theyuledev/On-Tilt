@@ -164,24 +164,23 @@ def test_the_tool_prints_the_line_off_a_saved_half_size_frame(tmp_path):
     assert [p.name for p in tmp_path.iterdir()] == ["board.png"]
 
 
-def test_the_tool_reads_on_the_board_map_found_on_the_frame(tmp_path, monkeypatch):
+@pytest.mark.parametrize("lost", [False, True])
+def test_the_tool_reads_on_the_board_map_found_on_the_frame(tmp_path, monkeypatch, lost):
     class Found:
-        lost = False
-
         def __init__(self, cfg, half, corners):
             pass
 
         def update(self, image):
-            pass
+            self.lost = lost
 
         def mapped(self):
             return TURNED
 
-    monkeypatch.setattr(tool, "with_calib", lambda v: {**v, "calib": {}, "plate_track": True})
+    monkeypatch.setattr(tool, "with_calib", lambda v: {**v, "calib": None, "plate_track": True})
     monkeypatch.setattr(tool, "configured", lambda half, cfg: None)
     monkeypatch.setattr(tool, "PlateTracker", Found)
     frame = tmp_path / "board.png"
-    cv2.imwrite(str(frame), picture(TURNED, [STRAIGHT], 8))
+    cv2.imwrite(str(frame), picture(VIS if lost else TURNED, [STRAIGHT], 8))
     pts = ast.literal_eval(main([str(frame), "--line"]).split("points = ")[1])
     ends = sorted([pts[0], pts[-1]])
     assert math.dist(ends[0], STRAIGHT[0]) < 5 and math.dist(ends[1], STRAIGHT[1]) < 5
