@@ -61,6 +61,21 @@ def test_a_line_running_off_the_board_is_read_up_to_the_edge():
     assert max(x for x, _ in got.points) == pytest.approx(HALF - EDGE, abs=5)
 
 
+def test_a_line_crossing_itself_goes_straight_over_the_crossing():
+    loop = [(-80.0, 0.0), (60.0, 0.0), (60.0, 40.0), (20.0, 40.0), (20.0, -60.0)]
+    follows(run(picture(VIS, [loop], 4)), loop)
+
+
+def test_a_reflection_on_a_faint_line_is_bridged_not_read():
+    img = picture(VIS, [STRAIGHT], 3, shade=FAINT).astype(float)
+    cx, cy = plate_px(-15.0, 5.0, VIS)
+    yy, xx = np.indices(img.shape)
+    glow = np.clip(1.6 - np.hypot(xx - cx, yy - cy) / 40, 0, 1)
+    speckle = np.random.default_rng(0).normal(0, 14, img.shape)
+    img += glow * (60 + speckle)
+    follows(run(np.uint8(np.clip(img, 0, 255))), STRAIGHT)
+
+
 def test_a_colour_frame_reads_the_same():
     gray = picture(VIS, [STRAIGHT])
     follows(run(cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)), STRAIGHT)

@@ -29,8 +29,7 @@ def ink(gray: np.ndarray, cfg: dict, wide: int) -> np.ndarray:
     board = cv2.resize(plate_level(downsample(gray, cfg), cfg, False), gray.shape[::-1])
     # capped just above the bare board so a reflection's edge can't pass for ink
     shut = np.minimum(cv2.morphologyEx(b, cv2.MORPH_CLOSE, disk), (1 + cfg["line_glare"]) * board)
-    # in grey levels: glare adds light to ink and board alike, so a ratio would fade the line
-    dark = (shut - b) / max(float(np.median(board)), 1.0)
+    dark = 1 - b / np.maximum(shut, 1.0)
     weak = dark > cfg["line_weak"]
     _, lab = cv2.connectedComponents(np.uint8(weak))
     marks = np.uint8(np.isin(lab, np.unique(lab[dark > cfg["line_core"]])) & weak)
@@ -89,7 +88,7 @@ def best_run(found: list, wiped, cfg: dict, stroke: int, ball):
     reach = cfg["line_bridge_mm"] * cfg["px_per_mm"]
     bend = cfg["line_bend_deg"]
     hole = None if ball is None else (*ball[:2], ball[2] + stroke)
-    joined = links(found, reach, bend, stroke, hole)
+    joined = links(found, reach, bend, hole)
     if wiped is not None:
         joined = through(found, wiped, round(cfg["line_web_mm"] * cfg["px_per_mm"] / 2), joined)
     every = [(i, e) for i in range(len(found)) for e in (0, 1)]
@@ -103,7 +102,7 @@ def best_run(found: list, wiped, cfg: dict, stroke: int, ball):
             return best, 0.0
     used = {i for i, _ in best}
     rest = [c for i, c in enumerate(found) if i not in used]
-    other = lines(rest, links(rest, reach, bend, stroke))
+    other = lines(rest, links(rest, reach, bend))
     return best, drawn(rest, other[0]) if other else 0.0
 
 
@@ -138,8 +137,6 @@ def find_line(
         return LinePath([], NONE)
     best, other = best_run(found, wiped, cfg, stroke, seen)
     total, chain = drawn(found, best), walk_px(found, best)
-    if total < cfg["line_min_mm"] * px:
-        return LinePath([], SHORT)
     if math.dist(chain[0], chain[-1]) < stroke and total > 4 * stroke:
         return LinePath([], BRANCH)
     if other >= cfg["line_similar"] * total:

@@ -14,7 +14,7 @@ class Chain(NamedTuple):
     px: np.ndarray  # (n, 2) x, y in order
     nodes: tuple[int, int]
     out: tuple[np.ndarray, np.ndarray]  # unit direction leaving the chain at each end
-    length: float  # 0 for a bridge
+    length: float
 
 
 def runs(skel: np.ndarray) -> np.ndarray:
@@ -38,7 +38,7 @@ def _far(pts: set, start) -> tuple:
 
 
 def _order(pts: set, ends: list) -> list:
-    """The run's pixels end to end: the longest way through it, or round it when it is a loop."""
+    """The run's pixels from one end to the far end, or round it when it is a loop."""
     if not ends:
         out, seen = [next(iter(pts))], set()
         while out[-1] not in seen:
@@ -47,10 +47,9 @@ def _order(pts: set, ends: list) -> list:
             nxt = [(x + dx, y + dy) for dx, dy in RING if (x + dx, y + dy) in pts - seen]
             out.append(min(nxt, key=lambda p: abs(p[0] - x) + abs(p[1] - y)) if nxt else out[-1])
         return out[:-1]
-    a, _ = _far(pts, ends[0])
-    b, prev = _far(pts, a)
+    b, prev = _far(pts, ends[0])
     out = [b]
-    while out[-1] != a:
+    while out[-1] != ends[0]:
         out.append(prev[out[-1]])
     return out
 
@@ -100,42 +99,29 @@ def _angle(a: np.ndarray, b: np.ndarray) -> float:
     return math.degrees(math.acos(float(np.clip(np.dot(a, b), -1, 1))))
 
 
-def links(found: list[Chain], reach: float, bend: float, near: float, hole=None) -> dict:
-    """Chain ends joined two by two, cheapest first: the gap over reach plus the turn over bend.
-    Ends closer than near meet and may turn up to bend; across a wider gap each end may turn
-    only half that. Two ends both inside hole, (x, y, r) px where the ball hides the line, may
-    join from any distance. No end is used twice and no join closes a loop. Gives {(chain, end):
-    (chain, end)} both ways."""
+def links(found: list[Chain], reach: float, bend: float, hole=None) -> dict:
+    """Chain ends joined two by two, cheapest first: the gap over reach plus the turn over bend,
+    where each end may turn half of bend towards the other. Two ends both inside hole, (x, y, r)
+    px where the ball hides the line, may join from any distance. No end is used twice. Gives
+    {(chain, end): (chain, end)} both ways."""
     ends = [(c.px[-e], c.out[e], i, e) for i, c in enumerate(found) for e in (0, 1)]
     pairs = []
     for k, (p, t, i, e) in enumerate(ends):
         for q, u, j, f in ends[k + 1 :]:
             v = q - p
-            d = float(np.linalg.norm(v))
+            d = max(float(np.linalg.norm(v)), 1e-9)
             hidden = (
                 hole is not None and max(math.dist(p, hole[:2]), math.dist(q, hole[:2])) <= hole[2]
             )
             if i == j or (d > reach and not hidden):
                 continue
-            if d < near:
-                turn = _angle(t, -u)
-            else:
-                turn = 2 * max(_angle(t, v / d), _angle(u, -v / d))
+            turn = 2 * max(_angle(t, v / d), _angle(u, -v / d))
             if turn <= bend:
                 pairs.append((d / reach + turn / bend, (i, e), (j, f)))
-    group = list(range(len(found)))
-
-    def root(i):
-        while group[i] != i:
-            i = group[i]
-        return i
-
     out: dict = {}
     for _, a, b in sorted(pairs, key=lambda x: x[0]):
-        if a in out or b in out or root(a[0]) == root(b[0]):
-            continue
-        group[root(a[0])] = root(b[0])
-        out[a], out[b] = b, a
+        if a not in out and b not in out:
+            out[a], out[b] = b, a
     return out
 
 

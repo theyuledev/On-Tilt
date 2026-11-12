@@ -1,3 +1,4 @@
+import ast
 import math
 
 import cv2
@@ -12,6 +13,7 @@ from tests.unit.line_pictures import (
     S_CURVE,
     STRAIGHT,
     VIS,
+    along,
     ball_px,
     follows,
     picture,
@@ -39,6 +41,41 @@ def test_a_darker_scribble_next_to_the_line_is_left_out(touching):
     line = [(-110.0 if touching else -60.0, -60.0), (80.0, 40.0)]
     lines = picture(VIS, [line], 3, shade=FAINT)
     follows(run(np.minimum(lines, picture(VIS, WEB, 3, shade=round(0.82 * 205)))), line[::-1])
+
+
+def test_a_line_through_a_scribble_is_joined_across_it():
+    line = [(-140.0, -140.0), (60.0, 60.0)]
+    lines = picture(VIS, [line], 3, shade=FAINT)
+    got = run(np.minimum(lines, picture(VIS, WEB, 3, shade=round(0.82 * 205))))
+    assert got.reason == ""
+    pts = np.array(got.points)
+    outside = np.abs(pts + 90).max(axis=1) > 30
+    assert along(pts[outside], line)[0].max() < 2
+    ends = sorted([got.points[0], got.points[-1]])
+    assert math.dist(ends[0], line[0]) < 5 and math.dist(ends[1], line[1]) < 5
+
+
+def test_a_longer_side_branch_does_not_pull_the_path_off_the_line():
+    bar = [(-80.0, 0.0), (80.0, 0.0)]
+    follows(run(picture(VIS, [bar, [(40.0, 0.0), (40.0, 55.0)]])), bar)
+
+
+def test_a_branch_turning_back_sharply_is_not_followed():
+    line = [(-140.0, 0.0), (100.0, 0.0)]
+    a = math.radians(60)
+    back = [(60.0, 0.0), (60 - 95 * math.cos(a), 95 * math.sin(a))]
+    follows(run(picture(VIS, [line, back], 4)), line)
+
+
+def test_a_gap_is_joined_to_the_line_beyond_it_not_to_a_stray_mark():
+    left, right = [(-100.0, 0.0), (0.0, 0.0)], [(8.0, 0.0), (100.0, 0.0)]
+    stray = [(10.0, 4.0), (22.0, 6.0)]
+    follows(run(picture(VIS, [left, right, stray], 3)), [(-100.0, 0.0), (100.0, 0.0)])
+
+
+def test_a_broad_stroke_with_a_gap_is_joined_end_to_end():
+    line = [(-100.0, 0.0), (100.0, 0.0)]
+    follows(run(picture(VIS, [[(-100.0, 0.0), (-8.0, 0.0)], [(8.0, 0.0), (100.0, 0.0)]], 12)), line)
 
 
 def test_faint_smudges_with_no_dark_core_are_not_ink():
@@ -87,6 +124,14 @@ CIRCLE = [[(50 * math.cos(a), 50 * math.sin(a)) for a in np.linspace(0, 2 * math
     [
         ([], "no line found"),
         ([[(-80.0, -30.0), (80.0, -30.0)], [(-80.0, 30.0), (80.0, 30.0)]], "more than one line"),
+        (
+            [
+                [(-80.0, -60.0), (80.0, -60.0)],
+                [(-80.0, 60.0), (80.0, 60.0)],
+                [(0.0, 0.0), (30.0, 0.0)],
+            ],
+            "more than one line",
+        ),
         (CIRCLE, "line branches or crosses itself"),
         ([[(0.0, 0.0), (25.0, 0.0)]], "line too short"),
     ],
@@ -102,7 +147,9 @@ def test_the_tool_prints_the_line_off_a_saved_half_size_frame(tmp_path):
     cv2.imwrite(str(frame), cv2.resize(picture(VIS, [STRAIGHT], 8), (640, 400)))
     out = main([str(frame), "--line"])
     assert out.startswith("line ")
-    assert "points = [[" in out
+    pts = ast.literal_eval(out.split("points = ")[1])
+    ends = sorted([pts[0], pts[-1]])
+    assert math.dist(ends[0], STRAIGHT[0]) < 5 and math.dist(ends[1], STRAIGHT[1]) < 5
     assert [p.name for p in tmp_path.iterdir()] == ["board.png"]
 
 
