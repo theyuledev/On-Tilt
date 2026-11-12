@@ -97,7 +97,10 @@ class Loop:
                 if self.safety.armed and self.arm_blocked:
                     self.kill()
 
-        if not self.safety.armed or self.safety.killing or stale:
+        idle = not self.safety.armed or self.safety.killing
+        if stale and not idle and hasattr(self.step, "resume"):
+            self.step.resume()  # the same run goes on after a gap in the heartbeat
+        elif idle or stale:
             self.step = make_mode(self.mode, self.cfg)  # fresh mode state, no kick on arm
         plate_cmd = self.step(ball, intent, self.cfg)
         target = tilt_to_pulse(plate_cmd, rig)
@@ -215,4 +218,5 @@ class Loop:
         if self.game is not None:
             snap["race"] = self.game.view()
         snap["guard"] = self.step.guard_view() if hasattr(self.step, "guard_view") else None
+        snap["path"] = self.step.path_view() if hasattr(self.step, "path_view") else None
         return snap

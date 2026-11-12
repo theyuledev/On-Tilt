@@ -7,7 +7,8 @@ from src.control.pid import Integral, integrate, pid, smooth
 from src.control.rest import Rest, pull_share
 from src.inputs.shaping import shape
 from src.modes.assist import goal_mm
-from src.modes.path import clip, target
+from src.modes.follow import OpenPath
+from src.modes.path import clip, is_open, target
 from src.modes.spot import held
 
 LEVEL = PlateCommand(tilt_x_deg=0.0, tilt_y_deg=0.0)
@@ -35,10 +36,12 @@ class Balance:
         self.rest = Rest()
 
     def __call__(self, ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
+        return self.toward(ball, held(cfg)["mm"], cfg)
+
+    def toward(self, ball: BallState, goal: tuple[float, float], cfg: dict) -> PlateCommand:
         c = cfg["control"]
         # the same loop about the target instead of the centre. a far ball is pulled as if only
         # balance_reach_mm away, so the brake outweighs the pull before it is too fast to stop
-        goal = held(cfg)["mm"]
         edge = cfg["rig"]["plate_inner_mm"] / 2 - max(abs(ball.x_mm), abs(ball.y_mm))
         tx, ty = clip((ball.x_mm, ball.y_mm), goal, c["balance_reach_mm"])
         ball = replace(ball, x_mm=ball.x_mm - tx, y_mm=ball.y_mm - ty)
@@ -82,15 +85,38 @@ def assist(ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
 
 
 class PathFollower:
-    """Chases the point path_lookahead_mm ahead along control.path_mm, then holds the end."""
+    """Chases the point path_lookahead_mm ahead along control.path_mm, then holds the end.
+    A path with two ends is left to OpenPath; one that closes on itself is lapped as before."""
 
     def __init__(self, cfg: dict):
         self.path = [(p[0], p[1]) for p in cfg["control"]["path_mm"]]
         if not self.path:
             raise ValueError("control.path_mm needs at least one point")
         self.seg = 0
+        self.open = None
+        if is_open(self.path):
+            self.open = OpenPath(self.path, cfg, lambda: Balance(cfg), pd_toward)
+
+    @property
+    def done(self) -> bool:
+        return self.open is not None and self.open.done
+
+    def path_view(self) -> dict:
+        """For the page: the points in whole mm in the order they are followed, and whether
+        the last one has been reached."""
+        points = self.open.path if self.open else self.path
+        return {"done": self.done, "points": [[round(x), round(y)] for x, y in points]}
+
+    def resume(self) -> None:
+        """After a gap in the heartbeat an open path goes on where it was; a lap starts over."""
+        if self.open:
+            self.open.resume()
+        else:
+            self.seg = 0
 
     def __call__(self, ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
+        if self.open:
+            return self.open(ball, intent, cfg)
         if not ball.valid:
             return LEVEL
         c = cfg["control"]

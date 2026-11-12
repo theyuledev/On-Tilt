@@ -4,11 +4,24 @@ import pytest
 
 from src.contracts import BallState, Intent
 from src.modes import MODES, Balance, PathFollower, make_mode, pd_toward
-from src.modes.path import advance, clip, project, target, walk
+from src.modes.path import (
+    advance,
+    clip,
+    from_nearest_end,
+    is_open,
+    lengths,
+    progress,
+    project,
+    stretch,
+    target,
+    tidy,
+    walk,
+)
 
 pytestmark = pytest.mark.unit
 
 SQ = [(100, 100), (-100, 100), (-100, -100), (100, -100), (100, 100)]
+ROW = [(float(x), 0.0) for x in range(-100, 101, 10)]
 CFG = {
     "control": {
         "kp_deg_mm": 0.1,
@@ -109,3 +122,68 @@ def test_each_run_gets_its_own_follower_and_plain_modes_come_back_as_is():
     assert make_mode("balance", CFG) is not make_mode("balance", CFG)
     assert isinstance(make_mode("balance", CFG), Balance)
     assert set(MODES) == {"hand", "balance", "path", "assist"}
+
+
+def test_a_closed_path_is_followed_exactly_as_before():
+    # CFG has no rig and no balance keys, so any step into the open path law raises
+    follow, seg, c = make_mode("path", CFG), 0, CFG["control"]
+    balls = [
+        ball(0, 0),
+        ball(-50, 90, -30, 5),
+        ball(0, 0, valid=False),
+        ball(-86, 95),
+        ball(-100, 50, 0, -40),
+        ball(-95, -90),
+    ]
+    for b in balls:
+        cmd = follow(b, NO_INTENT, CFG)
+        if b.valid:
+            at = (b.x_mm, b.y_mm)
+            seg, goal = target(SQ, seg, at, c["path_lookahead_mm"], c["path_capture_mm"])
+            assert cmd == pd_toward(b, goal, CFG)
+        else:
+            assert (cmd.tilt_x_deg, cmd.tilt_y_deg) == (0.0, 0.0)
+        assert follow.seg == seg
+    assert seg == 2 and not follow.done
+    assert follow.path_view() == {"done": False, "points": [list(p) for p in SQ]}
+
+
+def test_progress_is_the_distance_along_the_path_whatever_the_spacing():
+    for path in ([ROW[0], ROW[-1]], ROW):
+        s = progress(path, lengths(path), (-43.0, 6.0), 30.0, 40.0)
+        assert s == pytest.approx(57.0)
+        assert walk(path, 0, 0.0, s + 40.0) == pytest.approx((-3.0, 0.0))
+
+
+def test_progress_never_goes_back_and_stops_at_the_window():
+    cum = lengths(ROW)
+    assert progress(ROW, cum, (-80.0, 0.0), 50.0, 40.0) == 50.0
+    assert progress(ROW, cum, (50.0, 0.0), 50.0, 40.0) == 90.0
+    assert progress(ROW, cum, (150.0, 0.0), 190.0, 40.0) == 200.0
+
+
+def test_progress_stays_on_this_pass_where_the_path_crosses_itself():
+    cross = [(0.0, 0.0), (100.0, 0.0), (100.0, 50.0), (50.0, 50.0), (50.0, -50.0)]
+    cum = lengths(cross)
+    assert progress(cross, cum, (50.0, 1.0), 30.0, 40.0) == pytest.approx(50.0)
+    assert progress(cross, cum, (50.0, 1.0), 240.0, 40.0) == pytest.approx(249.0)
+
+
+def test_stretch_puts_the_goal_reach_away_however_near_or_far_it_is():
+    assert stretch((0, 0), (3, 4), 40) == pytest.approx((24, 32))
+    assert stretch((0, 0), (300, 400), 40) == pytest.approx((24, 32))
+    assert stretch((5, 5), (5, 5), 40) == (5, 5)
+
+
+def test_lengths_tidy_and_which_paths_have_two_ends():
+    assert lengths([(0, 0), (3, 4), (3, 10)]) == [0.0, 5.0, 11.0]
+    assert tidy([(0, 0), (0, 0), (1, 0), (1, 0), (0, 0)]) == [(0, 0), (1, 0), (0, 0)]
+    assert is_open(ROW) and is_open([(0, 0), (1, 0)])
+    assert not is_open([(0, 0), (1, 0), (0, 0)])
+    assert not is_open([(1, 1)]) and not is_open([])
+
+
+def test_from_nearest_end_puts_the_end_by_the_ball_first():
+    assert from_nearest_end(ROW, (90, 5)) == ROW[::-1]
+    assert from_nearest_end(ROW, (-90, 5)) == ROW
+    assert from_nearest_end(ROW, (0, 5)) == ROW
