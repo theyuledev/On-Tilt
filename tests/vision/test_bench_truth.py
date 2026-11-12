@@ -60,12 +60,18 @@ def test_a_frame_without_support_gets_no_label_and_a_reason():
     assert mark([shot()], cut, {0, 1}) == [ALONE]
     assert mark([shot(**GONE)], [lying()], {0}) == [UNSEEN]
     assert mark([shot(px=None)], [lying()], {0}) == [UNSEEN]
+    # seen at only one of the two snapshots around the picture
+    for gone in ({"valid": False}, {"px": None}):
+        first = rec.Shot(Path("x.jpg"), snap(100.0, **gone), snap(100.05), 0)
+        second = rec.Shot(Path("x.jpg"), snap(100.0), snap(100.05, **gone), 0)
+        assert mark([first, second], [lying()], {0}) == [UNSEEN, UNSEEN]
 
 
 def test_a_moving_balls_label_is_the_path_between_snapshots():
     moving = shot(b_px=B, v=800.0)
     # 15 px off the middle of the path, 25 px from either end
     assert mark([moving], [], (), at(120.0, 115.0)) == [Label(A, B, R, SECOND, False, True)]
+    assert mark([moving], [], (), at(120.0, 120.0)) == [Label(A, B, R, SECOND, False, True)]
     assert mark([moving], [], (), at(120.0, 121.0)) == [DISPUTED]
     assert mark([moving], [], (), at(161.0, 100.0)) == [DISPUTED]
     assert mark([moving], [], (), at(79.0, 100.0)) == [DISPUTED]
@@ -99,10 +105,18 @@ def test_at_rest_needs_a_slow_ball_that_stayed_put():
     # fast at just one of the two snapshots around the picture
     assert not rest(rec.Shot(Path("x.jpg"), snap(100.0), snap(100.05, v=5.0), 0), lying())
     assert not rest(rec.Shot(Path("x.jpg"), snap(100.0, v=5.0), snap(100.05), 0), lying())
-    # 1 mm/s: 3.05 mm over the three seconds before the picture and its 50 ms
+    # 0.99 mm/s: 2.97 mm over the three seconds before the picture, 3.02 mm with its 50 ms
     drift = lying()
-    drift.xy[:, 0] = np.linspace(0.0, 20.0, len(drift.t))
+    drift.xy[:, 0] = 0.99 * (drift.t - drift.t[0])
     assert not rest(shot(), drift)
+    # exactly the limit away a second before
+    stepped = lying()
+    stepped.xy[stepped.t < 99.0, 0] = BENCH["rest_mm"]
+    assert not rest(shot(), stepped)
+    # it rolls off after the picture
+    later = lying()
+    later.xy[:, 0] = np.clip(50.0 * (later.t - 102.0), 0.0, None)
+    assert rest(shot(), later)
     # seen for two and a half seconds only
     assert not rest(shot(), lying(start=97.5))
     # anywhere on the plate

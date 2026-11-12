@@ -8,7 +8,7 @@ import pytest
 
 from src.vision.bench import rec, truth_file
 from src.vision.bench.track import ARRIVED, NEVER, NO_TRAVEL, Arrivals
-from src.vision.bench.truth import ARRIVAL, DISPUTED, SECOND, UNSEEN, Label
+from src.vision.bench.truth import ARRIVAL, DISPUTED, SECOND, UNREADABLE, UNSEEN, Label
 from tools import replay_clip
 
 pytestmark = pytest.mark.unit
@@ -102,6 +102,26 @@ def test_build_cuts_tracks_at_the_bench_top_speed_and_the_coast_time(tmp_path, m
     truth_file.build(folder, cfg)
     coast_s = cfg["vision"]["lost_after_misses"] / cfg["rig"]["camera_fps"]
     assert asked == {"top_mm_s": cfg["bench"]["top_speed_mm_s"], "hole_s": coast_s}
+
+
+def by_disc(folder: Path) -> truth_file.Built:
+    cfg = rec.settings(folder)
+    return truth_file.build(folder, cfg, truth_file.by_disc(cfg))
+
+
+def test_a_folder_without_trials_is_labelled_by_the_second_detector_alone(tmp_path):
+    folder = recorded(tmp_path)
+    (folder / "trials.jsonl").unlink()
+    built = by_disc(folder)
+    got = [g if isinstance(g, str) else g.support for g in built.labels]
+    assert got == [SECOND, DISPUTED, UNSEEN]
+    assert not built.arrived.trials
+
+
+def test_a_picture_that_will_not_open_is_skipped_as_unreadable(tmp_path):
+    folder = recorded(tmp_path)
+    (folder / "frames" / "000100.000.jpg").write_bytes(b"")
+    assert by_disc(folder).labels[0] == UNREADABLE
 
 
 def test_the_labels_command_writes_a_row_a_picture_and_what_it_skipped(tmp_path, capsys):
