@@ -17,18 +17,25 @@ function camStart() {
            eye: null, dir: [0, 1], filmed: null, cam: { pitch: 56, yaw: 0, zoom: 1.2, cx: 0, cy: 0 } };
 }
 
-// unit direction of the path segment nearest to p, null when the path has no length
-function pathDir(path, p) {
-  let best = Infinity, dir = null;
-  for (let i = 0; i + 1 < path.length; i++) {
+// the point of the path nearest to p, looked for on the segments between points from and to:
+// { i: the segment, at: the point, dir: the segment's unit direction }, null when it has no length
+function nearest(path, p, from = 0, to = path.length - 1) {
+  let best = Infinity, hit = null;
+  for (let i = from; i < to; i++) {
     const [ax, ay] = path[i], dx = path[i + 1][0] - ax, dy = path[i + 1][1] - ay;
     const len = Math.hypot(dx, dy);
     if (!len) continue;
     const u = Math.max(0, Math.min(len, ((p[0] - ax) * dx + (p[1] - ay) * dy) / len));
-    const d = Math.hypot(ax + (dx * u) / len - p[0], ay + (dy * u) / len - p[1]);
-    if (d < best) { best = d; dir = [dx / len, dy / len]; }
+    const at = [ax + (dx * u) / len, ay + (dy * u) / len], d = Math.hypot(at[0] - p[0], at[1] - p[1]);
+    if (d < best) { best = d; hit = { i, at, dir: [dx / len, dy / len] }; }
   }
-  return dir;
+  return hit;
+}
+
+// unit direction of the path segment nearest to p, null when the path has no length
+function pathDir(path, p) {
+  const hit = nearest(path, p);
+  return hit && hit.dir;
 }
 
 const within = (gate, eye, mm) => !!gate && Math.hypot(gate[0] - eye[0], gate[1] - eye[1]) < mm;

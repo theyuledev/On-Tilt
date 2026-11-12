@@ -21,8 +21,8 @@ STAGING, FINISHED = {"state": "staging", "reached": 0}, {"state": "finished", "r
 LAP = {**COURSE, "points": [*COURSE["points"], [-80, 80]], "checkpoints": [1, 2, 3]}
 LONG = {**COURSE, "points": [*COURSE["points"], [-80, -80]], "checkpoints": [1, 2, 3]}
 INK = "() => [PATH, GATE, GATE_LIT]"
-# canvas px per scene px where the camera looks, what the 3D line widths scale with
-K = "c => projector(c, [0, 0], 135, 900)(c.cx, c.cy)[3]"
+# canvas px per plate mm where the camera looks, what the 3D line widths scale with
+MM = "c => projector(c, [0, 0], 135, 900)(c.cx, c.cy)[3] * PLATE_PX / 135"
 
 
 def flat(maze, s):
@@ -72,6 +72,11 @@ def test_path_mode_draws_its_own_path_and_leaves_the_courses_gates_and_letters_o
     corners = scene3d.run(*[(AT, [cam, *p]) for p in OWN_PATH])
     assert all(any(math.dist(c, p) < 0.01 for p in lines(drawn)) for c in corners)
     assert not any(call[0] == "fillText" for call in drawn)
+    assert not any(call[0] == "stroke" and len(call) > 1 for call in drawn)
+    # a race that is over does not turn the plate's own path into a driven one
+    done = scene3d.draw(COURSE, scene3d.snap(valid=False, mode="path", race=FINISHED), cam)
+    green = done.index(["strokeStyle=", scene3d.run((INK, []))[0][2]])
+    assert not lines(done[green : green + done[green:].index(["stroke"])])
 
 
 def test_gate_rings_and_the_start_ring_have_the_real_radius_in_the_flat_and_the_3d_view():
@@ -127,8 +132,9 @@ def test_take_rings_tell_taken_next_and_later_gates_apart_in_both_views():
     rings = [drawn.index(["arc", *p, TAKE_R, 0, 2 * math.pi]) for p in gates]
     assert [last(drawn, i, "strokeStyle=") for i in rings] == inks
     cam = scene3d.shots()["wide"]
-    drawn, k = scene3d.draw(LONG, s, cam), scene3d.run((K, [cam]))[0]
+    drawn, mm = scene3d.draw(LONG, s, cam), scene3d.run((MM, [cam]))[0]
     for at, ink in zip(scene3d.run(*[(AT, [cam, *p, TAKE_R]) for p in gates]), inks, strict=True):
-        [i] = ring_at(drawn, at)
+        i = ring_at(drawn, at)[0]
         assert last(drawn, i, "strokeStyle=") == ink and last(drawn, i, "setLineDash") == []
-        assert last(drawn, i, "lineWidth=") == pytest.approx(2 * k)
+        # the same thin line as on the flat board
+        assert last(drawn, i, "lineWidth=") == pytest.approx(0.8 * mm)

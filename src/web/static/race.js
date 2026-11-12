@@ -136,14 +136,20 @@ function shownPath(maze, cfg, s) {
   return maze ? maze.points : null;
 }
 
+// the last half second of the ball and of the ghost, kept for whichever view draws
+function trails(s) {
+  const g = s.race && s.race.ghost_mm;
+  keep(trail, s.ball.valid && [s.ball.x_mm, s.ball.y_mm], s.t_s, TRAIL_S);
+  if (g) keep(ghostTrail, g, s.t_s, TRAIL_S); else ghostTrail.length = 0;
+}
+
 // look is the window: its centre in plate mm, the zoom, and tall for the follow cam's extras
 function draw(ctx, cfg, maze, s, look) {
   const px = fit(ctx.canvas), h = cfg.plate_inner_mm / 2, r = cfg.ball_d_mm / 2;
   const k = (look.zoom * px) / (2 * (h + MARGIN_MM)), at = [s.ball.x_mm, s.ball.y_mm];
   const g = s.race && s.race.ghost_mm;
   const path = shownPath(maze, cfg, s), course = !!maze && path === maze.points;
-  keep(trail, s.ball.valid && [s.ball.x_mm, s.ball.y_mm], s.t_s, TRAIL_S);
-  if (g) keep(ghostTrail, g, s.t_s, TRAIL_S); else ghostTrail.length = 0;
+  trails(s);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, px, px);
   ctx.setTransform(k, 0, 0, -k, px / 2 - k * look.x, px / 2 + k * look.y);
