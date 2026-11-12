@@ -2,6 +2,7 @@
 
 Finds the S and E letters, takes the corridor path between them and maps it to plate mm the
 same way the tracker maps the ball. A frame smaller than the camera's is scaled up first.
+With --line it prints the one drawn line as a plate mm path instead and writes nothing.
 """
 
 import argparse
@@ -11,9 +12,11 @@ import cv2
 import numpy as np
 
 from src.io.settings import ROOT, load
+from src.vision.line_path import find_line
 from src.vision.maze_path import checkpoints, length, maze_toml, polyline
 from src.vision.maze_read import STROKES, read
-from src.vision.px_to_mm import plate_mm
+from src.vision.plate_find import PlateTracker, configured
+from src.vision.px_to_mm import plate_mm, with_calib
 
 
 def parser() -> argparse.ArgumentParser:
@@ -36,6 +39,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--tol-mm", type=float, default=3.0)
     p.add_argument("--step-mm", type=float, default=30.0)
     p.add_argument("--gates", type=int, default=4)
+    p.add_argument("--line", action="store_true", help="print the one drawn line as a path")
     return p
 
 
@@ -47,6 +51,8 @@ def main(argv=None) -> str:
     if gray is None:
         raise SystemExit(f"can't read {args.frame}")
     scale = cfg["rig"]["camera_width"] / gray.shape[1]
+    if args.line:
+        return _line(cv2.resize(gray, None, fx=scale, fy=scale), cfg)
     m = read(gray, vis["px_per_mm"] / scale, vars(args), args.start, args.end)
     print(f"board box px {m.board_box}  S px {_r(m.s_px)}  E px {_r(m.e_px)}")
     if m.path is None:
@@ -62,6 +68,22 @@ def main(argv=None) -> str:
     out.write_text(maze_toml(pts, gates, [_mm(w, scale, vis) for w in m.lines]))
     print(f"wrote {out}")
     return str(out)
+
+
+def _line(gray: np.ndarray, cfg: dict) -> str:
+    """The line on the board map the app would use: found on this frame when it tracks the board."""
+    vis, half = with_calib(cfg["vision"]), cfg["rig"]["plate_inner_mm"] / 2
+    if "calib" in vis and vis["plate_track"]:
+        plate = PlateTracker(vis, half, configured(half, vis))
+        plate.update(gray)
+        if plate.lost:
+            print("board edges not found, using the set map")
+        else:
+            vis = plate.mapped()
+    pts, why = find_line(gray, vis, half, vis["line_edge_mm"])
+    out = why or f"line {length(pts):.0f} mm in {len(pts)} points\npoints = {pts}"
+    print(out)
+    return out
 
 
 def _mm(line, scale: float, vis: dict) -> np.ndarray:
