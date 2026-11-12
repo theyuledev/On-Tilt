@@ -11,6 +11,10 @@ Recorder folders instead of a clip: what each holds and what a replay would skip
     uv run python -m tools.replay_clip --labels <out folder> data/recordings/<folder> [...]
 
 Writes where the ball is in each picture, as far as something other than the tracker backs it.
+
+    uv run python -m tools.replay_clip --score <labels folder> <calibration json> <folder> [...]
+
+Runs the tracker over the pictures and scores its answers against those labels, by board region.
 """
 
 import sys
@@ -23,7 +27,8 @@ import numpy as np
 
 from src.io.camera import ClipSource
 from src.io.settings import load
-from src.vision.bench import rec, truth_file
+from src.vision.bench import rec, replay, report, truth_file
+from src.vision.calib import load_calib
 from src.vision.tracker import BallTracker
 
 Window = tuple[int, int]
@@ -79,6 +84,18 @@ def spans(frames: list[int]) -> str:
     return " ".join(str(a) if a == b else f"{a}-{b}" for a, b in out) or "-"
 
 
+def score(truth: Path, calib: dict, folders: list[Path]) -> None:
+    scored = []
+    for folder in folders:
+        cfg = rec.calibrated(rec.settings(folder), calib)
+        recording = rec.read(folder, cfg["vision"]["bg_period_s"])
+        labels = truth_file.read(truth / f"{folder.name}.jsonl")
+        scored.append(replay.run(recording, labels, cfg))
+        print(report.table(folder.name, scored[-1]))
+    if len(scored) > 1:
+        print(report.table(f"all {len(scored)} folders", replay.total(scored)))
+
+
 def main(argv: list[str]) -> None:
     path, *args = argv
     if path == "--labels":
@@ -89,6 +106,9 @@ def main(argv: list[str]) -> None:
             built = truth_file.build(folder, cfg, truth_file.by_disc(cfg))
             truth_file.write(out / f"{folder.name}.jsonl", built)
             print(truth_file.describe(folder.name, built))
+        return
+    if path == "--score":
+        score(Path(args[0]), load_calib(Path(args[1])), [Path(a) for a in args[2:]])
         return
     if Path(path).is_dir():
         for folder in map(Path, argv):

@@ -37,6 +37,15 @@ def settings(folder: Path) -> dict:
     return load(local=local)
 
 
+def calibrated(cfg: dict, calib: dict) -> dict:
+    """The settings with the lens and plate calibration handed in. A recorder folder does not
+    save the one its run used, and the local file is whatever this machine has today."""
+    vision = cfg["vision"]
+    if not vision["use_calib"]:
+        return cfg
+    return {**cfg, "vision": {**vision, "use_calib": False, "calib": calib}}
+
+
 def _rows(folder: Path, counts: Counter) -> Iterator[dict]:
     with (folder / "snap.jsonl").open() as f:
         for line in f:

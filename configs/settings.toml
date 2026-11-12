@@ -167,4 +167,5 @@ top_speed_mm_s = { value = 530, label = "uncalibrated default (NOT TESTED, expec
 rest_mm_s = { value = 5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 rest_mm = { value = 3, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 rest_s = { value = 3, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+edge_mm = { value = 15, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 at_target_mm = { value = 24, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }

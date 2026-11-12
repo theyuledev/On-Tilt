@@ -34,6 +34,19 @@ def test_disc_match_finds_a_drawn_ball_at_the_board_edge():
     assert (x, y) == pytest.approx((60 + R, 150), abs=3)
 
 
+@pytest.mark.parametrize("x, y", [(R + 1, 110), (140, R + 1), (279 - R - 1, 219 - R - 1)])
+def test_disc_match_finds_a_drawn_ball_right_at_the_picture_border(x, y):
+    # whole in the picture, but nearer its border than the ground the match wants around it
+    board = plate()[40:260, 60:340]
+    assert disc(ball(board, x, y), [R])[:2] == pytest.approx((x, y), abs=3)
+
+
+def test_a_ball_at_the_border_matches_as_well_as_one_in_the_open():
+    # a smaller disc out in the open must not beat the ball for want of ground past the border
+    board = ball(plate()[40:260, 60:340], 150, 110, 15)
+    assert disc(ball(board, R + 1, 110), [R])[:2] == pytest.approx((R + 1, 110), abs=3)
+
+
 def test_the_best_of_several_sizes_is_the_drawn_balls():
     # 90 is too big to slide over this picture at all and is passed over
     x, y, r = disc(ball(plate(), 200, 150, 30), [12, 30, 45, 90])

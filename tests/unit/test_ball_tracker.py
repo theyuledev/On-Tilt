@@ -186,3 +186,39 @@ def test_ragged_junk_smaller_than_the_locked_ball_is_not_taken():
         tr.update(junk, (n + i) * DT)
         assert tr.misses > 0 or tr.r is None
     assert not tr.update(junk, 1.0).valid
+
+
+def state(tr: BallTracker) -> tuple:
+    return tr.r, tr.dark, tr.hits, tr.misses, tr.track
+
+
+def test_a_seeded_tracker_carries_on_like_one_that_found_the_ball_itself():
+    frames = [ball(plate(), 400 + 6 * i, 400, 30) for i in range(6)]
+    found, seeded = BallTracker(CFG), BallTracker(CFG)
+    first = found.update(frames[0], 0.0)
+    assert first.valid
+    seeded.seed(first.x_px, first.y_px, first.r_px, True, 0.0)
+    assert state(seeded) == state(found)
+    for i, img in enumerate(frames[1:], 1):
+        assert seeded.update(img, i * DT) == found.update(img, i * DT)
+    assert state(seeded) == state(found)
+
+
+def test_seeded_tracker_is_locked_on_the_given_ball():
+    img = ball(ball(plate(), 400, 300, 30), 800, 500, 30)
+    tr = BallTracker(CFG)
+    fresh = tr.update(img, 0.0)
+    # seeded on the ball it did not pick from nothing, it lets go of the first and stays there
+    other = (800.0, 500.0) if fresh.x_px < 600 else (400.0, 300.0)
+    tr.seed(*other, 30.0, True, DT)
+    assert state(tr) == (30.0, True, 1, 0, [(DT, *other)])
+    out = tr.update(img, 2 * DT)
+    assert out.valid and tr.misses == 0
+    assert (out.x_px, out.y_px) == pytest.approx(other, abs=2)
+
+
+def test_reset_drops_a_seed_like_any_other_lock():
+    tr = BallTracker(CFG)
+    tr.seed(400.0, 300.0, 30.0, True, 0.0)
+    tr.reset()
+    assert state(tr) == state(BallTracker(CFG))

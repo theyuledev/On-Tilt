@@ -6,6 +6,8 @@ import pytest
 
 from src.io.settings import load
 from src.vision.bench import rec
+from src.vision.pipeline import Pipeline
+from tests.unit.test_plate_find import CALIB
 from tools import replay_clip
 
 pytestmark = pytest.mark.unit
@@ -111,3 +113,16 @@ def test_folder_arguments_print_each_inventory_with_its_skipped_line(tmp_path, c
     assert first.rstrip().endswith("skipped 0 of 2 frames")
     assert second.startswith("1 frames, 3 snapshots, 0 torn lines, 3 stretches")
     assert second.rstrip().endswith(f"skipped 1 of 1 frames: 1 {rec.NO_NEXT}")
+
+
+def test_the_calibration_handed_in_reaches_the_pipeline_without_the_local_file():
+    cfg = load()
+    assert rec.calibrated(cfg, CALIB) is cfg  # a run on the flat map stays on it
+    on = {**cfg, "vision": {**cfg["vision"], "use_calib": True}}
+    with pytest.raises(FileNotFoundError):
+        Pipeline(on)
+    got = rec.calibrated(on, CALIB)
+    assert Pipeline(got).cfg["calib"] is CALIB and on["vision"]["use_calib"]
+    assert {k: v for k, v in got.items() if k != "vision"} == {
+        k: v for k, v in cfg.items() if k != "vision"
+    }

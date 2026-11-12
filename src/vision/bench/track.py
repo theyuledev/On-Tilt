@@ -30,9 +30,10 @@ class Arrivals(NamedTuple):
 def _joined(a: dict, b: dict, top_mm_s: float, hole_s: float) -> bool:
     """b carries on from a: no hole the tracker could have lost the ball in and found it again,
     no step faster than a real ball."""
-    if not 0 <= b["t_s"] - a["t_s"] <= hole_s:
-        return False
     p, q = a["ball"], b["ball"]
+    # the loop's clock and the camera's: a stalled camera leaves a hole the loop's rows paper over
+    if not (0 <= b["t_s"] - a["t_s"] <= hole_s and q["t_s"] - p["t_s"] <= hole_s):
+        return False
     step = math.hypot(q["x_mm"] - p["x_mm"], q["y_mm"] - p["y_mm"])
     return step <= top_mm_s * (q["t_s"] - p["t_s"])
 

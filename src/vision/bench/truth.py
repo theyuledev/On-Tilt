@@ -32,7 +32,8 @@ class Label(NamedTuple):
     second: bool | None  # what the second detector said, where it ran
 
 
-def _off_path(p: Px, a: Px, b: Px) -> float:
+def off_path(p: Px, a: Px, b: Px) -> float:
+    """How far p lies from the straight way between a and b."""
     dx, dy = b[0] - a[0], b[1] - a[1]
     span = dx * dx + dy * dy
     u = 0.0 if span == 0 else ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / span
@@ -75,7 +76,7 @@ def _seen(
         if at is None:
             return UNREADABLE
         # inside the ball at the size the second detector looked for, not the tracker's
-        agrees = _off_path(at[:2], (ax, ay), (bx, by)) <= at[2]
+        agrees = off_path(at[:2], (ax, ay), (bx, by)) <= at[2]
     if holding(found, k["t_s"], n["t_s"]) in arrived:
         support = ARRIVAL
     elif agrees:

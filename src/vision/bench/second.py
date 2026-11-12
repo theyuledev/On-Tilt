@@ -23,8 +23,10 @@ def disc(gray: np.ndarray, radii_px: Iterable[float]) -> tuple[float, float, flo
     for r in sorted({max(round(r), 1) for r in radii_px}):
         if 4 * r + 1 > min(gray.shape):
             break
-        match = cv2.matchTemplate(gray, _template(r), cv2.TM_CCOEFF_NORMED)
+        # the border repeated outwards, so a ball right at it has its ground on every side too
+        wide = cv2.copyMakeBorder(gray, 2 * r, 2 * r, 2 * r, 2 * r, cv2.BORDER_REPLICATE)
+        match = cv2.matchTemplate(wide, _template(r), cv2.TM_CCOEFF_NORMED)
         _, score, _, (x, y) = cv2.minMaxLoc(match)
         if best is None or score > best[0]:
-            best = (score, x + 2.0 * r, y + 2.0 * r, float(r))
+            best = (score, float(x), float(y), float(r))
     return best and best[1:]
