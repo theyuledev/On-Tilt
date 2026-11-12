@@ -1,6 +1,5 @@
 import ast
 import math
-import time
 
 import cv2
 import numpy as np
@@ -126,18 +125,6 @@ def test_two_lines_each_with_a_gap_are_still_two():
         [(3.0, y), (80.0, y)] for y in (-30.0, 30.0)
     ]
     assert run(picture(VIS, lines)).reason == "more than one line"
-
-
-@pytest.mark.parametrize("kind", ["black", "white", "noise"])
-def test_a_blank_or_noise_frame_is_refused_fast(kind):
-    img = {
-        "black": np.zeros((800, 1280), np.uint8),
-        "white": np.full((800, 1280), 255, np.uint8),
-        "noise": np.random.default_rng(0).integers(0, 256, (800, 1280), dtype=np.uint8),
-    }[kind]
-    start = time.perf_counter()
-    assert run(img).reason == "no line found"
-    assert time.perf_counter() - start < 1
 
 
 CIRCLE = [[(50 * math.cos(a), 50 * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 73)]]

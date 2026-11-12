@@ -1,6 +1,7 @@
 """The centre of one marker line drawn on the board, as a path in plate mm, or why there is none."""
 
 import math
+from collections import Counter
 from typing import NamedTuple
 
 import cv2
@@ -14,6 +15,7 @@ from src.vision.tracker import BallPx
 
 NONE, MANY = "no line found", "more than one line"
 BRANCH, SHORT = "line branches or crosses itself", "line too short"
+DIFFER = "pictures do not agree"
 
 
 class LinePath(NamedTuple):
@@ -164,3 +166,25 @@ def find_line(
     if length(mm) < cfg["line_min_mm"]:
         return LinePath([], SHORT)
     return LinePath(resample(mm, cfg["line_step_mm"]), "")
+
+
+def _near(a: np.ndarray, b: np.ndarray, tol: float) -> float:
+    """Share of a's points within tol of the polyline b."""
+    p, s, e = a[:, None], b[:-1], b[1:]
+    seg = e - s
+    t = np.clip(((p - s) * seg).sum(-1) / np.maximum((seg * seg).sum(-1), 1e-9), 0, 1)
+    return float((np.linalg.norm(p - s - t[..., None] * seg, axis=-1).min(1) <= tol).mean())
+
+
+def agree(reads: list[LinePath], cfg: dict) -> LinePath:
+    """The path most of several reads of the same board agree on: two agree when all but
+    line_similar of each one's points lie within half a step of the other. Too few agreeing
+    gives the refusal most reads gave, or DIFFER."""
+    paths = [np.array(r.points) for r in reads if not r.reason]
+    tol, need = cfg["line_step_mm"] / 2, 1 - cfg["line_similar"]
+    votes = [sum(min(_near(a, b, tol), _near(b, a, tol)) >= need for b in paths) for a in paths]
+    if votes and 2 * max(votes) > len(reads):
+        best = max(range(len(paths)), key=lambda k: (votes[k], len(paths[k])))
+        return LinePath(paths[best].tolist(), "")
+    said = Counter(r.reason for r in reads if r.reason).most_common(1)
+    return LinePath([], said[0][0] if said and 2 * said[0][1] > len(reads) else DIFFER)
