@@ -15,6 +15,7 @@ from src.io.settings import ROOT, load
 from src.vision.line_path import find_line
 from src.vision.maze_path import checkpoints, length, maze_toml, polyline
 from src.vision.maze_read import STROKES, read
+from src.vision.plate_find import PlateTracker, configured
 from src.vision.px_to_mm import plate_mm, with_calib
 
 
@@ -70,8 +71,16 @@ def main(argv=None) -> str:
 
 
 def _line(gray: np.ndarray, cfg: dict) -> str:
-    vis = with_calib(cfg["vision"])
-    pts, why = find_line(gray, vis, cfg["rig"]["plate_inner_mm"] / 2, vis["line_edge_mm"])
+    """The line on the board map the app would use: found on this frame when it tracks the board."""
+    vis, half = with_calib(cfg["vision"]), cfg["rig"]["plate_inner_mm"] / 2
+    if "calib" in vis and vis["plate_track"]:
+        plate = PlateTracker(vis, half, configured(half, vis))
+        plate.update(gray)
+        if plate.lost:
+            print("board edges not found, using the set map")
+        else:
+            vis = plate.mapped()
+    pts, why = find_line(gray, vis, half, vis["line_edge_mm"])
     out = why or f"line {length(pts):.0f} mm in {len(pts)} points\npoints = {pts}"
     print(out)
     return out

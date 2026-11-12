@@ -55,10 +55,11 @@ def test_a_line_close_to_the_board_edge_is_read():
     follows(run(picture(VIS, [line], 3, shade=FAINT)), line)
 
 
-def test_a_line_running_off_the_board_is_read_up_to_the_edge():
-    got = run(picture(VIS, [[(0.0, 0.0), (HALF + 10, 0.0)]]))
+@pytest.mark.parametrize("edge", [EDGE, 8.0])
+def test_a_line_running_off_the_board_is_read_up_to_the_edge(edge):
+    got = run(picture(VIS, [[(0.0, 0.0), (HALF + 10, 0.0)]]), edge=edge)
     assert got.reason == ""
-    assert max(x for x, _ in got.points) == pytest.approx(HALF - EDGE, abs=5)
+    assert max(x for x, _ in got.points) == pytest.approx(HALF - edge, abs=1.5)
 
 
 def test_a_line_crossing_itself_goes_straight_over_the_crossing():
@@ -139,8 +140,8 @@ def test_a_ball_given_picks_its_line_out_of_two():
     follows(run(img, VIS, ball_px(VIS, near[0], 8.0)), near)
 
 
-def test_a_ball_past_the_board_does_not_pull_the_end_out():
-    line, at = [(0.0, 0.0), (HALF - 25, 0.0)], (HALF - 8, 0.0)
+def test_a_ball_past_the_read_area_does_not_pull_the_end_out():
+    line, at = [(0.0, 0.0), (HALF - 12, 0.0)], (HALF - 1, 0.0)
     got = run(picture(VIS, [line], ball=(at, 8.0)), VIS, ball_px(VIS, at, 8.0))
     assert max(x for x, _ in got.points) <= HALF - EDGE
     assert np.all(np.abs(np.array(got.points)[:, 1]) < 2)

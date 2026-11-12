@@ -62,7 +62,7 @@ def pieces(marks: np.ndarray, stroke: int, web: float = 0.0):
 
 def through(found: list, wiped: np.ndarray, reach: int, joined: dict) -> dict:
     """In each wiped scribble, the two longest chains that end within reach px of it are joined
-    through it, in place of whatever their ends were joined to."""
+    through it."""
     _, zones = cv2.connectedComponents(cv2.dilate(wiped, np.ones((2 * reach + 1,) * 2, np.uint8)))
     h, w = zones.shape
     by: dict[int, list] = {}
@@ -74,17 +74,16 @@ def through(found: list, wiped: np.ndarray, reach: int, joined: dict) -> dict:
     out = dict(joined)
     for ends in by.values():
         top = sorted(ends, reverse=True)
-        if len(top) >= 2 and top[0][1] != top[1][1]:
+        if len(top) >= 2:
             a, b = top[0][1:], top[1][1:]
-            for end in (a, b):
-                out.pop(out.pop(end, None), None)
             out[a], out[b] = b, a
     return out
 
 
 def best_run(found: list, wiped, cfg: dict, stroke: int, ball):
-    """The longest smooth walk and the drawn length of the longest run left over. A ball given
-    picks the walk that reaches it; that walk is the line whatever else is drawn (0 left over)."""
+    """The longest smooth walk, and the drawn length of the longest run left over with whether
+    it hangs off the walk. A ball given picks the walk that reaches it; that walk is the line
+    whatever else is drawn."""
     reach = cfg["line_bridge_mm"] * cfg["px_per_mm"]
     bend = cfg["line_bend_deg"]
     hole = None if ball is None else (*ball[:2], ball[2] + stroke)
@@ -99,11 +98,16 @@ def best_run(found: list, wiped, cfg: dict, stroke: int, ball):
         if at and not {i for i, _ in best} & {i for i, _ in at}:
             best = longest_walk(found, joined, bend, cost, at)
         if {i for i, _ in best} & {i for i, _ in at}:
-            return best, 0.0
+            return best, 0.0, False
     used = {i for i, _ in best}
-    rest = [c for i, c in enumerate(found) if i not in used]
+    idx = [i for i in range(len(found)) if i not in used]
+    rest = [found[i] for i in idx]
     other = lines(rest, links(rest, reach, bend))
-    return best, drawn(rest, other[0]) if other else 0.0
+    if not other:
+        return best, 0.0, False
+    walked = {n for i in used for n in found[i].nodes}
+    hangs = any(n in walked for j, _ in other[0] for n in rest[j].nodes)
+    return best, drawn(rest, other[0]), hangs
 
 
 def resample(pts, step: float) -> list[list[float]]:
@@ -127,21 +131,30 @@ def find_line(
     if min(w, h) <= 2 * stroke:
         return LinePath([], NONE)
     crop = gray[y0 : y0 + h, x0 : x0 + w]
-    marks = np.uint8(ink(crop, cfg, 2 * stroke + 1) & (region[y0 : y0 + h, x0 : x0 + w] > 0))
+    region = region[y0 : y0 + h, x0 : x0 + w]
+    rim = np.float32(np.array(outline_px(half_mm - edge_mm, cfg)) - (x0, y0))
+    marks = np.uint8(ink(crop, cfg, 2 * stroke + 1) & (region > 0))
+    if 2 * marks.sum() > region.sum():
+        return LinePath([], NONE)
     seen = None
     if ball is not None and ball.valid:
         seen = (ball.x_px - x0, ball.y_px - y0, ball.r_px + stroke)
         cv2.circle(marks, (round(seen[0]), round(seen[1])), round(seen[2]), 0, -1)
     found, wiped = pieces(marks, stroke, cfg["line_web_mm"] * px)
-    if not found:
+    # more pieces than fit the board a bridge apart is noise, not a drawing
+    if (
+        not found
+        or len(found) * cfg["line_bridge_mm"] * cfg["line_stroke_mm"] > region.sum() / px**2
+    ):
         return LinePath([], NONE)
-    best, other = best_run(found, wiped, cfg, stroke, seen)
+    best, other, hangs = best_run(found, wiped, cfg, stroke, seen)
     total, chain = drawn(found, best), walk_px(found, best)
     if math.dist(chain[0], chain[-1]) < stroke and total > 4 * stroke:
         return LinePath([], BRANCH)
     if other >= cfg["line_similar"] * total:
-        return LinePath([], MANY)
-    if seen is not None:
+        return LinePath([], BRANCH if hangs else MANY)
+    inside = seen is not None and cv2.pointPolygonTest(rim, seen[:2], False) >= 0
+    if inside:
         near = [math.dist(p, seen[:2]) <= seen[2] + stroke for p in (chain[0], chain[-1])]
         chain = np.vstack(
             [[seen[:2]], chain] if near[0] else [chain, [seen[:2]]] if near[1] else [chain]

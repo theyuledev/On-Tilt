@@ -55,11 +55,10 @@ def _order(pts: set, ends: list) -> list:
 
 
 def _out(px: np.ndarray, back: int) -> tuple[np.ndarray, np.ndarray]:
-    """Direction leaving each end, measured back pixels long and starting back // 4 in, where a
-    fork has not bent the skeleton."""
+    """Direction leaving each end, measured over back pixels."""
     n = len(px) - 1
-    skip, far = min(back // 4, n // 2), min(back + back // 4, n)
-    a, b = px[skip] - px[far], px[n - skip] - px[n - far]
+    far = min(back, n)
+    a, b = px[0] - px[far], px[n] - px[n - far]
     return tuple(v / max(np.linalg.norm(v), 1e-9) for v in (a, b))
 
 
@@ -88,8 +87,6 @@ def chains(skel: np.ndarray, back: int) -> list[Chain]:
             hit = [f for f in near if f]
             nodes.append(hit[0] if hit else free)
             free += not hit
-        if not ends and nodes[0] != nodes[1]:
-            nodes[1] = nodes[0]
         steps = np.linalg.norm(np.diff(px, axis=0), axis=1).sum() if len(px) > 1 else 1.0
         found.append(Chain(px, tuple(nodes), _out(px, back), float(steps)))
     return found
@@ -125,11 +122,11 @@ def links(found: list[Chain], reach: float, bend: float, hole=None) -> dict:
     return out
 
 
-def longest_walk(found: list[Chain], joined: dict, bend: float, cost: float, starts, budget=3000):
-    """The walk over chains and joins, each chain once, turning at most bend degrees at a fork,
-    that covers the most drawn length less cost px per 90 degrees turned. It begins at one of
-    starts, (chain, end) pairs; straightest turns are tried first and each start gets budget
-    steps. Gives [(chain, forward)]."""
+def longest_walk(found: list[Chain], joined: dict, bend: float, cost: float, starts, budget=300000):
+    """The walk over chains and joins, each chain once, turning at most bend degrees, that
+    covers the most drawn length less cost px per 90 degrees turned. It begins at one of
+    starts, (chain, end) pairs; straightest turns are tried first and the starts share budget
+    steps evenly. Gives [(chain, forward)]."""
     at: dict[int, list] = {}
     for i, c in enumerate(found):
         at.setdefault(c.nodes[0], []).append((i, 0))
@@ -154,13 +151,13 @@ def longest_walk(found: list[Chain], joined: dict, bend: float, cost: float, sta
             left[0] -= 1
             if left[0] < 0:
                 break
-            if j not in used and (t <= bend or (i, 1 - e) in joined and joined[i, 1 - e] == (j, f)):
+            if j not in used and t <= bend:
                 go(path, used, total, j, f, t)
         path.pop()
         used.discard(i)
 
     for i, e in starts:
-        left[0] = budget
+        left[0] = budget // len(starts)
         go([], set(), 0.0, i, e, 0.0)
     return best[0]
 

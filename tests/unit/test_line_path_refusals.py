@@ -1,10 +1,12 @@
 import ast
 import math
+import time
 
 import cv2
 import numpy as np
 import pytest
 
+from src.vision.line_path import BRANCH
 from src.vision.px_to_mm import plate_px
 from src.web.form import check
 from tests.unit.line_pictures import (
@@ -12,6 +14,7 @@ from tests.unit.line_pictures import (
     FAINT,
     S_CURVE,
     STRAIGHT,
+    TURNED,
     VIS,
     along,
     ball_px,
@@ -19,6 +22,7 @@ from tests.unit.line_pictures import (
     picture,
     run,
 )
+from tools import maze_from_frame as tool
 from tools.maze_from_frame import main
 
 pytestmark = pytest.mark.unit
@@ -55,16 +59,16 @@ def test_a_line_through_a_scribble_is_joined_across_it():
     assert math.dist(ends[0], line[0]) < 5 and math.dist(ends[1], line[1]) < 5
 
 
-def test_a_longer_side_branch_does_not_pull_the_path_off_the_line():
-    bar = [(-80.0, 0.0), (80.0, 0.0)]
-    follows(run(picture(VIS, [bar, [(40.0, 0.0), (40.0, 55.0)]])), bar)
-
-
 def test_a_branch_turning_back_sharply_is_not_followed():
-    line = [(-140.0, 0.0), (100.0, 0.0)]
+    line = [(-140.0, 0.0), (70.0, 0.0)]
     a = math.radians(60)
-    back = [(60.0, 0.0), (60 - 95 * math.cos(a), 95 * math.sin(a))]
+    back = [(60.0, 0.0), (60 - 30 * math.cos(a), 30 * math.sin(a))]
     follows(run(picture(VIS, [line, back], 4)), line)
+
+
+def test_a_side_branch_a_bit_longer_than_the_line_end_is_not_taken():
+    line = [(-140.0, 0.0), (80.0, 0.0)]
+    follows(run(picture(VIS, [line, [(60.0, 0.0), (60.0, 30.0)]], 4)), line)
 
 
 def test_a_gap_is_joined_to_the_line_beyond_it_not_to_a_stray_mark():
@@ -111,9 +115,29 @@ def test_a_thick_blob_that_is_not_the_ball_is_not_a_line():
     follows(run(img, VIS, ball_px(VIS, (40.0, 60.0), 8.0)), STRAIGHT)
 
 
-def test_a_branch_off_the_line_is_left_out():
+def test_a_short_branch_is_left_out_and_a_long_one_refused():
     bar = [(-80.0, 0.0), (80.0, 0.0)]
-    follows(run(picture(VIS, [bar, [(0.0, 0.0), (0.0, 60.0)]])), bar)
+    follows(run(picture(VIS, [bar, [(0.0, 0.0), (0.0, 20.0)]])), bar)
+    assert run(picture(VIS, [bar, [(0.0, 0.0), (0.0, 60.0)]])).reason == BRANCH
+
+
+def test_two_lines_each_with_a_gap_are_still_two():
+    lines = [[(-80.0, y), (-3.0, y)] for y in (-30.0, 30.0)] + [
+        [(3.0, y), (80.0, y)] for y in (-30.0, 30.0)
+    ]
+    assert run(picture(VIS, lines)).reason == "more than one line"
+
+
+@pytest.mark.parametrize("kind", ["black", "white", "noise"])
+def test_a_blank_or_noise_frame_is_refused_fast(kind):
+    img = {
+        "black": np.zeros((800, 1280), np.uint8),
+        "white": np.full((800, 1280), 255, np.uint8),
+        "noise": np.random.default_rng(0).integers(0, 256, (800, 1280), dtype=np.uint8),
+    }[kind]
+    start = time.perf_counter()
+    assert run(img).reason == "no line found"
+    assert time.perf_counter() - start < 1
 
 
 CIRCLE = [[(50 * math.cos(a), 50 * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 73)]]
@@ -151,6 +175,29 @@ def test_the_tool_prints_the_line_off_a_saved_half_size_frame(tmp_path):
     ends = sorted([pts[0], pts[-1]])
     assert math.dist(ends[0], STRAIGHT[0]) < 5 and math.dist(ends[1], STRAIGHT[1]) < 5
     assert [p.name for p in tmp_path.iterdir()] == ["board.png"]
+
+
+def test_the_tool_reads_on_the_board_map_found_on_the_frame(tmp_path, monkeypatch):
+    class Found:
+        lost = False
+
+        def __init__(self, cfg, half, corners):
+            pass
+
+        def update(self, image):
+            pass
+
+        def mapped(self):
+            return TURNED
+
+    monkeypatch.setattr(tool, "with_calib", lambda v: {**v, "calib": {}, "plate_track": True})
+    monkeypatch.setattr(tool, "configured", lambda half, cfg: None)
+    monkeypatch.setattr(tool, "PlateTracker", Found)
+    frame = tmp_path / "board.png"
+    cv2.imwrite(str(frame), picture(TURNED, [STRAIGHT], 8))
+    pts = ast.literal_eval(main([str(frame), "--line"]).split("points = ")[1])
+    ends = sorted([pts[0], pts[-1]])
+    assert math.dist(ends[0], STRAIGHT[0]) < 5 and math.dist(ends[1], STRAIGHT[1]) < 5
 
 
 def test_the_frame_and_the_map_it_is_given_are_left_as_they_were():
