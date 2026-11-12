@@ -109,6 +109,7 @@ def test_a_laps_start_ring_lies_over_its_last_gate_in_the_paths_colour_while_the
         top = max(i for i, call in enumerate(drawn) if call == ring)
         assert drawn.count(ring) == 2
         assert last(drawn, top, "setLineDash") == [3, 3] and last(drawn, top, "strokeStyle=") == ink
+        assert next((c[1] for c in drawn[top:] if c[0] == "setLineDash"), None) == []
         drawn = scene3d.draw(LAP, s, cam)
         both = ring_at(drawn, east)
         assert len(both) == 2
