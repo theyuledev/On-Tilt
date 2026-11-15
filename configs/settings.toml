@@ -134,6 +134,7 @@ predict_dt_max_s = { value = 0.017, label = "uncalibrated default (NOT TESTED, e
 px_per_mm = { value = 2.37, label = "measured (2026-11-07)" }
 line_weak = { value = 0.03, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 line_core = { value = 0.05, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+line_share = { value = 0.5, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 line_glare = { value = 0.05, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 line_stroke_mm = { value = 3.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 line_gap_mm = { value = 3.0, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }

@@ -24,21 +24,39 @@ class LinePath(NamedTuple):
     reason: str
 
 
+def _kept(dark: np.ndarray, weak: float, core: float) -> np.ndarray:
+    """Marks at least weak dark, where part of each is at least core dark."""
+    faint = dark > weak
+    _, lab = cv2.connectedComponents(np.uint8(faint))
+    return np.uint8(np.isin(lab, np.unique(lab[dark > core])) & faint)
+
+
+def marks(dark: np.ndarray, cfg: dict) -> np.ndarray:
+    """Marks at least line_weak darker than the board around them, kept where part of them is
+    line_core darker. Next to a darker stroke both limits rise: the second to line_share of the
+    stroke's own darkness (the median along the centre lines of those marks), the first to
+    half of that, so what a wipe left behind is not ink."""
+    first = _kept(dark, cfg["line_weak"], cfg["line_core"])
+    centre = cv2.ximgproc.thinning(first * 255) > 0
+    if not centre.any():
+        return first
+    stroke = float(np.median(cv2.dilate(dark, np.ones((3, 3), np.uint8))[centre]))
+    core = max(cfg["line_core"], cfg["line_share"] * stroke)
+    return _kept(dark, max(cfg["line_weak"], core / 2), core)
+
+
 def ink(gray: np.ndarray, cfg: dict, wide: int) -> np.ndarray:
-    """Thin marks darker than the board right around them, kept where part of them is clearly
-    dark. wide (px) is more than the broadest stroke."""
+    """Thin marks darker than the board right around them. wide (px) is more than the broadest
+    stroke."""
     b = cv2.GaussianBlur(gray, (3, 3), 0).astype(np.float32)
     disk = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (wide, wide))
     board = cv2.resize(plate_level(downsample(gray, cfg), cfg, False), gray.shape[::-1])
     # capped just above the bare board so a reflection's edge can't pass for ink
     shut = np.minimum(cv2.morphologyEx(b, cv2.MORPH_CLOSE, disk), (1 + cfg["line_glare"]) * board)
-    dark = 1 - b / np.maximum(shut, 1.0)
-    weak = dark > cfg["line_weak"]
-    _, lab = cv2.connectedComponents(np.uint8(weak))
-    marks = np.uint8(np.isin(lab, np.unique(lab[dark > cfg["line_core"]])) & weak)
     gap = round(cfg["line_gap_mm"] * cfg["px_per_mm"] / 2)
     joint = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * gap + 1,) * 2)
-    return cv2.morphologyEx(marks, cv2.MORPH_CLOSE, joint) > 0
+    found = marks(1 - b / np.maximum(shut, 1.0), cfg)
+    return cv2.morphologyEx(found, cv2.MORPH_CLOSE, joint) > 0
 
 
 def _loose(found: list, best: list, runs: list, idx: list, zone: dict, near: float) -> bool:
