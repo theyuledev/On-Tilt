@@ -123,42 +123,44 @@ def links(found: list[Chain], reach: float, bend: float, hole=None) -> dict:
 
 
 def longest_walk(found: list[Chain], joined: dict, bend: float, cost: float, starts, budget=300000):
-    """The walk over chains and joins, each chain once, turning at most bend degrees, that
-    covers the most drawn length less cost px per 90 degrees turned. It begins at one of
-    starts, (chain, end) pairs; straightest turns are tried first and the starts share budget
-    steps evenly. Gives [(chain, forward)]."""
+    """The walk over chains and joins, {(chain, end): [(chain, end, scribble, free)]}, each chain
+    and each scribble but 0 once, turning at most bend degrees (any amount on a free join), that
+    covers the most drawn length less cost px per 90 degrees turned. It begins at one of starts,
+    (chain, end) pairs; straightest turns are tried first and the starts share budget steps
+    evenly. Gives [(chain, forward)]."""
     at: dict[int, list] = {}
     for i, c in enumerate(found):
         at.setdefault(c.nodes[0], []).append((i, 0))
         at.setdefault(c.nodes[1], []).append((i, 1))
-    best, left = ([], -1.0), [0]
+    best, left, crossed = ([], -1.0), [0], set()
 
     def nexts(i, e):
-        far = (i, 1 - e)
-        out = [(j, f) for j, f in at[found[i].nodes[1 - e]] if j != i]
-        return out + ([joined[far]] if far in joined else [])
+        out = [(j, f, 0, False) for j, f in at[found[i].nodes[1 - e]] if j != i]
+        return out + joined.get((i, 1 - e), [])
 
-    def go(path, used, total, i, e, turn):
+    def go(path, used, total, i, e, turn, k):
         nonlocal best
         used.add(i)
+        crossed.add(k)
         path.append((i, e == 0))
         total += found[i].length - cost * turn / 90
         if total > best[1]:
             best = (list(path), total)
         heading = found[i].out[1 - e]
-        turns = sorted((_angle(heading, -found[j].out[f]), j, f) for j, f in nexts(i, e))
-        for t, j, f in turns:
+        turns = sorted((_angle(heading, -found[j].out[f]), j, f, *o) for j, f, *o in nexts(i, e))
+        for t, j, f, z, free in turns:
             left[0] -= 1
             if left[0] < 0:
                 break
-            if j not in used and t <= bend:
-                go(path, used, total, j, f, t)
+            if j not in used and (z == 0 or z not in crossed) and (t <= bend or free):
+                go(path, used, total, j, f, t, z)
         path.pop()
         used.discard(i)
+        crossed.discard(k)
 
     for i, e in starts:
         left[0] = budget // len(starts)
-        go([], set(), 0.0, i, e, 0.0)
+        go([], set(), 0.0, i, e, 0.0, 0)
     return best[0]
 
 

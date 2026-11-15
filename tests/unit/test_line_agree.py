@@ -28,6 +28,15 @@ def test_five_reads_give_the_path_most_agree_on():
     follows(agree(reads, VIS), STRAIGHT)
 
 
+def test_three_reads_that_stop_early_do_not_outvote_two_that_go_on():
+    whole = LinePath([[float(x), 0.0] for x in range(-200, 201, 10)], "")
+    early = LinePath(whole.points[:21] + [[5.0, 8.0], [8.0, 17.0]], "")
+    assert agree([early] * 3 + [whole] * 2, VIS) == ([], DIFFER)
+    assert agree([whole] * 3 + [early] * 2, VIS) == whole
+    elsewhere = LinePath([[float(x), 60.0] for x in range(-200, 201, 10)], "")
+    assert agree([whole] * 3 + [elsewhere] * 2, VIS) == whole
+
+
 def test_reads_that_do_not_agree_are_refused():
     other = [(-90.0, 60.0), (80.0, 60.0)]
     reads = [run(picture(VIS, [STRAIGHT]))] * 2 + [run(picture(VIS, [other]))] * 2
