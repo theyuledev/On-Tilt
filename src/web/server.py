@@ -16,6 +16,7 @@ from src.modes import spot
 from src.vision.cross import cross_mm
 from src.vision.px_to_mm import outline_px, with_calib
 from src.web import form
+from src.web.line_read import read_line, use_line
 
 STATIC = Path(__file__).parent / "static"
 JPEG_SCALE = 0.5  # 1280x800 camera -> 640x400 on the page
@@ -38,6 +39,8 @@ def retarget(loop, want) -> None:
 def make_app(loop) -> FastAPI:
     app = FastAPI()
     app.state.restart, app.state.leave = False, lambda: None
+    # the pipeline the camera feeds, for the board map it tracks; the last line read
+    app.state.pipe = app.state.line = None
     vision = with_calib(loop.cfg["vision"])
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
@@ -56,6 +59,7 @@ def make_app(loop) -> FastAPI:
             "heartbeat_stale_s": game["heartbeat_stale_s"],
             "dead_zone": inp["dead_zone"],
             "hand": loop.hand is not None,
+            "camera": getattr(loop, "frames", None) is not None,
             "tilt_full_deg": inp["intent_gain_deg"],
             "px_per_mm": loop.cfg["vision"]["px_per_mm"],
             "camera_fps": rig["camera_fps"],
@@ -105,6 +109,15 @@ def make_app(loop) -> FastAPI:
             "walls": [[list(p) for p in w] for w in m.walls],
         }
 
+    async def line_read():
+        try:
+            got = await asyncio.to_thread(read_line, loop, app.state.pipe)
+            # back on the loop's own thread, so no tick runs between the armed check and the change
+            app.state.line = use_line(loop, got)
+        except Exception as e:
+            print(f"line read failed: {e!r}")
+            app.state.line = "could not read the line"
+
     jpeg = {"t": float("-inf"), "bytes": b""}
 
     @app.get("/camera.jpg")
@@ -152,6 +165,10 @@ def make_app(loop) -> FastAPI:
                     if "target" in msg:
                         # finding the X takes a while, the plate must not wait for it
                         await asyncio.to_thread(retarget, loop, msg["target"])
+                    if msg.get("line") and app.state.line != "reading":
+                        # a read takes seconds, the socket keeps answering while it runs
+                        app.state.line = "reading"
+                        app.state.reading = asyncio.create_task(line_read())
                     if msg.get("arm") and not msg.get("kill"):
                         loop.arm()
                     game = getattr(loop, "game", None)
@@ -166,6 +183,8 @@ def make_app(loop) -> FastAPI:
                 except Exception as e:
                     print(f"ws message dropped: {e!r}")
                 snap = loop.snapshot()
+                if app.state.line is not None:
+                    snap["line"] = app.state.line
                 # the board outline is long, so a socket only gets it again when it moved
                 if snap.get("plate_outline_px") is outline:
                     snap.pop("plate_outline_px", None)

@@ -12,6 +12,7 @@ function wireChoices() {
     e.currentTarget.blur();
   };
   for (const b of $("targets").children) b.onclick = e => { pending.target = b.dataset.pick; e.currentTarget.blur(); };
+  $("readline").onclick = e => { pending.line = true; e.currentTarget.blur(); };
   $("race").onclick = e => {
     const c = e.currentTarget;
     // only the flat picture maps a click straight onto the plate
@@ -39,6 +40,18 @@ function choices(s) {
   $("guardsay").textContent = c.mode === "hand" ? "invisible walls" : `off in ${c.mode}`;
   $("guard").setAttribute("aria-checked", c.guard === true && c.mode === "hand");
   $("guard").disabled = locked || c.guard === null || c.mode !== "hand";
+  readLine(s, locked);
+}
+
+// the line drawn on the board becomes the path; s.line is the last read's answer
+function readLine(s, locked) {
+  const reading = s.line === "reading", say = $("linesay");
+  $("readline").textContent = reading ? "READING..." : "READ LINE";
+  $("readline").disabled = locked || reading || !cfg.camera || !!s.camera_lost;
+  // its ends near the board edge can be off, so the ribbon is worth a look before arming
+  say.textContent = s.line === "ok" ? "line read, check the path on the board before arming" : s.line || "";
+  // the hint is for the path just read, not for a run or another mode
+  say.hidden = !s.line || reading || (s.line === "ok" && (locked || s.choices.mode !== "path"));
 }
 
 // balance swaps steering for the target picker; the target may move while armed

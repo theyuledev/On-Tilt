@@ -405,6 +405,7 @@ def test_config_gives_plate_ball_and_stale_limit_from_settings(client):
         "heartbeat_stale_s": cfg["game"]["heartbeat_stale_s"],
         "dead_zone": cfg["input"]["dead_zone"],
         "hand": False,
+        "camera": False,
         "tilt_full_deg": cfg["input"]["intent_gain_deg"],
         "px_per_mm": cfg["vision"]["px_per_mm"],
         "camera_fps": cfg["rig"]["camera_fps"],

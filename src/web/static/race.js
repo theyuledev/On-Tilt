@@ -132,7 +132,7 @@ function ball(ctx, [x, y], r, h) {
 // a race always runs the course, whatever the mode (uses hud.js LIVE)
 function shownPath(maze, cfg, s) {
   const racing = !!s.race && LIVE.includes(s.race.state);
-  if (s.choices.mode === "path" && !racing) return cfg.path_mm || null;
+  if (s.choices.mode === "path" && !racing) return (s.path && s.path.points) || cfg.path_mm || null;
   return maze ? maze.points : null;
 }
 

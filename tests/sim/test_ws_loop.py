@@ -25,6 +25,7 @@ HANDS_OFF = {"x": 0, "y": 0}
 NOT_SENT = {
     "race": "only there once a game is wired",
     "plate_outline_px": "only when a tracked plate moved",
+    "line": "only once a line read was asked for",
 }
 FN = re.compile(r"^function \w+\(([^)]*)\) \{$(.*?)^\}", re.M | re.S)
 # ways a reconnect can drop a queued arm; add forms here, don't loosen these
@@ -220,6 +221,9 @@ def test_every_snapshot_field_the_page_reads_is_sent(page):
     page.loop.mode = "hand"
     run(page, 1)
     snap = say(page, {})
+    # and the path its full shape only in path mode
+    page.loop.mode = "path"
+    snap["path"] = say(page, {})["path"]
     reads = page_reads()
     seen = {"armed", "t_s", "intent", "choices.steer", "ball.x_mm", "plate_state.sent_y_deg"}
     assert seen <= reads
