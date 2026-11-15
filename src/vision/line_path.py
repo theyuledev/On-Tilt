@@ -15,7 +15,8 @@ from src.vision.px_to_mm import outline_px, plate_mm
 from src.vision.tracker import BallPx
 
 NONE, MANY = "no line found", "more than one line"
-BRANCH, SHORT = "line branches or crosses itself", "line too short"
+BRANCH = "line splits in two: wipe one way, or put the ball on an end with one way out"
+SHORT = "line too short"
 DIFFER = "pictures do not agree"
 
 
@@ -135,6 +136,8 @@ def find_line(
     inside = seen is not None and cv2.pointPolygonTest(rim, seen[:2], False) >= 0
     if inside:
         near = [math.dist(p, seen[:2]) <= seen[2] + stroke for p in (chain[0], chain[-1])]
+        if near[1] and not near[0]:
+            chain, near = chain[::-1], near[::-1]
         chain = np.vstack(
             [[seen[:2]], chain] if near[0] else [chain, [seen[:2]]] if near[1] else [chain]
         )
@@ -153,9 +156,9 @@ def _gaps(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return np.linalg.norm(p - s - t[..., None] * seg, axis=-1).min(1)
 
 
-def _inner(a: np.ndarray, keep: float) -> np.ndarray:
+def _inner(a: np.ndarray, keep: float, inside: bool = True) -> np.ndarray:
     along = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(a, axis=0), axis=1))])
-    return a[(along > keep) & (along < along[-1] - keep)]
+    return a[((along > keep) & (along < along[-1] - keep)) == inside]
 
 
 def _stray(a: np.ndarray, b: np.ndarray, tol: float) -> int:
@@ -170,20 +173,33 @@ def _stray(a: np.ndarray, b: np.ndarray, tol: float) -> int:
 def agree(reads: list[LinePath], cfg: dict) -> LinePath:
     """The path most of several reads of the same board agree on. Two agree when every point of
     each, more than line_bridge_mm from its ends (where the ends wander), lies within half a step
-    of the other; of the most agreed on, the one closest to the rest. It is refused (DIFFER) when
-    a read runs along it and then goes on for more than line_bridge_mm where it does not: on a
-    still board the same early stop comes back, so a majority is no proof. Too few agreeing gives
-    the refusal most reads gave, or DIFFER."""
+    of the other. More reads give a path than refuse and most of those agree: of the most agreed
+    on, the one whose whole path, ends too, is closest to the rest. It is refused (DIFFER) when
+    a read runs along it and then goes on for more than line_bridge_mm where it does not, or,
+    once three reads or more agree on it, when two reads or more do: on a still board the same
+    early stop comes back, so a majority is no proof. Too few agreeing gives the refusal most
+    reads gave, or DIFFER."""
     paths = [np.array(r.points) for r in reads if not r.reason]
     tol, keep = cfg["line_step_mm"] / 2, cfg["line_bridge_mm"]
     off = [[_gaps(_inner(a, keep), b) for b in paths] for a in paths]
     far = [[o.max(initial=0) for o in row] for row in off]
     gap = [[max(f, far[j][i]) for j, f in enumerate(row)] for i, row in enumerate(far)]
     votes = [sum(g <= tol for g in row) for row in gap]
-    if votes and 2 * max(votes) > len(reads):
-        best = min(range(len(paths)), key=lambda k: (-votes[k], sum(gap[k])))
+    if 2 * len(paths) > len(reads) and 2 * max(votes) > len(paths):
+        top = [k for k, v in enumerate(votes) if v == max(votes)]
+        # the middles are measured already, so the whole-path gap only needs the two end stretches
+        rim = [_inner(p, keep, False) for p in paths]
+        apart = {
+            k: sum(
+                max(gap[k][j], _gaps(rim[k], b).max(), _gaps(rim[j], paths[k]).max())
+                for j, b in enumerate(paths)
+            )
+            for k in top
+        }
+        best = min(top, key=apart.get)
         past = [_stray(b, paths[best], tol) * cfg["line_step_mm"] > keep for b in paths]
-        if any(far[best][j] <= tol and past[j] for j in range(len(paths))):
+        on = sum(far[best][j] <= tol and past[j] for j in range(len(paths)))
+        if on > 1 or (on and votes[best] < 3):
             return LinePath([], DIFFER)
         return LinePath(paths[best].tolist(), "")
     said = Counter(r.reason for r in reads if r.reason).most_common(1)
