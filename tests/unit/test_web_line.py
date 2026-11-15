@@ -11,10 +11,12 @@ from fastapi.testclient import TestClient
 from src.io.ports import Frame
 from src.io.settings import load
 from src.loop import Loop
-from src.vision.line_path import LinePath
+from src.vision.line_path import MANY, LinePath
 from src.vision.maze_path import length
 from src.vision.pipeline import Pipeline
-from src.web.server import LINE_READS, make_app, use_line
+from src.vision.tracker import BallPx
+from src.web.line_read import LINE_READS, SAY, read_line, use_line
+from src.web.server import make_app
 from tests.unit.line_pictures import (
     HALF,
     S_CURVE,
@@ -36,11 +38,12 @@ SPLIT = [STRAIGHT, OTHER, STRAIGHT, OTHER, []]
 
 
 class Board(Loop):
-    """A sim loop whose camera has the next of its pictures each time the frame is looked at."""
+    """A sim loop whose camera has the next of its pictures each time the frame is looked at,
+    and the ball the tracker saw in it when balls are given."""
 
-    def __init__(self, pictures, gate=None, arm_at=None, cfg=None):
+    def __init__(self, pictures, gate=None, arm_at=None, cfg=None, balls=None):
         self.pictures, self.looks = itertools.cycle(pictures), 0
-        self.gate, self.arm_at = gate, arm_at
+        self.gate, self.arm_at, self.balls = gate, arm_at, balls and itertools.cycle(balls)
         super().__init__(cfg or load())
 
     @property
@@ -50,6 +53,8 @@ class Board(Loop):
         self.looks += 1
         if self.looks == self.arm_at:
             self.safety.arm()
+        if self.balls:
+            self.ball_px = next(self.balls)
         return Frame(next(self.pictures), time.monotonic())
 
     @frame.setter
@@ -123,7 +128,7 @@ def test_the_line_is_read_on_the_board_map_the_tracker_has_now_not_the_settings_
     "pictures, reason",
     [
         ([picture(VIS, [])], "no line found"),
-        ([picture(VIS, TWO)], "more than one line"),
+        ([picture(VIS, TWO)], SAY[MANY]),
         ([picture(VIS, CIRCLE)], "line branches or crosses itself"),
         ([picture(VIS, [[(0.0, 0.0), (25.0, 0.0)]])], "line too short"),
         ([picture(VIS, [s]) for s in SPLIT], "pictures do not agree"),
@@ -135,6 +140,27 @@ def test_each_refusal_reaches_the_snapshot_and_changes_nothing(pictures, reason)
     assert read(loop)["line"] == reason
     assert loop.mode == loop.cfg["control"]["mode"] == mode
     assert loop.cfg["control"]["path_mm"] == path
+
+
+def test_two_lines_need_the_ball_on_an_end_of_one_and_then_that_one_is_the_path():
+    end = TWO[1][0]
+    loop = Board([picture(VIS, TWO, 4)])
+    path = loop.cfg["control"]["path_mm"]
+    said = read(loop)["line"]
+    assert said == "more than one line: put the ball on an end of the line you want"
+    assert (loop.mode, loop.cfg["control"]["path_mm"]) == (load()["control"]["mode"], path)
+    on_end = Board([picture(VIS, TWO, 4, ball=(end, 8.0))])
+    on_end.ball_px = ball_px(VIS, end, 8.0)
+    assert read(on_end)["line"] == "ok" and on_end.mode == "path"
+    assert along(on_end.cfg["control"]["path_mm"], TWO[1])[0].max() < 2
+
+
+def test_each_picture_is_read_with_the_ball_seen_at_that_moment():
+    end, lost = TWO[1][0], BallPx(0.0, 0.0, 0.0, False, 0.0)
+    seen = ball_px(VIS, end, 8.0)
+    loop = Board([picture(VIS, TWO, 4, ball=(end, 8.0))], balls=[lost, seen, seen, seen, seen])
+    assert read(loop)["line"] == "ok"
+    assert along(loop.cfg["control"]["path_mm"], TWO[1])[0].max() < 2
 
 
 def test_no_camera_picture_a_lost_camera_or_no_board_map_is_refused():
@@ -151,12 +177,13 @@ def test_no_camera_picture_a_lost_camera_or_no_board_map_is_refused():
 
 
 def test_a_camera_that_stops_sending_is_refused_not_waited_on():
-    loop = Loop(load())
+    loop, got = Loop(load()), []
     loop.frame = Frame(picture(VIS, [S_CURVE], 4), time.monotonic())
-    start = time.monotonic()
-    assert read(loop)["line"] == "no camera picture"
-    assert time.monotonic() - start < 2
-    assert loop.cfg["control"]["path_mm"] == load()["control"]["path_mm"]
+    reader = threading.Thread(target=lambda: got.append(read_line(loop, Pipeline(loop.cfg))))
+    reader.daemon = True
+    reader.start()
+    reader.join(2)
+    assert got == [LinePath([], "no camera picture")]
 
 
 def test_armed_before_or_during_the_read_is_refused():
