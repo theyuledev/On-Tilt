@@ -83,7 +83,7 @@ def test_lands_on_the_board_from_the_corners_it_is_handed():
     tr = PlateTracker(VIS, HALF, start)
     assert tr.lost
     tr.update(scene())
-    assert not tr.lost
+    assert not tr.lost and tr.seen == 4
     assert np.abs(tr.corners - TRUE).max() < 0.15
 
 
@@ -127,7 +127,7 @@ def test_a_hidden_edge_keeps_its_line_while_the_others_follow():
     tr.update(scene(4))
     assert tr.corners[:, 0] == pytest.approx(TRUE[:, 0] + 2.0, abs=0.1)
     tr.update(covered(7))
-    assert not tr.lost
+    assert not tr.lost and tr.seen == 3
     x = tr.corners[:, 0]
     # the +x edge is under the cover and stays where it was last seen, the -x edge goes on
     assert x[[0, 3]] == pytest.approx(HALF + 2.0, abs=0.1)

@@ -126,12 +126,13 @@ def board_like(corners: np.ndarray, half_mm: float, cfg: dict) -> bool:
 
 class PlateTracker:
     """Starts from the corners it is handed. lost while fewer than two edges show or the edges
-    do not make a plate-sized square; the corners then stay where they were."""
+    do not make a plate-sized square; the corners then stay where they were. seen: how many
+    edges showed in the last frame."""
 
     def __init__(self, cfg: dict, half_mm: float, corners: np.ndarray):
         self.cfg, self.half_mm, self.corners = cfg, half_mm, corners
         self.grid = grid(corners, cfg)
-        self.lost = True
+        self.lost, self.seen = True, 0
 
     def update(self, image: np.ndarray) -> None:
         cfg, g = self.cfg, self.grid
@@ -141,7 +142,8 @@ class PlateTracker:
             # an edge with no fit keeps the line it had
             lines = np.where(seen[:, None], lines, edge_lines(self.corners))
         new = crossings(lines)
-        self.lost = int(seen.sum()) < 2 or not board_like(new, self.half_mm, cfg)
+        self.seen = int(seen.sum())
+        self.lost = self.seen < 2 or not board_like(new, self.half_mm, cfg)
         if self.lost:
             return
         self.corners = new
