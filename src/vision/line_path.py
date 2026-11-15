@@ -8,7 +8,8 @@ import cv2
 import numpy as np
 
 from src.vision.balls import downsample, plate_level
-from src.vision.line_graph import chains, drawn, lines, links, longest_walk, walk_px
+from src.vision.line_graph import drawn, lines, links, longest_walk, walk_px
+from src.vision.line_scribble import meets, pieces, through, zones
 from src.vision.maze_path import length
 from src.vision.px_to_mm import outline_px, plate_mm
 from src.vision.tracker import BallPx
@@ -40,77 +41,54 @@ def ink(gray: np.ndarray, cfg: dict, wide: int) -> np.ndarray:
     return cv2.morphologyEx(marks, cv2.MORPH_CLOSE, joint) > 0
 
 
-def pieces(marks: np.ndarray, stroke: int, web: float = 0.0):
-    """Chains of the marks' skeleton, with specks and short spurs dropped. Where three forks or
-    more sit within web px of each other (a scribble, not a line) the marks are wiped and read
-    again; the wiped area comes back too (None when nothing was wiped)."""
-    found = chains(cv2.ximgproc.thinning(np.uint8(marks) * 255) > 0, 3 * stroke)
-    degree: dict[int, int] = {}
-    at = {}
-    for c in found:
-        for e, node in enumerate(c.nodes):
-            degree[node] = degree.get(node, 0) + 1
-            at[node] = c.px[-e]
-    forks = np.array([at[n] for n, d in degree.items() if d >= 3]).reshape(-1, 2)
-    close = np.linalg.norm(forks[:, None] - forks[None], axis=-1) <= web
-    wipe = forks[close.sum(1) >= 3] if web else forks[:0]
-    if len(wipe):
-        wiped = np.zeros_like(marks)
-        for x, y in wipe:
-            cv2.circle(wiped, (round(x), round(y)), round(web / 2), 1, -1)
-        return pieces(marks & (1 - wiped), stroke)[0], wiped
-    return [c for c in found if c.length >= stroke or min(degree[n] for n in c.nodes) > 1], None
-
-
-def through(found: list, wiped: np.ndarray, reach: int, joined: dict) -> dict:
-    """In each wiped scribble, the two longest chains that end within reach px of it are joined
-    through it."""
-    _, zones = cv2.connectedComponents(cv2.dilate(wiped, np.ones((2 * reach + 1,) * 2, np.uint8)))
-    h, w = zones.shape
-    by: dict[int, list] = {}
-    for i, c in enumerate(found):
-        for e in (0, 1):
-            x, y = np.clip(np.round(c.px[-e]).astype(int), 0, [w - 1, h - 1])
-            if zones[y, x]:
-                by.setdefault(zones[y, x], []).append((c.length, i, e))
-    out = dict(joined)
-    for ends in by.values():
-        top = sorted(ends, reverse=True)
-        if len(top) >= 2:
-            a, b = top[0][1:], top[1][1:]
-            out[a], out[b] = b, a
-    return out
+def _loose(found: list, best: list, runs: list, idx: list, zone: dict, near: float) -> bool:
+    """Whether one of the runs, over chains idx, ends within near px of a walk end or at the same
+    wiped scribble."""
+    ends = [(idx[r[0][0]], int(not r[0][1])) for r in runs]
+    ends += [(idx[r[-1][0]], int(r[-1][1])) for r in runs]
+    tips = [(best[0][0], int(not best[0][1])), (best[-1][0], int(best[-1][1]))]
+    return any(
+        math.dist(found[a[0]].px[-a[1]], found[b[0]].px[-b[1]]) <= near
+        or 0 < zone.get(a, 0) == zone.get(b)
+        for a in tips
+        for b in ends
+    )
 
 
 def best_run(found: list, wiped, cfg: dict, stroke: int, ball):
-    """The longest smooth walk, and the drawn length of the runs left over that are at least
-    line_min_mm, with whether the longest of them hangs off the walk. A ball given picks the
-    walk that reaches it; that walk is the line whatever else is drawn."""
+    """The longest smooth walk; the drawn length of the runs left over that are at least
+    line_min_mm, with whether the longest of them hangs off the walk; and whether one of those runs
+    ends within line_web_mm / 2 of a walk end or at the same wiped scribble, so the line may go on
+    there. A ball given picks the walk that reaches it; then only what meets that walk is left
+    over, other drawings are not."""
     reach = cfg["line_bridge_mm"] * cfg["px_per_mm"]
     bend = cfg["line_bend_deg"]
     hole = None if ball is None else (*ball[:2], ball[2] + stroke)
-    joined = links(found, reach, bend, hole)
-    if wiped is not None:
-        joined = through(found, wiped, round(cfg["line_web_mm"] * cfg["px_per_mm"] / 2), joined)
+    web = round(cfg["line_web_mm"] * cfg["px_per_mm"] / 2)
+    zone = zones(found, wiped, web)
+    joined = through(zone, links(found, reach, bend, hole))
     every = [(i, e) for i in range(len(found)) for e in (0, 1)]
     cost = cfg["line_turn_mm"] * cfg["px_per_mm"]
     best = longest_walk(found, joined, bend, cost, every)
+    at = []
     if ball is not None:
         at = [(i, e) for i, e in every if math.dist(found[i].px[-e], ball[:2]) <= ball[2] + stroke]
         if at and not {i for i, _ in best} & {i for i, _ in at}:
             best = longest_walk(found, joined, bend, cost, at)
-        if {i for i, _ in best} & {i for i, _ in at}:
-            return best, 0.0, False
     used = {i for i, _ in best}
     idx = [i for i in range(len(found)) if i not in used]
     rest = [found[i] for i in idx]
     other = lines(rest, links(rest, reach, bend))
     big = [r for r in other if drawn(rest, r) >= cfg["line_min_mm"] * cfg["px_per_mm"]]
+    loose = _loose(found, best, big, idx, zone, web)
+    if used & {i for i, _ in at}:
+        met = meets(used, other, found, idx, zone)
+        big = [r for r in big if r in met]
     if not big:
-        return best, 0.0, False
+        return best, 0.0, False, loose
     walked = {n for i in used for n in found[i].nodes}
     hangs = any(n in walked for j, _ in big[0] for n in rest[j].nodes)
-    return best, sum(drawn(rest, r) for r in big), hangs
+    return best, sum(drawn(rest, r) for r in big), hangs, loose
 
 
 def resample(pts, step: float) -> list[list[float]]:
@@ -146,12 +124,14 @@ def find_line(
     found, wiped = pieces(marks, stroke, cfg["line_web_mm"] * px)
     if not found:
         return LinePath([], NONE)
-    best, other, hangs = best_run(found, wiped, cfg, stroke, seen)
+    best, other, hangs, loose = best_run(found, wiped, cfg, stroke, seen)
     total, chain = drawn(found, best), walk_px(found, best)
     if math.dist(chain[0], chain[-1]) < stroke and total > 4 * stroke:
         return LinePath([], BRANCH)
     if other >= cfg["line_similar"] * total:
         return LinePath([], BRANCH if hangs else MANY)
+    if loose:
+        return LinePath([], BRANCH)
     inside = seen is not None and cv2.pointPolygonTest(rim, seen[:2], False) >= 0
     if inside:
         near = [math.dist(p, seen[:2]) <= seen[2] + stroke for p in (chain[0], chain[-1])]
@@ -178,22 +158,33 @@ def _inner(a: np.ndarray, keep: float) -> np.ndarray:
     return a[(along > keep) & (along < along[-1] - keep)]
 
 
-def _apart(a: np.ndarray, b: np.ndarray, keep: float) -> float:
-    """Farthest either path strays from the other, away from its ends."""
-    return max(_gaps(_inner(a, keep), b).max(initial=0), _gaps(_inner(b, keep), a).max(initial=0))
+def _stray(a: np.ndarray, b: np.ndarray, tol: float) -> int:
+    """Most points of a in a row that lie farther than tol from b."""
+    run = most = 0
+    for far in _gaps(a, b) > tol:
+        run = run + 1 if far else 0
+        most = max(most, run)
+    return most
 
 
 def agree(reads: list[LinePath], cfg: dict) -> LinePath:
     """The path most of several reads of the same board agree on. Two agree when every point of
     each, more than line_bridge_mm from its ends (where the ends wander), lies within half a step
-    of the other; of the most agreed on, the one closest to the rest. Too few agreeing gives the
-    refusal most reads gave, or DIFFER."""
+    of the other; of the most agreed on, the one closest to the rest. It is refused (DIFFER) when
+    a read runs along it and then goes on for more than line_bridge_mm where it does not: on a
+    still board the same early stop comes back, so a majority is no proof. Too few agreeing gives
+    the refusal most reads gave, or DIFFER."""
     paths = [np.array(r.points) for r in reads if not r.reason]
     tol, keep = cfg["line_step_mm"] / 2, cfg["line_bridge_mm"]
-    gap = [[_apart(a, b, keep) for b in paths] for a in paths]
+    off = [[_gaps(_inner(a, keep), b) for b in paths] for a in paths]
+    far = [[o.max(initial=0) for o in row] for row in off]
+    gap = [[max(f, far[j][i]) for j, f in enumerate(row)] for i, row in enumerate(far)]
     votes = [sum(g <= tol for g in row) for row in gap]
     if votes and 2 * max(votes) > len(reads):
         best = min(range(len(paths)), key=lambda k: (-votes[k], sum(gap[k])))
+        past = [_stray(b, paths[best], tol) * cfg["line_step_mm"] > keep for b in paths]
+        if any(far[best][j] <= tol and past[j] for j in range(len(paths))):
+            return LinePath([], DIFFER)
         return LinePath(paths[best].tolist(), "")
     said = Counter(r.reason for r in reads if r.reason).most_common(1)
     return LinePath([], said[0][0] if said and 2 * said[0][1] > len(reads) else DIFFER)

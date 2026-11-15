@@ -30,6 +30,45 @@ SPIRAL = [
 FAINT = round(0.9 * 205)
 
 
+def winding(rows=(100.0, 40.0, -20.0, -80.0), x=(-110.0, 90.0)):
+    """Rows joined by half circles, first row left to right, about 1.1 m for the default."""
+    pts = []
+    for k, y in enumerate(rows):
+        a, b = x if k % 2 == 0 else x[::-1]
+        pts += [(a, y), (b, y)]
+        if k + 1 < len(rows):
+            r, s = (y - rows[k + 1]) / 2, 1 if k % 2 == 0 else -1
+            turn = np.linspace(math.pi / 2, -math.pi / 2, 30)[1:-1]
+            pts += [(b + s * r * math.cos(t), y - r + r * math.sin(t)) for t in turn]
+    return pts
+
+
+WINDING = winding()
+
+
+def scribble(x0, top, wide, tall, step=10.0):
+    """Strokes crossing step mm apart in a wide x tall box hanging below top."""
+    down = [[(x0 + k, top), (x0 + k, top - tall)] for k in np.arange(0, wide + 0.1, step)]
+    return down + [[(x0, top - k), (x0 + wide, top - k)] for k in np.arange(0, tall + 0.1, step)]
+
+
+def split(line, x, y, gap=8.0):
+    """The line in two pieces, a gap mm wide round x on its row at y."""
+    i = next(k for k in range(len(line) - 1) if line[k][1] == y == line[k + 1][1])
+    d = 1 if line[i + 1][0] > line[i][0] else -1
+    return [line[: i + 1] + [(x - d * gap / 2, y)], [(x + d * gap / 2, y)] + line[i + 1 :]]
+
+
+def lamps(img, cfg, spots):
+    """Lamp reflections: white 60 px across, fading out to 130 px."""
+    yy, xx = np.mgrid[: img.shape[0], : img.shape[1]]
+    out = img.astype(np.float32)
+    for at in spots:
+        x, y = plate_px(*at, cfg)
+        out += np.clip((65 - np.hypot(xx - x, yy - y)) / 35, 0, 1) * (255 - out)
+    return np.uint8(out)
+
+
 def picture(cfg, lines, width=6, ball=None, cut_x_mm=None, glare=None, shade=55):
     """Grey camera frame: dark floor, board lit brighter on the right, lines drawn in plate mm."""
     img = np.full((800, 1280), 60, np.uint8)
