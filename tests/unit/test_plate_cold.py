@@ -64,6 +64,16 @@ def test_a_board_with_an_edge_hidden_is_not_guessed_from_the_other_three():
     assert find(hidden_edge()) is None
 
 
+def test_an_edge_the_edge_tracker_cannot_fit_is_not_taken():
+    # a ragged +x edge, three depths 3 mm apart in 7 px rows: the fine fit sees a step there, the
+    # edge tracker cannot put half of it on one line and locks three edges only
+    img = scene(60, 0)
+    x = round(at([(HALF, 0.0)], 60)[0, 0])
+    for i, y in enumerate(range(0, 800, 7)):
+        img[y : y + 7, x : x + 6 * (i % 3)] = 210
+    assert find(img) is None
+
+
 def lamp(img, x, y, r=10, halo=20.0):
     """A lamp reflection: a white spot with a soft glow round it."""
     spot = np.zeros(img.shape, np.float32)

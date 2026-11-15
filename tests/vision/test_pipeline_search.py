@@ -16,6 +16,8 @@ from tests.vision.test_pipeline_plate import DT, HALF, R_PX, TRACKED, VIS, table
 pytestmark = pytest.mark.unit
 
 DARK = np.full((800, 1280), 60, np.uint8)
+# the set place with its +x edge 30 mm out, past the edge tracker's reach
+WIDE = configured(HALF, VIS) + [(30, 0), (0, 0), (0, 0), (30, 0)]
 
 
 def board(dx=0.0, dy=0.0, deg=0.0) -> np.ndarray:
@@ -26,21 +28,17 @@ def board(dx=0.0, dy=0.0, deg=0.0) -> np.ndarray:
 
 
 @pytest.fixture
-def gate():
-    g = threading.Event()
-    yield g
-    g.set()
+def hold():
+    """hold(pipe): its searches wait until the gate it returns opens, at the latest at the end."""
+    gate = threading.Event()
 
+    def held(pipe):
+        find = pipe.finder.find
+        pipe.finder.find = lambda *args: gate.wait() and find(*args)
+        return gate
 
-def held(pipe, gate):
-    """Every search waits for the gate before it looks."""
-    find = pipe.finder.find
-
-    def wait_then_find(*args):
-        gate.wait()
-        return find(*args)
-
-    pipe.finder.find = wait_then_find
+    yield held
+    gate.set()
 
 
 def test_a_board_far_from_its_set_place_is_found_beside_the_grab_thread():
@@ -57,10 +55,8 @@ def test_a_board_far_from_its_set_place_is_found_beside_the_grab_thread():
 
 def test_a_lock_with_an_edge_out_of_reach_is_replaced_by_a_four_edge_find():
     pipe = Pipeline(TRACKED)
-    # the +x edge 30 mm out, past the edge tracker's reach. A tipped board can let such a lock
-    # through the shape check; a looser check stands in for that here
-    wide = configured(HALF, VIS) + [(30, 0), (0, 0), (0, 0), (30, 0)]
-    stale = pipe.plate = PlateTracker({**VIS, "plate_shape_tol": 0.2}, HALF, wide)
+    # a tipped board can let such a lock through the shape check; a looser one stands in here
+    stale = pipe.plate = PlateTracker({**VIS, "plate_shape_tol": 0.2}, HALF, WIDE)
     img = ball(table(), 700, 340, R_PX)
     o = pipe.step(img, 0.0)
     assert not o.occluded and stale.seen == 3 and abs(o.ball.x_mm - 30) > 10
@@ -84,8 +80,7 @@ def test_a_lost_tracker_is_replaced_even_when_it_saw_as_many_edges():
 
 def test_a_tracker_that_sees_all_four_edges_again_is_kept():
     pipe = Pipeline(TRACKED)
-    wide = configured(HALF, VIS) + [(30, 0), (0, 0), (0, 0), (30, 0)]
-    stale = pipe.plate = PlateTracker({**VIS, "plate_shape_tol": 0.2}, HALF, wide)
+    stale = pipe.plate = PlateTracker({**VIS, "plate_shape_tol": 0.2}, HALF, WIDE)
     img = ball(table(), 700, 340, R_PX)
     pipe.step(img, 0.0)
     assert pipe.search.result()[0].seen == 4
@@ -145,9 +140,9 @@ def test_a_steady_four_edge_lock_never_starts_a_search():
         assert not o.occluded and pipe.plate.seen == 4 and pipe.search is None
 
 
-def test_one_search_at_a_time_then_a_rest_three_times_as_long(gate):
+def test_one_search_at_a_time_then_a_rest_three_times_as_long(hold):
     pipe = Pipeline(TRACKED)
-    held(pipe, gate)
+    gate = hold(pipe)
     pipe.step(DARK, 0.0)
     first = pipe.search
     for i in range(1, 20):
@@ -165,9 +160,9 @@ def test_one_search_at_a_time_then_a_rest_three_times_as_long(gate):
     pipe.search.result()
 
 
-def test_a_search_that_ends_after_the_pipeline_is_gone_does_no_harm(gate):
+def test_a_search_that_ends_after_the_pipeline_is_gone_does_no_harm(hold):
     pipe = Pipeline(TRACKED)
-    held(pipe, gate)
+    gate = hold(pipe)
     pipe.step(DARK, 0.0)
     search, gone = pipe.search, weakref.ref(pipe)
     del pipe
@@ -195,9 +190,8 @@ def test_a_search_that_fails_does_not_stop_the_frames():
 @pytest.mark.parametrize("off_mm", [0.0, 5.0])
 def test_a_three_edge_tracker_is_left_only_when_the_find_agrees_with_it(off_mm):
     pipe = Pipeline(TRACKED)
-    wide = configured(HALF, VIS) + [(30, 0), (0, 0), (0, 0), (30, 0)]
-    # its +x search is out of reach, so it keeps that edge where it had it: off_mm out
-    tr = pipe.plate = PlateTracker(VIS, HALF, wide)
+    # its +x search is out of reach, so it keeps that edge where it had it, off_mm out
+    tr = pipe.plate = PlateTracker(VIS, HALF, WIDE)
     tr.corners = configured(HALF, VIS) + [(off_mm, 0), (0, 0), (0, 0), (off_mm, 0)]
     o = pipe.step(ball(table(), 700, 340, R_PX), 0.0)
     assert not o.occluded and tr.seen == 3
