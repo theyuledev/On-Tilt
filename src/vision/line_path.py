@@ -9,7 +9,7 @@ import numpy as np
 
 from src.vision.balls import downsample, plate_level
 from src.vision.line_graph import drawn, lines, links, longest_walk, walk_px
-from src.vision.line_scribble import pieces, through, zones
+from src.vision.line_scribble import meets, pieces, through, zones
 from src.vision.maze_path import length
 from src.vision.px_to_mm import outline_px, plate_mm
 from src.vision.tracker import BallPx
@@ -41,15 +41,31 @@ def ink(gray: np.ndarray, cfg: dict, wide: int) -> np.ndarray:
     return cv2.morphologyEx(marks, cv2.MORPH_CLOSE, joint) > 0
 
 
+def _loose(found: list, best: list, runs: list, idx: list, zone: dict, near: float) -> bool:
+    """Whether one of the runs, over chains idx, ends within near px of a walk end or at the same
+    wiped scribble."""
+    ends = [(idx[r[0][0]], int(not r[0][1])) for r in runs]
+    ends += [(idx[r[-1][0]], int(r[-1][1])) for r in runs]
+    tips = [(best[0][0], int(not best[0][1])), (best[-1][0], int(best[-1][1]))]
+    return any(
+        math.dist(found[a[0]].px[-a[1]], found[b[0]].px[-b[1]]) <= near
+        or 0 < zone.get(a, 0) == zone.get(b)
+        for a in tips
+        for b in ends
+    )
+
+
 def best_run(found: list, wiped, cfg: dict, stroke: int, ball):
     """The longest smooth walk; the drawn length of the runs left over that are at least
-    line_min_mm, with whether the longest of them hangs off the walk; and whether a run longer than
-    line_bridge_mm ends within that of a walk end, so the line may go on there. A ball given picks
-    the walk that reaches it; then whatever else is drawn is not counted."""
+    line_min_mm, with whether the longest of them hangs off the walk; and whether one of those runs
+    ends within line_web_mm / 2 of a walk end or at the same wiped scribble, so the line may go on
+    there. A ball given picks the walk that reaches it; then only what meets that walk is left
+    over, other drawings are not."""
     reach = cfg["line_bridge_mm"] * cfg["px_per_mm"]
     bend = cfg["line_bend_deg"]
     hole = None if ball is None else (*ball[:2], ball[2] + stroke)
-    zone = zones(found, wiped, round(cfg["line_web_mm"] * cfg["px_per_mm"] / 2))
+    web = round(cfg["line_web_mm"] * cfg["px_per_mm"] / 2)
+    zone = zones(found, wiped, web)
     joined = through(zone, links(found, reach, bend, hole))
     every = [(i, e) for i in range(len(found)) for e in (0, 1)]
     cost = cfg["line_turn_mm"] * cfg["px_per_mm"]
@@ -60,15 +76,19 @@ def best_run(found: list, wiped, cfg: dict, stroke: int, ball):
         if at and not {i for i, _ in best} & {i for i, _ in at}:
             best = longest_walk(found, joined, bend, cost, at)
     used = {i for i, _ in best}
-    rest = [found[i] for i in range(len(found)) if i not in used]
+    idx = [i for i in range(len(found)) if i not in used]
+    rest = [found[i] for i in idx]
     other = lines(rest, links(rest, reach, bend))
     big = [r for r in other if drawn(rest, r) >= cfg["line_min_mm"] * cfg["px_per_mm"]]
-    ends = [q for r in other if drawn(rest, r) > reach for q in walk_px(rest, r)[[0, -1]]]
-    loose = any(math.dist(p, q) <= reach for p in walk_px(found, best)[[0, -1]] for q in ends)
-    if used & {i for i, _ in at} or not big:
+    loose = _loose(found, best, big, idx, zone, web)
+    on_ball = bool(used & {i for i, _ in at})
+    if on_ball:
+        met = meets(used, other, found, idx, zone)
+        big = [r for r in big if r in met]
+    if not big:
         return best, 0.0, False, loose
     walked = {n for i in used for n in found[i].nodes}
-    hangs = any(n in walked for j, _ in big[0] for n in rest[j].nodes)
+    hangs = on_ball or any(n in walked for j, _ in big[0] for n in rest[j].nodes)
     return best, sum(drawn(rest, r) for r in big), hangs, loose
 
 
@@ -139,6 +159,15 @@ def _inner(a: np.ndarray, keep: float) -> np.ndarray:
     return a[(along > keep) & (along < along[-1] - keep)]
 
 
+def _stray(a: np.ndarray, b: np.ndarray, tol: float) -> int:
+    """Most points of a in a row that lie farther than tol from b."""
+    run = most = 0
+    for far in _gaps(a, b) > tol:
+        run = run + 1 if far else 0
+        most = max(most, run)
+    return most
+
+
 def agree(reads: list[LinePath], cfg: dict) -> LinePath:
     """The path most of several reads of the same board agree on. Two agree when every point of
     each, more than line_bridge_mm from its ends (where the ends wander), lies within half a step
@@ -154,7 +183,7 @@ def agree(reads: list[LinePath], cfg: dict) -> LinePath:
     votes = [sum(g <= tol for g in row) for row in gap]
     if votes and 2 * max(votes) > len(reads):
         best = min(range(len(paths)), key=lambda k: (-votes[k], sum(gap[k])))
-        past = [(o > tol).sum() * cfg["line_step_mm"] > keep for o in (row[best] for row in off)]
+        past = [_stray(b, paths[best], tol) * cfg["line_step_mm"] > keep for b in paths]
         if any(far[best][j] <= tol and past[j] for j in range(len(paths))):
             return LinePath([], DIFFER)
         return LinePath(paths[best].tolist(), "")

@@ -43,23 +43,35 @@ def zones(found: list, wiped, reach: int) -> dict:
 
 
 def through(zone: dict, joined: dict) -> dict:
-    """Join options for the walk, {(chain, end): [(chain, end, scribble, free)]}: the links, and
-    at each wiped scribble any chain end on to any other there. A join at scribble k carries k, so
-    the walk crosses it once; where only two chains leave it (have one end there, not both) the
-    join between them is free to turn any amount, as the ink that showed the turn is wiped and
-    there is no other way on."""
+    """Join options for the walk, {(chain, end): [(chain, end, scribble)]}: the links, and at each
+    wiped scribble k any chain end on to any other there. A join at scribble k carries k, so the
+    walk crosses it once; other joins carry 0."""
     at: dict[int, list] = {}
     for a, k in zone.items():
         if k:
             at.setdefault(k, []).append(a)
-    leave = {k: {a for a in ends if zone[a[0], 1 - a[1]] != k} for k, ends in at.items()}
-
-    def tag(a, b):
-        k = zone.get(a, 0) if zone.get(a, 0) == zone.get(b, 0) else 0
-        return (*b, k, k > 0 and len(leave[k]) == 2 and {a, b} == leave[k])
-
-    out = {a: [tag(a, b)] for a, b in joined.items()}
-    for ends in at.values():
+    out = {
+        a: [(*b, zone.get(a, 0) if zone.get(a, 0) == zone.get(b, 0) else 0)]
+        for a, b in joined.items()
+    }
+    for k, ends in at.items():
         for a in ends:
-            out.setdefault(a, []).extend(tag(a, b) for b in ends if b != a and b != joined.get(a))
+            out.setdefault(a, []).extend((*b, k) for b in ends)
+    return out
+
+
+def meets(walk: set, runs: list, found: list, idx: list, zone: dict) -> list:
+    """The runs, [(chain in idx, forward)], that meet the walk's chains at a fork or a wiped
+    scribble, directly or through each other."""
+
+    def keys(chains):
+        nodes = {("n", n) for i in chains for n in found[i].nodes}
+        return nodes | {("z", zone.get((i, e), 0)) for i in chains for e in (0, 1)} - {("z", 0)}
+
+    seen, todo, out = keys(walk), list(runs), []
+    while met := [r for r in todo if keys([idx[j] for j, _ in r]) & seen]:
+        for r in met:
+            seen |= keys([idx[j] for j, _ in r])
+            todo.remove(r)
+        out += met
     return out
