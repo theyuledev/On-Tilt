@@ -102,10 +102,17 @@ class PathFollower:
         return self.open is not None and self.open.done
 
     def path_view(self) -> dict:
-        """For the page: the points in whole mm in the order they are followed, and whether
-        the last one has been reached."""
+        """For the page: the points in whole mm in the order they are followed, whether the
+        last one has been reached, how far along them the ball is taken to be (None on a lap) and
+        the point on the line it is steered for (None on a lap and before a ball is seen)."""
         points = self.open.path if self.open else self.path
-        return {"done": self.done, "points": [[round(x), round(y)] for x, y in points]}
+        chase = self.open.chase if self.open else None
+        return {
+            "done": self.done,
+            "points": [[round(x), round(y)] for x, y in points],
+            "along_mm": round(self.open.s) if self.open else None,
+            "chase": [round(chase[0]), round(chase[1])] if chase else None,
+        }
 
     def resume(self) -> None:
         """After a gap in the heartbeat an open path goes on where it was; a lap starts over."""

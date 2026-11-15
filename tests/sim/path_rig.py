@@ -110,6 +110,7 @@ def follow(
     cfg=None,
     mode=None,
     track=None,
+    late_s=SEEN_LATE_S,
 ):
     """Runs a mode (default path mode) from start (default the first point) and measures the
     run from where the ball really is; the finish is the true ball within capture of end.
@@ -117,7 +118,7 @@ def follow(
     cfg = cfg or rig_cfg(path)
     rig, control = cfg["rig"], cfg["control"]
     dt = 1 / control["sim_tick_hz"]
-    lag = round((SEEN_LATE_S - control["servo_dead_time_s"]) / dt)
+    lag = round((late_s - control["servo_dead_time_s"]) / dt)
     plate, guard, rng = SimActuator(rig, control), safety.SafetyState(), random.Random(1)
     guard.arm()
     mode = mode or make_mode("path", cfg)

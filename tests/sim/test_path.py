@@ -103,7 +103,9 @@ def test_an_open_path_run_goes_on_after_a_gap_in_the_heartbeat(clock):
     assert loop.step is step and step.done
     assert (step.open.hold.acc.x, step.open.hold.acc.y) == (0.0, 0.0)
     run(loop, clock, dt, 5.0)
-    assert loop.snapshot()["path"] == {"done": True, "points": OPEN}
+    view = loop.snapshot()["path"]
+    assert view["done"] and view["points"] == OPEN and view["chase"] == OPEN[-1]
+    assert view["along_mm"] == round(step.open.s) > 0
     assert from_end(loop) < 15
 
 
@@ -128,7 +130,8 @@ def test_a_lap_starts_over_after_a_gap_in_the_heartbeat_as_before(clock):
     run(loop, clock, dt, 0.5, keys=False)
     assert loop.step.seg == 0
     square = loop.cfg["control"]["path_mm"]
-    assert loop.snapshot()["path"] == {"done": False, "points": square}
+    view = {"done": False, "points": square, "along_mm": None, "chase": None}
+    assert loop.snapshot()["path"] == view
 
 
 @pytest.mark.parametrize("mode", ["balance", "hand"])
