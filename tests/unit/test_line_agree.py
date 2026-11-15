@@ -3,7 +3,7 @@ import time
 import numpy as np
 import pytest
 
-from src.vision.line_path import DIFFER, LinePath, agree
+from src.vision.line_path import DIFFER, MANY, LinePath, agree
 from tests.unit.line_pictures import STRAIGHT, VIS, follows, picture, run
 
 pytestmark = pytest.mark.unit
@@ -38,6 +38,31 @@ def test_three_reads_that_stop_early_do_not_outvote_two_that_go_on():
         assert (agree([stop] * 3 + [whole] * 2, VIS).reason == DIFFER) == refused
     elsewhere = LinePath([[float(x), 60.0] for x in range(-200, 201, 10)], "")
     assert agree([whole] * 3 + [elsewhere] * 2, VIS) == whole
+
+
+def test_one_read_of_four_that_goes_on_does_not_refuse_the_rest():
+    whole = LinePath([[float(x), 0.0] for x in range(-200, 201, 10)], "")
+    early = LinePath(whole.points[:21] + [[5.0, 8.0], [8.0, 17.0]], "")
+    assert agree([early] * 3 + [whole], VIS) == early
+    assert agree([early] * 2 + [whole] + [early], VIS) == early
+
+
+def test_paths_that_outnumber_the_refusals_win_when_most_of_them_agree():
+    whole = LinePath([[float(x), 0.0] for x in range(-200, 201, 10)], "")
+    detour = LinePath([[x, 30.0 if abs(x) <= 20 else 0.0] for x, _ in whole.points], "")
+    many = LinePath([], MANY)
+    assert agree([whole, many, detour, many, whole], VIS) == whole
+    assert agree([whole, whole, detour, many], VIS) == whole
+    assert agree([whole, whole, many, many], VIS) == ([], DIFFER)
+    assert agree([whole, detour, many, many, many], VIS) == ([], MANY)
+    assert agree([whole, detour, LinePath([], MANY), whole, detour], VIS) == ([], DIFFER)
+
+
+def test_of_reads_that_agree_the_one_whose_ends_match_the_rest_is_taken():
+    whole = LinePath([[float(x), 0.0] for x in range(-200, 201, 10)], "")
+    tail = LinePath(whole.points + [[200.0, 16.0]], "")
+    other = LinePath([[-200.0, -16.0]] + whole.points, "")
+    assert agree([tail, whole, other, whole, whole], VIS) == whole
 
 
 def test_reads_whose_two_ends_both_wander_still_win_the_vote():
