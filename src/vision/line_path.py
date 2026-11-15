@@ -15,7 +15,7 @@ from src.vision.px_to_mm import outline_px, plate_mm
 from src.vision.tracker import BallPx
 
 NONE, MANY = "no line found", "more than one line"
-BRANCH, SHORT = "line branches or crosses itself", "line too short"
+BRANCH = "line branches or crosses itself"
 DIFFER = "pictures do not agree"
 
 
@@ -159,7 +159,7 @@ def find_line(
     keep = cv2.approxPolyDP(np.float32(chain).reshape(-1, 1, 2), 1.0, False).reshape(-1, 2)
     mm = [plate_mm(x + x0, y + y0, cfg) for x, y in keep]
     if length(mm) < cfg["line_min_mm"]:
-        return LinePath([], SHORT)
+        return LinePath([], NONE)
     return LinePath(resample(mm, cfg["line_step_mm"]), "")
 
 

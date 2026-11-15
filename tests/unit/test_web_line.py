@@ -130,7 +130,7 @@ def test_the_line_is_read_on_the_board_map_the_tracker_has_now_not_the_settings_
         ([picture(VIS, [])], "no line found"),
         ([picture(VIS, TWO)], SAY[MANY]),
         ([picture(VIS, CIRCLE)], "line branches or crosses itself"),
-        ([picture(VIS, [[(0.0, 0.0), (25.0, 0.0)]])], "line too short"),
+        ([picture(VIS, [[(0.0, 0.0), (25.0, 0.0)]])], "no line found"),
         ([picture(VIS, [s]) for s in SPLIT], "pictures do not agree"),
     ],
 )

@@ -144,7 +144,7 @@ CIRCLE = [[(50 * math.cos(a), 50 * math.sin(a)) for a in np.linspace(0, 2 * math
             "more than one line",
         ),
         (CIRCLE, "line branches or crosses itself"),
-        ([[(0.0, 0.0), (25.0, 0.0)]], "line too short"),
+        ([[(0.0, 0.0), (25.0, 0.0)]], "no line found"),
     ],
 )
 def test_a_clear_reason_instead_of_a_wrong_path(lines, reason):
