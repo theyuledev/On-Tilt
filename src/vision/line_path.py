@@ -35,14 +35,14 @@ def marks(dark: np.ndarray, cfg: dict) -> np.ndarray:
     """Marks at least line_weak darker than the board around them, kept where part of them is
     line_core darker. Next to a darker stroke both limits rise: the second to line_share of the
     stroke's own darkness (the median along the centre lines of those marks), the first to
-    half of that, so what a wipe left behind is not ink."""
+    line_share of the second, so what a wipe left behind is not ink."""
     first = _kept(dark, cfg["line_weak"], cfg["line_core"])
     centre = cv2.ximgproc.thinning(first * 255) > 0
     if not centre.any():
         return first
     stroke = float(np.median(cv2.dilate(dark, np.ones((3, 3), np.uint8))[centre]))
     core = max(cfg["line_core"], cfg["line_share"] * stroke)
-    return _kept(dark, max(cfg["line_weak"], core / 2), core)
+    return _kept(dark, max(cfg["line_weak"], cfg["line_share"] * core), core)
 
 
 def ink(gray: np.ndarray, cfg: dict, wide: int) -> np.ndarray:
