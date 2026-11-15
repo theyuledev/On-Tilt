@@ -1,14 +1,19 @@
 import math
 import time
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import NamedTuple
 
 import numpy as np
 
 from src.contracts import BallState
 from src.vision.balls import Candidate
+from src.vision.plate_cold import ColdFinder
 from src.vision.plate_find import PlateTracker, configured
 from src.vision.px_to_mm import ball_state, outline_px, plate_mm, with_calib
 from src.vision.tracker import BallPx, BallTracker
+
+# after a search the next one waits three times as long, so the grab thread keeps most of the time
+REST = 3
 
 
 class Observation(NamedTuple):
@@ -33,6 +38,10 @@ class Pipeline:
         self.plate: PlateTracker | None = None
         if "calib" in self.cfg and self.cfg["plate_track"]:
             self.plate = PlateTracker(self.cfg, self.half_mm, configured(self.half_mm, self.cfg))
+            self.finder = ColdFinder(self.cfg, self.half_mm)
+            self.pool = ThreadPoolExecutor(max_workers=1)
+        self.search: Future | None = None
+        self.search_t = self.rest_until = -math.inf
         self.outline: list | None = None
         self.outline_t = -math.inf
         self.history: list[BallState] = []
@@ -52,12 +61,36 @@ class Pipeline:
         """Puts the map on the board as this frame shows it, so a shaking camera stays out of the
         ball's mm. The page's outline follows at its own slow rate."""
         self.plate.update(image)
+        self._recover(image, t_read)
         self.cfg = self.plate.mapped()
         if abs(t_read - self.outline_t) >= self.cfg["plate_outline_period_s"]:
             self.outline_t = t_read
             outline = outline_px(self.half_mm, self.cfg)
             if outline != self.outline:
                 self.outline = outline
+
+    def _recover(self, image: np.ndarray, t_read: float) -> None:
+        """A lost board, or one with fewer than all four edges, is looked for anywhere in the
+        picture. That takes many frames, so it runs beside the grab thread; only this thread
+        touches the pipeline, and it takes the find up once the search is done."""
+        if self.search is not None:
+            if not self.search.done():
+                return
+            self._take(self.search.result(), image)
+            self.rest_until = t_read + REST * (t_read - self.search_t)
+            self.search = None
+        if t_read >= self.rest_until and (self.plate.lost or self.plate.seen < 4):
+            self.search_t = t_read
+            self.search = self.pool.submit(self.finder.find, image, self.plate.corners)
+
+    def _take(self, found: PlateTracker | None, image: np.ndarray) -> None:
+        """The find replaces the tracker when it locks on this frame too and sees more edges. The
+        map jumps, so the velocity must not bridge it."""
+        if found is None:
+            return
+        found.update(image)
+        if not found.lost and (self.plate.lost or found.seen > self.plate.seen):
+            self.plate, self.history = found, []
 
     def step(self, image: np.ndarray, t_read: float) -> Observation:
         if self.last is not None and self.last.t_read == t_read:
