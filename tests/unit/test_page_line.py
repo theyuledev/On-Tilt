@@ -57,9 +57,20 @@ def test_a_refusal_shows_the_readers_sentence_and_a_good_read_asks_for_a_look():
     page, _ = click(snap(line="more than one line"))
     assert page["linesay"]["text"] == "more than one line" and not page["linesay"]["hidden"]
     assert not page["readline"]["disabled"]
-    page, _ = click(snap(line="ok"))
+    page, _ = click(path_mode(line="ok"))
     assert page["linesay"]["text"] == "line read, check the path on the board before arming"
     assert not page["linesay"]["hidden"]
+
+
+def test_the_check_the_path_hint_goes_once_armed_or_in_another_mode():
+    assert click(path_mode(line="ok", armed=True))[0]["linesay"]["hidden"]
+    assert click(snap(line="ok"))[0]["linesay"]["hidden"]
+    assert not click(snap(line="no line found"))[0]["linesay"]["hidden"]
+
+
+def test_arm_waits_while_a_line_is_read():
+    assert click(snap(line="reading"))[0]["arm"]["disabled"]
+    assert not click(snap(line="ok"))[0]["arm"]["disabled"]
 
 
 def test_the_banner_says_finished_once_the_ball_is_at_the_end():

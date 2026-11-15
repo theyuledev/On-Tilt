@@ -50,7 +50,8 @@ function readLine(s, locked) {
   $("readline").disabled = locked || reading || !cfg.camera || !!s.camera_lost;
   // its ends near the board edge can be off, so the ribbon is worth a look before arming
   say.textContent = s.line === "ok" ? "line read, check the path on the board before arming" : s.line || "";
-  say.hidden = !s.line || reading;
+  // the hint is for the path just read, not for a run or another mode
+  say.hidden = !s.line || reading || (s.line === "ok" && (locked || s.choices.mode !== "path"));
 }
 
 // balance swaps steering for the target picker; the target may move while armed

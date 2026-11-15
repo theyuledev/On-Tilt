@@ -130,7 +130,8 @@ function show(s) {
   $("bally").textContent = "Y" + (b.valid ? signed(b.y_mm, 1) : "--.-");
   $("tiltx").textContent = `X ${signed(p.sent_x_deg)}°`;
   $("tilty").textContent = `Y ${signed(p.sent_y_deg)}°`;
-  $("arm").disabled = watch || !!s.armed;
+  // a read runs on level pictures, so arming waits for it
+  $("arm").disabled = watch || !!s.armed || s.line === "reading";
   $("restart").disabled = !!s.armed;
   $("racebtn").disabled = watch || s.race === undefined || s.choices.mode === "balance";
   choices(s);
