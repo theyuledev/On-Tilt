@@ -55,10 +55,11 @@ def main() -> None:
         print(f"hand input off: {e}")
         hand = None
     try:
-        frames = CameraSource(open_camera(cfg["rig"]), process=Pipeline(cfg).step)
+        pipe = Pipeline(cfg)
+        frames = CameraSource(open_camera(cfg["rig"]), process=pipe.step)
     except (RuntimeError, OSError) as e:
         print(f"camera off: {e}")
-        frames = None
+        frames = pipe = None
     exposure = check_exposure(cfg["rig"]) if frames is not None else None
     actuator = None
     if cfg["rig"]["actuator"] == "real":
@@ -78,6 +79,7 @@ def main() -> None:
     app = make_app(loop)
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     app.state.leave = lambda: setattr(server, "should_exit", True)
+    app.state.pipe = pipe
 
     async def go():
         ticker = asyncio.create_task(run(loop))

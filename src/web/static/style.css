@@ -154,6 +154,8 @@ header.tight { gap: 10px 24px; }
 .title { font: 400 16px var(--px); line-height: 1; color: var(--pink); }
 #note { flex: 1 1 200px; }
 button.pill { border: 0; font: 400 22px var(--vt); cursor: pointer; }
+#readline { justify-content: center; }
+#readline:disabled { opacity: 0.4; }
 #save { min-height: 48px; padding: 0 24px; border: 0; border-radius: 999px; background: var(--yellow); color: var(--ground); box-shadow: 0 5px 0 #A8851A; font: 400 13px var(--px); cursor: pointer; }
 #save:disabled { opacity: 0.35; }
 .settings { width: 100%; max-width: 1440px; margin: 0 auto; box-sizing: border-box; display: flex; flex-direction: column; gap: 44px; padding: 28px 32px 64px; }

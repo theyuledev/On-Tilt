@@ -4,6 +4,7 @@ import pytest
 
 from src import app
 from src.io.settings import load
+from src.web.server import make_app
 
 pytestmark = pytest.mark.unit
 
@@ -90,3 +91,12 @@ def test_a_missing_maze_turns_the_race_off_and_the_app_still_starts(monkeypatch,
     assert capsys.readouterr().out.count("race off") == 1
     loop.tick(1.0, 0.01)
     assert "race" not in loop.snapshot()
+
+
+def test_the_page_reads_lines_on_the_board_map_the_camera_feeds(monkeypatch):
+    apps = []
+    monkeypatch.setattr(app, "make_app", lambda loop: apps.append(make_app(loop)) or apps[-1])
+    loop = start(monkeypatch, lambda rig: object(), lambda rig: None)
+    assert apps[0].state.pipe.step == loop.frames.process
+    start(monkeypatch, boom, lambda rig: None)
+    assert apps[1].state.pipe is None
