@@ -81,14 +81,13 @@ def best_run(found: list, wiped, cfg: dict, stroke: int, ball):
     other = lines(rest, links(rest, reach, bend))
     big = [r for r in other if drawn(rest, r) >= cfg["line_min_mm"] * cfg["px_per_mm"]]
     loose = _loose(found, best, big, idx, zone, web)
-    on_ball = bool(used & {i for i, _ in at})
-    if on_ball:
+    if used & {i for i, _ in at}:
         met = meets(used, other, found, idx, zone)
         big = [r for r in big if r in met]
     if not big:
         return best, 0.0, False, loose
     walked = {n for i in used for n in found[i].nodes}
-    hangs = on_ball or any(n in walked for j, _ in big[0] for n in rest[j].nodes)
+    hangs = any(n in walked for j, _ in big[0] for n in rest[j].nodes)
     return best, sum(drawn(rest, r) for r in big), hangs, loose
 
 

@@ -33,7 +33,7 @@ def test_three_reads_that_stop_early_do_not_outvote_two_that_go_on():
     early = LinePath(whole.points[:21] + [[5.0, 8.0], [8.0, 17.0]], "")
     assert agree([early] * 3 + [whole] * 2, VIS) == ([], DIFFER)
     assert agree([whole] * 3 + [early] * 2, VIS) == whole
-    for short, refused in ((5, False), (10, True)):
+    for short, refused in ((6, False), (7, True)):
         stop = LinePath(whole.points[:-short], "")
         assert (agree([stop] * 3 + [whole] * 2, VIS).reason == DIFFER) == refused
     elsewhere = LinePath([[float(x), 60.0] for x in range(-200, 201, 10)], "")
