@@ -95,6 +95,15 @@ def test_a_ball_on_one_end_neither_bends_nor_shortens_the_path(r_mm, cfg, width)
     assert min(math.dist(got.points[0], STRAIGHT[0]), math.dist(got.points[-1], STRAIGHT[0])) < 5
 
 
+@pytest.mark.parametrize("line", [STRAIGHT, CORNER, S_CURVE])
+@pytest.mark.parametrize("end", [0, -1])
+def test_the_path_starts_at_the_ball_whichever_end_it_sits_on(line, end):
+    at = line[end]
+    got = run(picture(VIS, [line], ball=(at, 8.0)), VIS, ball_px(VIS, at, 8.0))
+    follows(got, line)
+    assert math.dist(got.points[0], at) < 5
+
+
 @pytest.mark.parametrize("r_mm", [8.0, BIG])
 def test_a_ball_not_given_leaves_the_path_at_its_rim(r_mm):
     got = run(picture(VIS, [STRAIGHT], ball=(STRAIGHT[0], r_mm)))
