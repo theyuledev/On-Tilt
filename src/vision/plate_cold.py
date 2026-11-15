@@ -61,7 +61,8 @@ def _strips(s: int, b: int, m: int):
 
 def _turned(top, ok, deg, s, b, m, level, cfg):
     """Over the view turned by deg: per centre, how strongly the square's edges step down from
-    inside to outside, 0 unless three are clear. The fourth may lie against something as bright."""
+    inside to outside, 0 unless three are clear: the fine fit can still find a fourth these coarse
+    strips miss."""
     n = top.shape[0]
     rot = cv2.getRotationMatrix2D((n / 2, n / 2), deg, 1.0)
     pad = s + b  # as far as a strip reaches from the middle
@@ -108,8 +109,8 @@ def _side(lit: np.ndarray, pts: np.ndarray, out: np.ndarray, deep: int, sign: in
 
 def _edge(lit, p, q, cfg, r, deep, slopes):
     """The line near edge p-q with the strongest bright-to-dark step across it, as a point and a
-    direction; its outward normal; whether the step is clear. Lines are tried at every whole
-    pixel out up to r either way, at each of the slopes."""
+    direction, and whether the step is clear. Lines are tried at every whole pixel out up to r
+    either way, at each of the slopes."""
     samples = cfg["plate_edge_samples"]
     mid, t = (p + q) / 2, (q - p) / np.linalg.norm(q - p)
     # the corners run counter-clockwise, so this side is out
@@ -125,7 +126,7 @@ def _edge(lit, p, q, cfg, r, deep, slopes):
     drop[enough] = np.nanmedian(diff[enough], axis=-1)
     o, k = np.unravel_index(drop.argmax(), drop.shape)
     clear = bool(enough[o, k]) and drop[o, k] >= cfg["plate_edge_step"] * np.nanmedian(inside[o, k])
-    return (mid + offs[o] * out, t + slopes[k] * out), out, clear
+    return (mid + offs[o] * out, t + slopes[k] * out), clear
 
 
 def _cross(a, b) -> np.ndarray:
@@ -137,22 +138,17 @@ def refine(
     top: np.ndarray, ok: np.ndarray, quad: np.ndarray, cfg: dict, half_mm: float
 ) -> np.ndarray | None:
     """Each edge moved and turned on its own to the strongest step near it, within the edge
-    tracker's reach; an edge that shows none sits a board's width from the one across. None
-    under three edges. View px."""
+    tracker's reach. View px. None unless all four step clearly: the board is seen at a slant,
+    so a fourth edge guessed from the other three is several mm off."""
     step, reach = cfg["plate_edge_width_mm"], cfg["plate_search_mm"]
     lit = np.where(ok > 0, top, np.nan)
     r, deep = round(reach / step), round(reach / 2 / step)
     # half the coarse turn step, out to two of them: a tipped board's edges are not quite square
     slopes = np.tan(np.arange(-2, 2.5, 0.5) * turn_step(cfg, half_mm))
     fits = [_edge(lit, quad[i], quad[(i + 1) % 4], cfg, r, deep, slopes) for i in range(4)]
-    if sum(clear for _, _, clear in fits) < 3:
+    if not all(clear for _, clear in fits):
         return None
-    lines = [line for line, _, _ in fits]
-    for i, (_, _, clear) in enumerate(fits):
-        if not clear:
-            (p, d), out, _ = fits[(i + 2) % 4]
-            lines[i] = (p - 2 * half_mm / step * out, d)
-    return np.array([_cross(lines[i - 1], lines[i]) for i in range(4)])
+    return np.array([_cross(fits[i - 1][0], fits[i][0]) for i in range(4)])
 
 
 class ColdFinder:
@@ -182,6 +178,6 @@ class ColdFinder:
             # twice: the first look re-centres the search when the seed was far off
             for _ in range(2):
                 found.update(image)
-            if not found.lost and found.seen >= 3:
+            if not found.lost and found.seen == 4:
                 return found
         return None

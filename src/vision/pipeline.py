@@ -16,6 +16,12 @@ from src.vision.tracker import BallPx, BallTracker
 REST = 3
 
 
+def _timed(finder: ColdFinder, image: np.ndarray, near: np.ndarray):
+    """The find and how long it took, s. Runs beside the grab thread and holds no pipeline."""
+    t0 = time.perf_counter()
+    return finder.find(image, near), time.perf_counter() - t0
+
+
 class Observation(NamedTuple):
     ball: BallState
     ball_px: BallPx
@@ -41,7 +47,7 @@ class Pipeline:
             self.finder = ColdFinder(self.cfg, self.half_mm)
             self.pool = ThreadPoolExecutor(max_workers=1)
         self.search: Future | None = None
-        self.search_t = self.rest_until = -math.inf
+        self.rest_until = -math.inf
         self.outline: list | None = None
         self.outline_t = -math.inf
         self.history: list[BallState] = []
@@ -76,20 +82,26 @@ class Pipeline:
         if self.search is not None:
             if not self.search.done():
                 return
-            self._take(self.search.result(), image)
-            self.rest_until = t_read + REST * (t_read - self.search_t)
-            self.search = None
+            # cleared first, so a search that raised does not raise again on every frame
+            search, self.search = self.search, None
+            found, took = search.result()
+            self._take(found, image)
+            # on the clock, not in frames: a rest of whole frames can keep meeting the same one of
+            # two alternating frames
+            self.rest_until = t_read + REST * took
         if t_read >= self.rest_until and (self.plate.lost or self.plate.seen < 4):
-            self.search_t = t_read
-            self.search = self.pool.submit(self.finder.find, image, self.plate.corners)
+            self.search = self.pool.submit(_timed, self.finder, image, self.plate.corners)
 
     def _take(self, found: PlateTracker | None, image: np.ndarray) -> None:
-        """The find replaces the tracker when it locks on this frame too and sees more edges. The
-        map jumps, so the velocity must not bridge it."""
+        """The find replaces the tracker when it locks on this frame too and the tracker is lost,
+        or sees fewer edges than the find did on its own frame and has the board somewhere else.
+        The map jumps, so the velocity must not bridge it."""
         if found is None:
             return
+        more = found.seen > self.plate.seen
         found.update(image)
-        if not found.lost and (self.plate.lost or found.seen > self.plate.seen):
+        moved = np.abs(found.corners - self.plate.corners).max() > found.cfg["plate_edge_inlier_mm"]
+        if not found.lost and (self.plate.lost or (more and moved)):
             self.plate, self.history = found, []
 
     def step(self, image: np.ndarray, t_read: float) -> Observation:

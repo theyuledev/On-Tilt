@@ -11,9 +11,6 @@ from tests.unit.test_plate_find import CALIB, HALF, TRUE, VIS, at, paint, scene
 pytestmark = [pytest.mark.unit, pytest.mark.filterwarnings("error")]
 
 SET = configured(HALF, VIS)
-# an edge out of sight is only as good as the coarse fit: half a slope step at a corner plus half
-# a view pixel
-UNSEEN_MM = VIS["plate_search_mm"] / 8 + VIS["plate_edge_width_mm"] / 2
 
 
 def truth(dx=0.0, dy=0.0, deg=0.0) -> np.ndarray:
@@ -61,22 +58,10 @@ def hidden_edge():
     return img
 
 
-def test_a_sheet_as_bright_as_the_board_hides_one_edge():
-    found = find(hidden_edge())
-    assert found is not None and found.seen == 3
-    # the hidden edge sits a board's width from the one across
-    assert np.abs(found.corners - truth(60, 0)).max() < UNSEEN_MM
-
-
-def test_something_along_part_of_the_edge_across_from_a_hidden_one_does_not_move_it():
-    img = hidden_edge()
-    # 8 mm of dark strip inside the -x edge along 40% of it, light beyond it there
-    (x0, y0), (x1, y1) = at([(-HALF, HALF - 20), (-HALF + 8, 0.2 * HALF - 20)], 60).astype(int)
-    cv2.rectangle(img, (x0, y0), (x1, y1), 60, -1)
-    cv2.rectangle(img, (x0 - 30, y0), (x0 - 1, y1), 210, -1)
-    found = find(img)
-    assert found is not None and found.seen == 3
-    assert np.abs(found.corners - truth(60, 0)).max() < UNSEEN_MM
+def test_a_board_with_an_edge_hidden_is_not_guessed_from_the_other_three():
+    # seen at a slant the board is no square in the calibration's mm: a fourth edge put a
+    # board's width from the one across is several mm off
+    assert find(hidden_edge()) is None
 
 
 def lamp(img, x, y, r=10, halo=20.0):
@@ -121,7 +106,13 @@ def test_a_sheet_of_paper_alone_is_not_the_board():
     assert find(a4_sheet()) is None
 
 
-@pytest.mark.parametrize("dx, dy", [(0, 200), (0, 260), (380, 200), (-380, -230)])
+def test_a_board_close_to_the_frame_edge_is_found():
+    # its bottom edge 5 mm from the frame's
+    found = find(scene(0, 150))
+    assert found is not None and np.abs(found.corners - truth(0, 150)).max() < 1.5
+
+
+@pytest.mark.parametrize("dx, dy", [(0, 160), (0, 200), (380, 200), (-380, -230)])
 def test_a_board_partly_out_of_the_frame_is_found_right_or_not_at_all(dx, dy):
     found = find(scene(dx, dy))
-    assert found is None or np.abs(found.corners - truth(dx, dy)).max() < UNSEEN_MM
+    assert found is None or np.abs(found.corners - truth(dx, dy)).max() < 1.5
