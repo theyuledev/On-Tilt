@@ -43,19 +43,20 @@ def test_what_a_wipe_left_beside_a_dark_stroke_is_not_ink():
 
 def test_a_faint_tail_on_a_dark_stroke_is_not_ink_but_its_soft_edge_is():
     tail, edge = (slice(24, 40), slice(100, 104), 0.06), (19, slice(10, 190), 0.15)
-    found = marks(board(0.4, tail, edge), VIS, ALL)
+    found, faint = marks(board(0.4, tail, edge), VIS, ALL)
     assert found[21, 50] and found[19, 50] and not found[30, 101]
+    assert faint[30, 101] and not faint[21, 50]
 
 
 def test_the_limits_never_drop_below_the_fixed_ones():
     # a faint stroke: half its darkness is under line_core and half of line_core under line_weak
     tail, apart = (slice(24, 40), slice(100, 104), 0.028), (slice(45, 49), slice(50, 80), 0.045)
-    found = marks(board(0.07, tail, apart), VIS, ALL)
+    found = marks(board(0.07, tail, apart), VIS, ALL)[0]
     assert found[21, 50] and not found[30, 101] and not found[46, 60]
 
 
-def test_a_much_lighter_stretch_after_a_pen_lift_is_left_out():
-    # known limit: ink about 4x lighter than most of the line is not ink, and no reason is given
+def test_a_much_lighter_stretch_after_a_pen_lift_is_left_out_but_comes_back_skipped():
+    # ink about 4x lighter than most of the line is not the route, it is shown as left out
     a, b = np.array(STRAIGHT)
     n = np.linalg.norm(b - a)
     lift = [tuple(a + (b - a) * mm / n) for mm in (95, 97)]
@@ -65,6 +66,9 @@ def test_a_much_lighter_stretch_after_a_pen_lift_is_left_out():
         off, arc = along(got.points, STRAIGHT)
         assert got.reason == "" and off.max() < 2
         assert abs(arc.max() - arc.min() - cover) < 5
+        rest = [along(s, STRAIGHT) for s in got.skipped]
+        assert [round(a.max() - a.min()) // 10 for _, a in rest] == ([] if cover == n else [5])
+        assert all(off.max() < 2 and a.min() > cover for off, a in rest)
 
 
 def test_a_weak_limit_over_the_core_one_keeps_a_clear_line():
@@ -75,7 +79,7 @@ def test_the_stroke_is_as_dark_as_its_darkest_side():
     # a 2 px stroke is thinned onto its lighter top row
     dark = board(0.0, (20, slice(10, 190), 0.12), (21, slice(10, 190), 0.4))
     dark[45:49, 50:80] = 0.1
-    assert not marks(dark, VIS, ALL)[46, 60]
+    assert not marks(dark, VIS, ALL)[0][46, 60]
 
 
 def test_the_stroke_is_measured_on_the_board_not_round_it():
@@ -89,4 +93,30 @@ def test_the_stroke_is_measured_on_the_board_not_round_it():
 def test_a_blank_board_has_no_ink_and_no_warning():
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        assert not marks(np.zeros(ALL.shape, np.float32), VIS, ALL).any()
+        assert not np.any(marks(np.zeros(ALL.shape, np.float32), VIS, ALL))
+
+
+def test_faint_wipe_ticks_in_a_row_are_not_skipped_but_one_faint_stroke_is():
+    ticks, x = [], -100.0
+    for k, (long, gap) in enumerate(zip((18, 21, 25, 19, 23), (10, 12, 14, 11, 13), strict=True)):
+        ticks.append([(x, 60.0), (x + long, 60.0 + (3 if k % 2 else -3))])
+        x += long + gap
+    line = picture(VIS, [STRAIGHT], 4, shade=120)
+    got = run(np.minimum(line, picture(VIS, ticks, 4, shade=FAINT)))
+    follows(got, STRAIGHT)
+    assert got.skipped == []
+    one = [(-60.0, 60.0), (0.0, 60.0)]
+    got = run(np.minimum(line, picture(VIS, [one], 4, shade=FAINT)))
+    assert len(got.skipped) == 1 and along(got.skipped[0], one)[0].max() < 2
+
+
+def test_faint_ink_outside_the_read_area_is_not_skipped():
+    # on a turned board the read area's bounding box takes in board outside it
+    h = HALF - 40.0
+    img = np.minimum(
+        picture(TURNED, [S_CURVE], 4, shade=120),
+        picture(TURNED, [[(-50.0, h + 5), (50.0, h + 5)]], 4, shade=FAINT),
+    )
+    got = run(img, TURNED, edge=40.0)
+    follows(got, S_CURVE)
+    assert got.skipped == []

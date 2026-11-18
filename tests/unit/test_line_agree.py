@@ -1,10 +1,12 @@
+import math
 import time
 
 import numpy as np
 import pytest
 
-from src.vision.line_path import DIFFER, MANY, LinePath, agree
-from tests.unit.line_pictures import STRAIGHT, VIS, follows, picture, run
+from src.vision.line_path import NONE
+from src.vision.line_vote import DIFFER, LinePath, agree, closes
+from tests.unit.line_pictures import STRAIGHT, VIS, along, follows, picture, run
 
 pytestmark = pytest.mark.unit
 
@@ -31,7 +33,7 @@ def test_five_reads_give_the_path_most_agree_on():
 def test_three_reads_that_stop_early_do_not_outvote_two_that_go_on():
     whole = LinePath([[float(x), 0.0] for x in range(-200, 201, 10)], "")
     early = LinePath(whole.points[:21] + [[5.0, 8.0], [8.0, 17.0]], "")
-    assert agree([early] * 3 + [whole] * 2, VIS) == ([], DIFFER)
+    assert agree([early] * 3 + [whole] * 2, VIS) == LinePath([], DIFFER)
     assert agree([whole] * 3 + [early] * 2, VIS) == whole
     for short, refused in ((6, False), (7, True)):
         stop = LinePath(whole.points[:-short], "")
@@ -50,15 +52,15 @@ def test_one_read_of_four_that_goes_on_does_not_refuse_the_rest():
 def test_two_reads_that_stop_early_do_not_beat_one_that_goes_on():
     whole = LinePath([[float(x), 0.0] for x in range(-200, 201, 10)], "")
     early = LinePath(whole.points[:21] + [[5.0, 8.0], [8.0, 17.0]], "")
-    many = LinePath([], MANY)
-    assert agree([early, many, whole, early, many], VIS) == ([], DIFFER)
+    many = LinePath([], NONE)
+    assert agree([early, many, whole, early, many], VIS) == LinePath([], DIFFER)
 
 
 def test_two_reads_on_the_same_wrong_way_still_beat_one_right_read():
     right = LinePath([[float(x), 0.0] for x in range(-200, 201, 10)], "")
     wrong = LinePath([[x, 30.0 if abs(x) <= 20 else 0.0] for x, _ in right.points], "")
     close = LinePath([[x, y + 2.0 * (y > 0)] for x, y in wrong.points], "")
-    many = LinePath([], MANY)
+    many = LinePath([], NONE)
     got = agree([wrong, right, close, many, many], VIS)
     assert got in (wrong, close)
 
@@ -66,12 +68,12 @@ def test_two_reads_on_the_same_wrong_way_still_beat_one_right_read():
 def test_paths_that_outnumber_the_refusals_win_when_most_of_them_agree():
     whole = LinePath([[float(x), 0.0] for x in range(-200, 201, 10)], "")
     detour = LinePath([[x, 30.0 if abs(x) <= 20 else 0.0] for x, _ in whole.points], "")
-    many = LinePath([], MANY)
+    many = LinePath([], NONE)
     assert agree([whole, many, detour, many, whole], VIS) == whole
     assert agree([whole, whole, detour, many], VIS) == whole
-    assert agree([whole, whole, many, many], VIS) == ([], DIFFER)
-    assert agree([whole, detour, many, many, many], VIS) == ([], MANY)
-    assert agree([whole, detour, LinePath([], MANY), whole, detour], VIS) == ([], DIFFER)
+    assert agree([whole, whole, many, many], VIS) == LinePath([], DIFFER)
+    assert agree([whole, detour, many, many, many], VIS) == LinePath([], NONE)
+    assert agree([whole, detour, LinePath([], NONE), whole, detour], VIS) == LinePath([], DIFFER)
 
 
 def test_of_reads_that_agree_the_one_whose_ends_match_the_rest_is_taken():
@@ -106,9 +108,9 @@ def test_reads_whose_two_ends_both_wander_still_win_the_vote():
 def test_reads_that_do_not_agree_are_refused():
     other = [(-90.0, 60.0), (80.0, 60.0)]
     reads = [run(picture(VIS, [STRAIGHT]))] * 2 + [run(picture(VIS, [other]))] * 2
-    assert agree(reads + [run(picture(VIS, []))], VIS) == ([], DIFFER)
+    assert agree(reads + [run(picture(VIS, []))], VIS) == LinePath([], DIFFER)
     blank = run(picture(VIS, []))
-    assert agree([blank] * 3 + reads[:2], VIS) == ([], "no line found")
+    assert agree([blank] * 3 + reads[:2], VIS) == LinePath([], "no line found")
 
 
 def test_two_reads_whose_middle_differs_by_a_spiral_turn_do_not_agree():
@@ -123,7 +125,68 @@ def test_reads_whose_ends_wander_still_agree():
     assert agree([LinePath(base, ""), LinePath(wander, "")], VIS).reason == ""
 
 
-def test_a_grid_is_not_a_line():
+def test_a_crowded_board_gives_the_same_route_every_time_without_hanging():
+    # the walk search runs out of steps here; what it found by then stands
     grid = [[(k, -120.0), (k, 120.0)] for k in range(-120, 121, 40)]
     grid += [[(-120.0, k), (120.0, k)] for k in range(-120, 121, 40)]
-    assert run(picture(VIS, grid, 4)).reason != ""
+    img = picture(VIS, grid, 4)
+    t0 = time.perf_counter()
+    got = run(img)
+    assert time.perf_counter() - t0 < 10
+    assert got.reason == "" and got.skipped and run(img) == got
+    assert np.min([along(got.points, g)[0] for g in grid], 0).max() < 2
+
+
+RING = [
+    [round(60 * math.cos(a), 1), round(60 * math.sin(a), 1)]
+    for a in np.linspace(0, 2 * math.pi, 38)[:-1]
+]
+
+
+def ring(start):
+    pts = RING[start:] + RING[:start]
+    return LinePath(pts + pts[:1], "")
+
+
+def test_closing_and_open_reads_of_one_loop_do_not_agree():
+    shut, open_ = ring(0), LinePath(RING, "")
+    assert closes(shut.points) == 0 and closes(open_.points) is None
+    assert agree([shut] * 3 + [open_] * 2, VIS) == shut
+    assert agree([shut] * 2 + [open_] * 3, VIS) == open_
+
+
+def test_loops_read_from_different_seams_agree_but_not_ones_that_differ_before_the_close():
+    got = agree([ring(0), ring(9), ring(0), ring(20), ring(9)], VIS)
+    assert got.reason == "" and closes(got.points) == 0
+    bent = ring(0).points
+    bent[-4:-1] = [[x * 1.4, y * 1.4] for x, y in bent[-4:-1]]
+    assert agree([ring(0)] * 2 + [LinePath(bent, "")] * 2, VIS) == LinePath([], DIFFER)
+
+
+def test_a_loop_with_a_different_tail_does_not_agree_and_a_split_is_refused():
+    tails = [
+        [[-60.0 - d, -d] for d in range(50, 0, -10)],
+        [[-60.0 - d, d] for d in range(50, 0, -10)],
+    ]
+    a, b = (LinePath(t + RING[18:] + RING[:19], "") for t in tails)
+    assert closes(a.points) == 5 and agree([a, a, b, a, b], VIS) == a
+    assert agree([a, b, a, b, LinePath([], NONE)], VIS) == LinePath([], DIFFER)
+
+
+def test_reads_that_left_out_much_ink_sit_out_while_the_sure_ones_agree():
+    whole = LinePath([[float(x), 0.0] for x in range(-200, 201, 10)], "")
+    detour = LinePath([[x, 30.0 if abs(x) <= 20 else 0.0] for x, _ in whole.points], "")
+    cut = [LinePath(whole.points[:k], "", [whole.points[k:]]) for k in (20, 24)]
+    assert agree([whole, detour, cut[0], whole, cut[1]], VIS) == whole
+    assert (
+        agree([LinePath(p.points, "") for p in cut] + [whole, detour, whole], VIS).reason == DIFFER
+    )
+    assert agree([cut[0]] * 5, VIS) == cut[0]
+
+
+def test_a_long_tail_is_compared_more_than_line_bridge_mm_from_its_end():
+    y = RING[18][1]
+    tail = [[RING[18][0] - d, y] for d in range(200, 0, -10)]
+    bent = [[x, y + 20.0 * (i < 9)] for i, (x, _) in enumerate(tail)]
+    a, b = (LinePath(t + RING[18:] + RING[:19], "") for t in (tail, bent))
+    assert agree([a, a, a, b, b], VIS) == a

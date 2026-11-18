@@ -116,7 +116,9 @@ def test_a_ball_not_given_leaves_the_path_at_its_rim(r_mm):
 def test_a_ball_on_the_middle_of_the_line_is_bridged(r_mm, given):
     mid = (-15.0, 5.0)
     img = picture(VIS, [STRAIGHT], ball=(mid, r_mm))
-    follows(run(img, VIS, ball_px(VIS, mid, r_mm) if given else None), STRAIGHT)
+    got = run(img, VIS, ball_px(VIS, mid, r_mm) if given else None)
+    follows(got, STRAIGHT)
+    assert got.skipped == []
 
 
 @pytest.mark.parametrize("r_px", [8, 15, 30])

@@ -11,11 +11,11 @@ from fastapi.testclient import TestClient
 from src.io.ports import Frame
 from src.io.settings import load
 from src.loop import Loop
-from src.vision.line_path import MANY, LinePath
+from src.vision.line_path import LinePath
 from src.vision.maze_path import length
 from src.vision.pipeline import Pipeline
 from src.vision.tracker import BallPx
-from src.web.line_read import LINE_READS, SAY, read_line, use_line
+from src.web.line_read import LINE_READS, read_line, use_line
 from src.web.server import make_app
 from tests.unit.line_pictures import (
     HALF,
@@ -128,11 +128,6 @@ def test_the_line_is_read_on_the_board_map_the_tracker_has_now_not_the_settings_
     "pictures, reason",
     [
         ([picture(VIS, [])], "no line found"),
-        ([picture(VIS, TWO)], SAY[MANY]),
-        (
-            [picture(VIS, CIRCLE)],
-            "line splits in two: wipe one way, or put the ball on an end with one way out",
-        ),
         ([picture(VIS, [[(0.0, 0.0), (25.0, 0.0)]])], "no line found"),
         ([picture(VIS, [s]) for s in SPLIT], "pictures do not agree"),
     ],
@@ -145,13 +140,11 @@ def test_each_refusal_reaches_the_snapshot_and_changes_nothing(pictures, reason)
     assert loop.cfg["control"]["path_mm"] == path
 
 
-def test_two_lines_need_the_ball_on_an_end_of_one_and_then_that_one_is_the_path():
-    end = TWO[1][0]
+def test_two_lines_give_one_and_the_ball_on_an_end_of_the_other_picks_that_one():
     loop = Board([picture(VIS, TWO, 4)])
-    path = loop.cfg["control"]["path_mm"]
-    said = read(loop)["line"]
-    assert said == "more than one line: put the ball on an end of the line you want"
-    assert (loop.mode, loop.cfg["control"]["path_mm"]) == (load()["control"]["mode"], path)
+    assert read(loop)["line"] == "ok"
+    assert min(along(loop.cfg["control"]["path_mm"], t)[0].max() for t in TWO) < 2
+    end = TWO[1][0]
     on_end = Board([picture(VIS, TWO, 4, ball=(end, 8.0))])
     on_end.ball_px = ball_px(VIS, end, 8.0)
     assert read(on_end)["line"] == "ok" and on_end.mode == "path"
@@ -166,6 +159,13 @@ def test_each_picture_is_read_with_the_ball_seen_at_that_moment():
     loop = Board([picture(VIS, TWO, 4, ball=(end, 8.0))], balls=balls)
     assert read(loop)["line"] == "ok"
     assert along(loop.cfg["control"]["path_mm"], TWO[1])[0].max() < 2
+
+
+def test_a_drawn_loop_becomes_a_path_that_closes_on_itself():
+    loop = Board([picture(VIS, CIRCLE)])
+    assert read(loop)["line"] == "ok"
+    path = loop.cfg["control"]["path_mm"]
+    assert path[0] == path[-1] and along(path, CIRCLE[0])[0].max() < 2
 
 
 def test_no_camera_picture_a_lost_camera_or_no_board_map_is_refused():
