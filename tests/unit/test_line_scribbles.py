@@ -3,11 +3,11 @@ import math
 import numpy as np
 import pytest
 
-from src.vision.line_path import BRANCH
 from src.vision.maze_path import length
 from tests.unit.line_pictures import (
     VIS,
     WINDING,
+    along,
     ball_px,
     follows,
     lamps,
@@ -62,29 +62,33 @@ def test_a_scribble_near_the_line_end_does_not_turn_it_back_along_another_mark(b
 
 
 @pytest.mark.parametrize("ball", [BALL, None])
-def test_a_scribble_over_a_bend_or_over_one_line_ending_by_another_is_refused(ball):
-    # the two look the same once the scribble is wiped, so neither is guessed
-    bend = scribble(95.0, -25.0, 30.0, 50.0) + [WINDING]
-    other = scribble(-115.0, -70.0, 30.0, 20.0) + [[(-100.0, -70.0), (40.0, -40.0)], WINDING]
-    for marks in (bend, other):
-        assert run(picture(VIS, marks, 4), ball=ball).reason != ""
+@pytest.mark.parametrize(
+    "marks",
+    [
+        scribble(95.0, -25.0, 30.0, 50.0),
+        scribble(-115.0, -70.0, 30.0, 20.0) + [[(-100.0, -70.0), (40.0, -40.0)]],
+        scribble(95.0, -25.0, 30.0, 50.0)
+        + [[(30.0, -20.0), (60.0, -14.0), (75.0, 0.0), (78.0, 25.0)]],
+    ],
+)
+def test_a_scribble_the_walk_cannot_cross_gives_a_route_and_the_rest_skipped(marks, ball):
+    # over a bend, over one line ending by another, past a mark off the line: none is refused
+    got = run(picture(VIS, marks + [WINDING], 4), ball=ball)
+    assert got.reason == ""
+    assert length(got.points) + sum(map(length, got.skipped)) > 0.9 * length(WINDING)
 
 
-@pytest.mark.parametrize("ball", [BALL, None])
-def test_a_mark_off_the_line_before_a_scribble_on_its_bend_is_not_taken_for_it(ball):
-    # the walk can't get across the scribble, so the mark is longer than what is left before it
-    off = [(30.0, -20.0), (60.0, -14.0), (75.0, 0.0), (78.0, 25.0)]
-    marks = scribble(95.0, -25.0, 30.0, 50.0) + [off, WINDING]
-    assert run(picture(VIS, marks, 4), ball=ball).reason != ""
-
-
-def test_a_gap_at_a_corner_with_a_bit_of_ink_in_it_is_refused_not_cut_short():
+def test_a_gap_at_a_corner_with_a_bit_of_ink_in_it_keeps_the_part_past_it_as_skipped():
     marks = [
         [(-100.0, 0.0), (43.0, 0.0)],
         [(50.0, 2.0), (50.0, 8.0)],
         [(50.0, 15.0), (50.0, 120.0)],
     ]
-    assert run(picture(VIS, marks, 4), ball=ball_px(VIS, (-100.0, 0.0), 8)).reason == BRANCH
+    got = run(picture(VIS, marks, 4), ball=ball_px(VIS, (-100.0, 0.0), 8))
+    follows(got, marks[0])
+    assert (
+        len(got.skipped) == 1 and along(got.skipped[0], [(50.0, 2.0), (50.0, 120.0)])[0].max() < 2
+    )
 
 
 @pytest.mark.parametrize("other", [[(-80.0, 40.0), (80.0, 40.0)], [(80.0, 40.0), (80.0, 140.0)]])
@@ -103,9 +107,11 @@ def test_a_short_mark_just_past_the_line_end_is_no_reason_to_refuse(ball):
     assert abs(length(got.points) / length(line) - 1) < 0.05
 
 
-def test_a_corner_too_sharp_to_follow_is_refused_not_cut_short():
+def test_a_corner_too_sharp_to_follow_ends_the_route_and_the_rest_is_skipped():
     v = [(-100.0, 0.0), (60.0, 0.0), (-80.0, 40.0)]
-    assert run(picture(VIS, [v], 4), ball=ball_px(VIS, v[0], 8)).reason == BRANCH
+    got = run(picture(VIS, [v], 4), ball=ball_px(VIS, v[0], 8))
+    follows(got, v[:2])
+    assert len(got.skipped) == 1 and along(got.skipped[0], v[1:])[0].max() < 3
 
 
 def test_a_hook_too_sharp_to_follow_but_shorter_than_a_bridge_is_left_off():

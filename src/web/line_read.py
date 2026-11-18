@@ -4,12 +4,10 @@ import time
 
 from src import switches
 from src.contracts import Choices
-from src.vision.line_path import MANY, LinePath, agree, find_line
+from src.vision.line_path import LinePath, agree, find_line
 
 LINE_READS = 5  # pictures the line is read off, the path most of them agree on is kept
 ARMED, NO_PICTURE = "armed, kill first", "no camera picture"
-# a refusal said as what to do about it; the others go to the page as the reader gives them
-SAY = {MANY: "more than one line: put the ball on an end of the line you want"}
 
 
 def read_line(loop, pipe) -> LinePath:
@@ -37,7 +35,7 @@ def use_line(loop, got: LinePath) -> str:
     if loop.safety.armed:
         return ARMED
     if got.reason:
-        return SAY.get(got.reason, got.reason)
+        return got.reason
     loop.cfg["control"]["path_mm"] = got.points
     switches.choose(loop, Choices(mode="path"))
     return "ok"

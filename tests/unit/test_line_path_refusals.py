@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 import pytest
 
-from src.vision.line_path import BRANCH
+from src.vision.maze_path import length
 from src.vision.px_to_mm import plate_px
 from src.web.form import check
 from tests.unit.line_pictures import (
@@ -114,36 +114,30 @@ def test_a_thick_blob_that_is_not_the_ball_is_not_a_line():
     follows(run(img, VIS, ball_px(VIS, (40.0, 60.0), 8.0)), STRAIGHT)
 
 
-def test_a_short_branch_is_left_out_and_a_long_one_refused():
+def test_a_short_branch_is_left_out_and_a_long_one_comes_back_skipped():
     bar = [(-80.0, 0.0), (80.0, 0.0)]
-    follows(run(picture(VIS, [bar, [(0.0, 0.0), (0.0, 20.0)]])), bar)
-    assert run(picture(VIS, [bar, [(0.0, 0.0), (0.0, 60.0)]])).reason == BRANCH
+    short = run(picture(VIS, [bar, [(0.0, 0.0), (0.0, 20.0)]]))
+    follows(short, bar)
+    assert short.skipped == []
+    long = run(picture(VIS, [bar, [(0.0, 0.0), (0.0, 60.0)]]))
+    follows(long, bar)
+    assert len(long.skipped) == 1 and along(long.skipped[0], [(0.0, 0.0), (0.0, 60.0)])[0].max() < 2
 
 
-def test_two_lines_each_with_a_gap_are_still_two():
+def test_two_lines_each_with_a_gap_give_one_and_skip_the_other_whole():
     lines = [[(-80.0, y), (-3.0, y)] for y in (-30.0, 30.0)] + [
         [(3.0, y), (80.0, y)] for y in (-30.0, 30.0)
     ]
-    assert run(picture(VIS, lines)).reason == "more than one line"
-
-
-CIRCLE = [[(50 * math.cos(a), 50 * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 73)]]
+    got = run(picture(VIS, lines))
+    rows = [[(-80.0, y), (80.0, y)] for y in (-30.0, 30.0)]
+    assert sorted(along(got.points, r)[0].max() < 2 for r in rows) == [False, True]
+    assert len(got.skipped) == 1 and abs(length(got.skipped[0]) - 154) < 8
 
 
 @pytest.mark.parametrize(
     "lines, reason",
     [
         ([], "no line found"),
-        ([[(-80.0, -30.0), (80.0, -30.0)], [(-80.0, 30.0), (80.0, 30.0)]], "more than one line"),
-        (
-            [
-                [(-80.0, -60.0), (80.0, -60.0)],
-                [(-80.0, 60.0), (80.0, 60.0)],
-                [(0.0, 0.0), (30.0, 0.0)],
-            ],
-            "more than one line",
-        ),
-        (CIRCLE, "line splits in two: wipe one way, or put the ball on an end with one way out"),
         ([[(0.0, 0.0), (25.0, 0.0)]], "no line found"),
     ],
 )

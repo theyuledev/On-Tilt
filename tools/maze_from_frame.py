@@ -80,7 +80,7 @@ def _line(gray: np.ndarray, cfg: dict) -> str:
             print("board edges not found, using the set map")
         else:
             vis = plate.mapped()
-    pts, why = find_line(gray, vis, half, vis["line_edge_mm"])
+    pts, why, _ = find_line(gray, vis, half, vis["line_edge_mm"])
     out = why or f"line {length(pts):.0f} mm in {len(pts)} points\npoints = {pts}"
     print(out)
     return out

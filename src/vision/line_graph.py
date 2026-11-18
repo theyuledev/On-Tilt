@@ -125,24 +125,30 @@ def links(found: list[Chain], reach: float, bend: float, hole=None) -> dict:
 def longest_walk(found: list[Chain], joined: dict, bend: float, cost: float, starts, budget=300000):
     """The walk over chains and joins, {(chain, end): [(chain, end, scribble)]}, each chain and
     each scribble but 0 once, turning at most bend degrees, that covers the most drawn length less
-    cost px per 90 degrees turned. It begins at one of starts, (chain, end) pairs; straightest
-    turns are tried first and the starts share budget steps evenly. Gives [(chain, forward)]."""
+    cost px per 90 degrees turned and less the length of each join that starts or ends at a fork
+    (a join of two free ends is a gap in the line and costs nothing). It begins at one of starts,
+    (chain, end) pairs; straightest turns are tried first and the starts share budget steps
+    evenly: when a start's share runs out, the best walk found so far stands, so the same picture
+    always gives the same walk. Gives [(chain, forward)]."""
     at: dict[int, list] = {}
     for i, c in enumerate(found):
         at.setdefault(c.nodes[0], []).append((i, 0))
         at.setdefault(c.nodes[1], []).append((i, 1))
     best, left, crossed = ([], -1.0), [0], set()
 
+    def free(i, e):
+        return len(at[found[i].nodes[e]]) == 1
+
     def nexts(i, e):
         out = [(j, f, 0) for j, f in at[found[i].nodes[1 - e]] if j != i]
         return out + joined.get((i, 1 - e), [])
 
-    def go(path, used, total, i, e, turn, k):
+    def go(path, used, total, i, e, turn, k, gap):
         nonlocal best
         used.add(i)
         crossed.add(k)
         path.append((i, e == 0))
-        total += found[i].length - cost * turn / 90
+        total += found[i].length - cost * turn / 90 - gap
         if total > best[1]:
             best = (list(path), total)
         heading = found[i].out[1 - e]
@@ -152,14 +158,19 @@ def longest_walk(found: list[Chain], joined: dict, bend: float, cost: float, sta
             if left[0] < 0:
                 break
             if j not in used and (z == 0 or z not in crossed) and t <= bend:
-                go(path, used, total, j, f, t, z)
+                gap = (
+                    0.0
+                    if z or free(i, 1 - e) and free(j, f)
+                    else math.dist(found[i].px[e - 1], found[j].px[-f])
+                )
+                go(path, used, total, j, f, t, z, gap)
         path.pop()
         used.discard(i)
         crossed.discard(k)
 
     for i, e in starts:
         left[0] = budget // len(starts)
-        go([], set(), 0.0, i, e, 0.0, 0)
+        go([], set(), 0.0, i, e, 0.0, 0, 0.0)
     return best[0]
 
 
