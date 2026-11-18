@@ -6,7 +6,18 @@ import pytest
 
 from src.vision.line_ink import marks
 from src.vision.px_to_mm import outline_px
-from tests.unit.line_pictures import FAINT, HALF, S_CURVE, TURNED, VIS, follows, picture, run
+from tests.unit.line_pictures import (
+    FAINT,
+    HALF,
+    S_CURVE,
+    STRAIGHT,
+    TURNED,
+    VIS,
+    along,
+    follows,
+    picture,
+    run,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -41,6 +52,23 @@ def test_the_limits_never_drop_below_the_fixed_ones():
     tail, apart = (slice(24, 40), slice(100, 104), 0.028), (slice(45, 49), slice(50, 80), 0.045)
     found = marks(board(0.07, tail, apart), VIS, ALL)
     assert found[21, 50] and not found[30, 101] and not found[46, 60]
+
+
+def test_a_much_lighter_stretch_after_a_pen_lift_is_left_out():
+    # known limit: ink about 4x lighter than most of the line is not ink, and no reason is given
+    a, b = np.array(STRAIGHT)
+    n = np.linalg.norm(b - a)
+    lift = [tuple(a + (b - a) * mm / n) for mm in (95, 97)]
+    faint = picture(VIS, [[lift[1], STRAIGHT[1]]], 4, shade=FAINT)
+    for shade, cover in ((150, n), (120, 95)):
+        got = run(np.minimum(picture(VIS, [[STRAIGHT[0], lift[0]]], 4, shade=shade), faint))
+        off, arc = along(got.points, STRAIGHT)
+        assert got.reason == "" and off.max() < 2
+        assert abs(arc.max() - arc.min() - cover) < 5
+
+
+def test_a_weak_limit_over_the_core_one_keeps_a_clear_line():
+    follows(run(picture(VIS, [S_CURVE], 4, shade=170), {**VIS, "line_weak": 0.06}), S_CURVE)
 
 
 def test_the_stroke_is_as_dark_as_its_darkest_side():

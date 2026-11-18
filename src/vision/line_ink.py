@@ -9,7 +9,7 @@ from src.vision.balls import downsample, plate_level
 def _kept(dark: np.ndarray, weak: float, core: float) -> np.ndarray:
     """Marks at least weak dark, where part of each is at least core dark."""
     _, lab = cv2.connectedComponents(np.uint8(dark > weak))
-    return np.uint8(np.isin(lab, np.unique(lab[dark > core])))
+    return np.uint8(np.isin(lab, np.unique(lab[dark > core])) & (lab > 0))
 
 
 def marks(dark: np.ndarray, cfg: dict, region: np.ndarray) -> np.ndarray:
