@@ -71,11 +71,11 @@ def test_tangent_turned_and_apart():
 def test_a_ball_that_cut_inside_a_corner_keeps_its_place_and_is_pulled_back_to_the_line():
     cfg = cfg_for(BEND)
     follow, _ = led(cfg, [(-100, 0), (-70, 0), (-30, 0)])
-    assert follow.open.s == pytest.approx(70.0)
+    assert follow.s == pytest.approx(70.0)
     cmd = follow(ball(-12, 14), NO_INTENT, cfg)
-    assert follow.open.s == pytest.approx(70.0) and cmd.tilt_y_deg < 0.0
+    assert follow.s == pytest.approx(70.0) and cmd.tilt_y_deg < 0.0
     follow(ball(-12, 5), NO_INTENT, cfg)
-    assert follow.open.s == pytest.approx(88.0)
+    assert follow.s == pytest.approx(88.0)
 
 
 @pytest.mark.parametrize(
@@ -130,9 +130,9 @@ def test_a_ball_beside_the_other_leg_of_a_hairpin_is_not_taken_to_be_there():
     ]
     cfg = cfg_for(legs)
     follow, _ = led(cfg, [(0, 0), (40, 0), (80, 0)])
-    assert follow.open.s == pytest.approx(80.0)
+    assert follow.s == pytest.approx(80.0)
     follow(ball(92, 9.5), NO_INTENT, cfg)
-    assert follow.open.s == pytest.approx(80.0)
+    assert follow.s == pytest.approx(80.0)
 
 
 def test_a_gap_in_the_heartbeat_drops_what_was_wound_up_against_a_lean():
@@ -168,4 +168,4 @@ def test_the_page_gets_how_far_along_the_ball_is_and_the_point_it_is_steered_for
     for x in range(-40, 90, 10):
         follow(ball(x, 0), NO_INTENT, cfg)
     # balance takes over with the line still turning ahead: the point is then the end
-    assert follow.open.phase == "finish" and follow.path_view()["chase"] == [100, 20]
+    assert follow.phase == "finish" and follow.path_view()["chase"] == [100, 20]

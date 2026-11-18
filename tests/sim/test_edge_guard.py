@@ -8,9 +8,9 @@ import pytest
 from src.app import Loop
 from src.contracts import BallState, Intent
 from src.io.settings import ROOT, load
-from src.modes.path import target
 from src.sim.ball import roll
 from src.sim.plate import SimActuator
+from tests.sim.guard_lap import target
 
 pytestmark = pytest.mark.sim
 

@@ -7,8 +7,8 @@ from src.control.pid import Integral, integrate, pid, smooth
 from src.control.rest import Rest, pull_share
 from src.inputs.shaping import shape
 from src.modes.assist import goal_mm
-from src.modes.follow import OpenPath
-from src.modes.path import clip, is_open, target
+from src.modes.follow import Follow
+from src.modes.path import clip
 from src.modes.spot import held
 
 LEVEL = PlateCommand(tilt_x_deg=0.0, tilt_y_deg=0.0)
@@ -84,53 +84,11 @@ def assist(ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
     return pd_toward(ball, clip((ball.x_mm, ball.y_mm), goal, c["path_lookahead_mm"]), cfg)
 
 
-class PathFollower:
-    """Chases the point path_lookahead_mm ahead along control.path_mm, then holds the end.
-    A path with two ends is left to OpenPath; one that closes on itself is lapped as before."""
+class PathFollower(Follow):
+    """Follows control.path_mm, with the balance law for the end of an open path."""
 
     def __init__(self, cfg: dict):
-        self.path = [(p[0], p[1]) for p in cfg["control"]["path_mm"]]
-        if not self.path:
-            raise ValueError("control.path_mm needs at least one point")
-        self.seg = 0
-        self.open = None
-        if is_open(self.path):
-            self.open = OpenPath(self.path, cfg, lambda: Balance(cfg), pd_toward)
-
-    @property
-    def done(self) -> bool:
-        return self.open is not None and self.open.done
-
-    def path_view(self) -> dict:
-        """For the page: the points in whole mm in the order they are followed, whether the
-        last one has been reached, how far along them the ball is taken to be (None on a lap) and
-        the point on the line it is steered for (None on a lap and before a ball is seen)."""
-        points = self.open.path if self.open else self.path
-        chase = self.open.chase if self.open else None
-        return {
-            "done": self.done,
-            "points": [[round(x), round(y)] for x, y in points],
-            "along_mm": round(self.open.s) if self.open else None,
-            "chase": [round(chase[0]), round(chase[1])] if chase else None,
-        }
-
-    def resume(self) -> None:
-        """After a gap in the heartbeat an open path goes on where it was; a lap starts over."""
-        if self.open:
-            self.open.resume()
-        else:
-            self.seg = 0
-
-    def __call__(self, ball: BallState, intent: Intent, cfg: dict) -> PlateCommand:
-        if self.open:
-            return self.open(ball, intent, cfg)
-        if not ball.valid:
-            return LEVEL
-        c = cfg["control"]
-        at = (ball.x_mm, ball.y_mm)
-        ahead, capture = c["path_lookahead_mm"], c["path_capture_mm"]
-        self.seg, goal = target(self.path, self.seg, at, ahead, capture)
-        return pd_toward(ball, goal, cfg)
+        super().__init__(cfg["control"]["path_mm"], cfg, lambda: Balance(cfg), pd_toward)
 
 
 MODES = {"hand": hand, "balance": Balance, "path": PathFollower, "assist": assist}
