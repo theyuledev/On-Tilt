@@ -1,7 +1,8 @@
 // the play choices on the page: mode, steering, hand mode, guard and the balance target
 // (uses app.js $, pending, cfg, maze, watch, subtitle, handnone and target.js plateMm)
 const PICKS = { modes: "mode", steers: "steer", handmodes: "hand_mode" };
-let balancing = false, askedX = -Infinity, askedLine = -Infinity, wasReading = false;
+let balancing = false, askedX = -Infinity, askedLine = -Infinity, wasReading = false, saidAt = -Infinity;
+const FLASH_MS = 900;  // as long as the flash in style.css
 
 function wireChoices() {
   for (const [group, field] of Object.entries(PICKS)) {
@@ -62,12 +63,14 @@ function readLine(s, locked) {
     : s.line ? `NO PATH: ${s.line}` : "";
   say.classList.toggle("got", ok);
   say.classList.toggle("red", !ok && !!s.line);
-  // a new answer flashes, so a second read that says the same is still seen
+  // a new answer flashes, so a second read that says the same is still seen. the flash comes off
+  // once played, or showing the answer again after a run or a mode change would play it again
   if (wasReading && !reading && s.line) {
     say.classList.toggle("flash", false);
     void say.offsetWidth;
-    say.classList.toggle("flash", true);
+    saidAt = performance.now();
   }
+  say.classList.toggle("flash", performance.now() - saidAt < FLASH_MS);
   wasReading = reading;
   // the hint is for the path just read, not for a run or another mode
   say.hidden = !s.line || reading || (s.line === "ok" && (locked || s.choices.mode !== "path"));

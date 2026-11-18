@@ -99,27 +99,30 @@ def test_page_scripts_never_define_the_same_name_twice(client):
     assert len(names) > 100 and sorted(names) == sorted(set(names))
 
 
-def test_the_page_asks_for_each_static_file_under_its_change_time_and_is_never_kept(client):
-    r = client.get("/")
+@pytest.mark.parametrize("url, least", [("/", 10), ("/settings", 2)])
+def test_each_page_asks_for_its_static_files_under_their_change_time_and_is_never_kept(
+    client, url, least
+):
+    r = client.get(url)
     refs = re.findall(r'"/static/([^"]+)"', r.text)
-    assert len(refs) > 10 and r.headers["cache-control"] == "no-cache"
+    assert len(refs) >= least and r.headers["cache-control"] == "no-cache"
     for ref in refs:
         name, stamp = ref.split("?v=")
-        assert stamp == str(int((STATIC / name).stat().st_mtime)), ref
+        assert stamp == str((STATIC / name).stat().st_mtime_ns), ref
 
 
-def test_a_changed_file_gets_a_new_stamp_and_a_missing_one_is_left_alone(
+def test_a_file_saved_twice_in_one_second_gets_a_new_stamp_and_a_missing_one_is_left_alone(
     client, tmp_path, monkeypatch
 ):
     page = '<script src="/static/a.js"></script><script src="/static/gone.js"></script>'
     (tmp_path / "index.html").write_text(page)
     (tmp_path / "a.js").write_text("")
     monkeypatch.setattr(server, "STATIC", tmp_path)
-    os.utime(tmp_path / "a.js", (1000, 1000))
-    assert '"/static/a.js?v=1000"' in client.get("/").text
-    os.utime(tmp_path / "a.js", (2000, 2000))
+    os.utime(tmp_path / "a.js", ns=(1000_000_000_001, 1000_000_000_001))
+    assert '"/static/a.js?v=1000000000001"' in client.get("/").text
+    os.utime(tmp_path / "a.js", ns=(1000_000_000_002, 1000_000_000_002))
     page = client.get("/").text
-    assert '"/static/a.js?v=2000"' in page and '"/static/gone.js"' in page
+    assert '"/static/a.js?v=1000000000002"' in page and '"/static/gone.js"' in page
 
 
 def test_play_and_settings_pages_link_to_each_other(client):

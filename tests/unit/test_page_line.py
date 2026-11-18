@@ -87,6 +87,15 @@ def test_only_an_answer_that_ends_a_read_flashes_even_when_it_says_the_same_agai
     assert again["cls"] == "red flash" and again["text"] == "NO PATH: no line found"
 
 
+def test_the_flash_plays_once_so_the_answer_shown_again_after_arm_and_kill_does_not_flash():
+    got = path_mode(line="ok", path={"done": False, "points": READ})
+    read = [("snap", path_mode(line="reading")), ("snap", got)]
+    assert shown(*read, ("wait", 800), ("snap", got))["linesay"]["cls"] == "got flash"
+    armed = path_mode(line="ok", path={"done": False, "points": READ}, armed=True)
+    again = shown(*read, ("wait", 900), ("snap", armed), ("snap", got))["linesay"]
+    assert again["cls"] == "got" and not again["hidden"]
+
+
 def test_the_check_the_path_hint_goes_once_armed_or_in_another_mode():
     assert click(path_mode(line="ok", armed=True))[0]["linesay"]["hidden"]
     assert click(snap(line="ok"))[0]["linesay"]["hidden"]
