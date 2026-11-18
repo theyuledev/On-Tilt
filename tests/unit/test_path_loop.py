@@ -1,4 +1,5 @@
 import math
+import time
 
 import pytest
 
@@ -103,6 +104,25 @@ def test_a_longer_lookahead_mid_run_gets_more_path_ahead_and_never_a_finish():
     cmd = follow(ball(30, 50), NO_INTENT, cfg)
     assert follow.phase == "follow" and lengths(follow.path)[-1] >= 20 + 400 + 900
     assert math.isfinite(cmd.tilt_x_deg) and math.isfinite(cmd.tilt_y_deg)
+
+
+def test_a_loop_with_a_doubled_point_shows_its_points_once():
+    cfg = cfg_for([SQ[0], SQ[1], SQ[1], *SQ[2:]])
+    follow = led(cfg, along(SQ, 300.0, 720.0))
+    assert follow.path_view()["points"] == [list(p) for p in SQ] and follow.laps == 1
+
+
+def test_a_loop_smaller_than_the_ball_is_where_an_open_path_ends():
+    cfg = cfg_for([(-50.0, 0.0), (10.0, 0.0), (10.015, 0.0), (10.0, 0.0)])
+    follow, slowest = make_mode("path", cfg), 0.0
+    for x in range(-50, 11, 10):
+        t = time.perf_counter()
+        follow(ball(x, 0), NO_INTENT, cfg)
+        slowest = max(slowest, time.perf_counter() - t)
+    view = follow.path_view()
+    assert view["points"] == [[-50, 0], [10, 0]] and view["done"] and view["laps"] == 0
+    # repeated round a 0.03 mm lap, one tick took 9.6 s
+    assert slowest < 0.005
 
 
 @pytest.mark.parametrize(

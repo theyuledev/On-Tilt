@@ -34,8 +34,11 @@ class Follow:
         if not path:
             raise ValueError("control.path_mm needs at least one point")
         self.path = tidy([inside(p, cfg) for p in path])
+        k, cum = loop_start(self.path), lengths(self.path)
+        if k is not None and cum[-1] - cum[k] < cfg["control"]["path_capture_mm"]:
+            # a loop smaller than the ball is a place to stop at, not one to go round
+            self.path, k = self.path[: k + 1], None
         self.cum, self.shown = lengths(self.path), len(self.path)
-        k = loop_start(self.path)
         # a loop is followed on the path with its lap repeated as often as the lookahead needs
         self.ring = None if k is None else self.path[k + 1 :]
         self.new_hold, self.pull = hold, pull
