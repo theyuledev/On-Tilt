@@ -133,7 +133,7 @@ def test_the_line_is_read_on_the_board_map_the_tracker_has_now_not_the_settings_
             [picture(VIS, CIRCLE)],
             "line splits in two: wipe one way, or put the ball on an end with one way out",
         ),
-        ([picture(VIS, [[(0.0, 0.0), (25.0, 0.0)]])], "line too short"),
+        ([picture(VIS, [[(0.0, 0.0), (25.0, 0.0)]])], "no line found"),
         ([picture(VIS, [s]) for s in SPLIT], "pictures do not agree"),
     ],
 )
