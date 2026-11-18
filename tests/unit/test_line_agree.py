@@ -3,7 +3,8 @@ import time
 import numpy as np
 import pytest
 
-from src.vision.line_path import DIFFER, MANY, LinePath, agree
+from src.vision.line_path import MANY
+from src.vision.line_vote import DIFFER, LinePath, agree
 from tests.unit.line_pictures import STRAIGHT, VIS, follows, picture, run
 
 pytestmark = pytest.mark.unit
