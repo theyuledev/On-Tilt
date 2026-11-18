@@ -80,7 +80,8 @@ def test_of_two_tails_the_longer_is_taken_every_time_and_the_other_skipped():
     got = run(img)
     k, pts = lap(got)
     assert math.dist(got.points[0], TAILS[0][0]) < 5 and math.dist(pts[0], TAILS[0][1]) < 10
-    assert len(got.skipped) == 1 and along(got.skipped[0], TAILS[1])[0].max() < 3
+    # drawn from the route: its last point is where the tail's stroke meets the loop's
+    assert len(got.skipped) == 1 and along(got.skipped[0][:-1], TAILS[1])[0].max() < 3
     assert run(img) == got
 
 
@@ -94,14 +95,25 @@ def test_two_loops_through_one_point_are_lapped_both_after_the_stem():
     assert all(along(p, pts)[0].max() < 3 for p in petals)
 
 
-def test_a_small_loop_at_a_line_end_is_an_end_not_a_lap():
-    oval = ring(12.0, 0.0, 12.0)
-    assert 2 * math.pi * 12 < VIS["line_loop_min_mm"]
-    got = read([[(-120.0, 0.0), (0.0, 0.0)], oval])
-    assert got.reason == "" and closes(got.points) is None
-    assert (
-        np.min([along(got.points, s)[0] for s in ([(-120.0, 0.0), (0.0, 0.0)], oval)], 0).max() < 2
-    )
+@pytest.mark.parametrize("around, lapped", [(112.0, True), (88.0, False)])
+def test_an_end_loop_is_lapped_from_line_loop_min_mm_round(around, lapped):
+    r = around / (2 * math.pi)
+    got = read([[(-120.0, 0.0), (0.0, 0.0)], ring(r, 0.0, r)])
+    assert got.reason == "" and (closes(got.points) is not None) == lapped
+
+
+def test_a_c_with_the_ball_in_its_30_mm_gap_stays_open():
+    c = [(50 * math.cos(t), 50 * math.sin(t)) for t in np.linspace(0.3, 2 * math.pi - 0.3, 80)]
+    got = read([c], ball=(50.0, 0.0))
+    assert got.reason == "" and closes(got.points) is None and along(got.points, c)[0].max() < 2
+
+
+@pytest.mark.parametrize("long", [41.5, 60.0])
+def test_a_branch_left_out_is_measured_and_drawn_from_the_route(long):
+    bar, stem = [(-90.0, 0.0), (90.0, 0.0)], [(0.0, 0.0), (0.0, long)]
+    got = read([bar, stem])
+    follows(got, bar)
+    assert len(got.skipped) == 1 and min(abs(y) for _, y in got.skipped[0]) < 1
 
 
 def test_a_t_follows_the_bar_and_skips_the_stem():

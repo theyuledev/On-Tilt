@@ -35,20 +35,29 @@ def best_run(found: list, wiped, cfg: dict, stroke: int, ball):
             best = longest_walk(found, joined, bend, cost, at)
     used = {i for i, _ in best}
     rest = [c for i, c in enumerate(found) if i not in used]
-    big = cfg["line_min_mm"] * cfg["px_per_mm"]
-    return best, [
-        walk_px(rest, r) for r in lines(rest, links(rest, reach, bend)) if drawn(rest, r) >= big
-    ]
+    route, met = walk_px(found, best), {n for i in used for n in found[i].nodes}
+    big, left = cfg["line_min_mm"] * cfg["px_per_mm"], []
+    for r in lines(rest, links(rest, reach, bend)):
+        px = walk_px(rest, r)
+        # a run off a fork of the route is measured from where it leaves the route
+        ends = (rest[r[0][0]].nodes[1 - r[0][1]], rest[r[-1][0]].nodes[r[-1][1]])
+        near = [route[np.argmin(np.linalg.norm(route - p, axis=1))] for p in px[[0, -1]]]
+        grow = [
+            math.dist(a, b) * (n in met) for a, b, n in zip(px[[0, -1]], near, ends, strict=True)
+        ]
+        if drawn(rest, r) + sum(grow) >= big:
+            left.append(
+                np.vstack([[near[0]]] * (ends[0] in met) + [px] + [[near[1]]] * (ends[1] in met))
+            )
+    return best, left
 
 
 def _strokes(marks: np.ndarray, cfg: dict, stroke: int) -> list:
     """The runs of marks at least line_min_mm long, as px polylines."""
     found, _ = pieces(marks, stroke)
     big = cfg["line_min_mm"] * cfg["px_per_mm"]
-    runs = lines(
-        found, links(found, cfg["line_bridge_mm"] * cfg["px_per_mm"], cfg["line_bend_deg"])
-    )
-    return [walk_px(found, r) for r in runs if drawn(found, r) >= big]
+    # not joined across gaps: wipe ticks in a row are not a stroke
+    return [walk_px(found, r) for r in lines(found, {}) if drawn(found, r) >= big]
 
 
 def _turned(walk: list) -> list:
@@ -134,8 +143,22 @@ def find_line(
         return LinePath([], NONE)
     walk, left = best_run(found, wiped, cfg, stroke, seen)
     inside = seen is not None and cv2.pointPolygonTest(rim, seen[:2], False) >= 0
+    chain, k, at_ball = _closed(found, walk, stroke, seen if inside else None)
+
+    def mm(c):
+        keep = cv2.approxPolyDP(np.float32(c).reshape(-1, 1, 2), 1.0, False).reshape(-1, 2)
+        return [plate_mm(x + x0, y + y0, cfg) for x, y in keep]
+
+    skipped = [resample(mm(r), cfg["line_step_mm"]) for r in left + _strokes(faint, cfg, stroke)]
+    points = _laid(chain, k, at_ball, mm, cfg)
+    return LinePath(points, "", skipped) if points else LinePath([], NONE)
+
+
+def _closed(found: list, walk: list, stroke: int, seen) -> tuple:
+    """The walk's px polyline, from the ball when it covers an end, else turned round when only
+    its start comes back; the index it closes on (None when open); whether it starts at the ball."""
     tips = walk_px(found, walk)[[0, -1]]
-    near = [inside and math.dist(p, seen[:2]) <= seen[2] + stroke for p in tips]
+    near = [seen is not None and math.dist(p, seen[:2]) <= seen[2] + stroke for p in tips]
     back = _turned(walk)
     if (near[1] and not near[0]) or (
         not near[0] and seam(found, walk, stroke) is None and seam(found, back, stroke) is not None
@@ -145,21 +168,20 @@ def find_line(
     if near[0]:
         chain = np.vstack([[seen[:2]], chain])
         k = 0 if near[1] else None if k is None else k + 1
+    return chain, k, near[0]
 
-    def mm(c):
-        keep = cv2.approxPolyDP(np.float32(c).reshape(-1, 1, 2), 1.0, False).reshape(-1, 2)
-        return [plate_mm(x + x0, y + y0, cfg) for x, y in keep]
 
+def _laid(chain: np.ndarray, k, at_ball: bool, mm, cfg: dict) -> list:
+    """The path in plate mm every line_step_mm: the tail, then the lap ending exactly on point k;
+    open when the lap is under line_loop_min_mm; [] when shorter than line_min_mm."""
+    step = cfg["line_step_mm"]
     # simplified open: a polyline whose two ends coincide would simplify to nothing
     lap = None if k is None else mm(chain[k:])
     lap = lap and lap + lap[:1]
-    skipped = [resample(mm(r), cfg["line_step_mm"]) for r in left + _strokes(faint, cfg, stroke)]
     if lap is None or length(lap) < cfg["line_loop_min_mm"]:
         whole = mm(chain)
-        if length(whole) < cfg["line_min_mm"]:
-            return LinePath([], NONE)
-        return LinePath(resample(whole, cfg["line_step_mm"]), "", skipped)
-    ring = resample(lap, cfg["line_step_mm"])
+        return resample(whole, step) if length(whole) >= cfg["line_min_mm"] else []
+    ring = resample(lap, step)
     if not k:
-        return LinePath(ring if near[0] else _ring_start(ring), "", skipped)
-    return LinePath(resample(mm(chain[: k + 1]), cfg["line_step_mm"])[:-1] + ring, "", skipped)
+        return ring if at_ball else _ring_start(ring)
+    return resample(mm(chain[: k + 1]), step)[:-1] + ring

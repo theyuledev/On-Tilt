@@ -182,3 +182,11 @@ def test_reads_that_left_out_much_ink_sit_out_while_the_sure_ones_agree():
         agree([LinePath(p.points, "") for p in cut] + [whole, detour, whole], VIS).reason == DIFFER
     )
     assert agree([cut[0]] * 5, VIS) == cut[0]
+
+
+def test_a_long_tail_is_compared_more_than_line_bridge_mm_from_its_end():
+    y = RING[18][1]
+    tail = [[RING[18][0] - d, y] for d in range(200, 0, -10)]
+    bent = [[x, y + 20.0 * (i < 9)] for i, (x, _) in enumerate(tail)]
+    a, b = (LinePath(t + RING[18:] + RING[:19], "") for t in (tail, bent))
+    assert agree([a, a, a, b, b], VIS) == a

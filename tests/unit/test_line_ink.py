@@ -94,3 +94,29 @@ def test_a_blank_board_has_no_ink_and_no_warning():
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         assert not np.any(marks(np.zeros(ALL.shape, np.float32), VIS, ALL))
+
+
+def test_faint_wipe_ticks_in_a_row_are_not_skipped_but_one_faint_stroke_is():
+    ticks, x = [], -100.0
+    for k, (long, gap) in enumerate(zip((18, 21, 25, 19, 23), (10, 12, 14, 11, 13), strict=True)):
+        ticks.append([(x, 60.0), (x + long, 60.0 + (3 if k % 2 else -3))])
+        x += long + gap
+    line = picture(VIS, [STRAIGHT], 4, shade=120)
+    got = run(np.minimum(line, picture(VIS, ticks, 4, shade=FAINT)))
+    follows(got, STRAIGHT)
+    assert got.skipped == []
+    one = [(-60.0, 60.0), (0.0, 60.0)]
+    got = run(np.minimum(line, picture(VIS, [one], 4, shade=FAINT)))
+    assert len(got.skipped) == 1 and along(got.skipped[0], one)[0].max() < 2
+
+
+def test_faint_ink_outside_the_read_area_is_not_skipped():
+    # on a turned board the read area's bounding box takes in board outside it
+    h = HALF - 40.0
+    img = np.minimum(
+        picture(TURNED, [S_CURVE], 4, shade=120),
+        picture(TURNED, [[(-50.0, h + 5), (50.0, h + 5)]], 4, shade=FAINT),
+    )
+    got = run(img, TURNED, edge=40.0)
+    follows(got, S_CURVE)
+    assert got.skipped == []
