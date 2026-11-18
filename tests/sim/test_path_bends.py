@@ -62,7 +62,7 @@ def run(path, back=False, late_s=rig.SEEN_LATE_S, lean=(0.0, 0.0), gaps=rig.GAPS
         if each:
             each(cfg, len(places) / cfg["control"]["sim_tick_hz"])
         cmd = mode(ball, intent, cfg)
-        places.append(mode.open.s)
+        places.append(mode.s)
         tilts.append((cmd.tilt_x_deg, cmd.tilt_y_deg))
         return cmd
 
@@ -70,7 +70,7 @@ def run(path, back=False, late_s=rig.SEEN_LATE_S, lean=(0.0, 0.0), gaps=rig.GAPS
     kw = dict(gaps=gaps, lean=lean, cfg=cfg, mode=watched, track=track, late_s=late_s)
     r = rig.follow(path, start, end, 120.0, **kw)
     n = round(r["time_s"] * 100) if r["finished"] else len(track)
-    return r, mode.open.path, places[:n], track[:n], tilts[:n]
+    return r, mode.path, places[:n], track[:n], tilts[:n]
 
 
 def passed_off(path, places, track):

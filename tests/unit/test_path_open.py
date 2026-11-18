@@ -47,7 +47,13 @@ def led(cfg, spots):
 def test_open_path_starts_at_the_end_nearest_the_ball():
     cfg = cfg_for(ROW)
     follow = make_mode("path", cfg)
-    view = {"done": False, "points": [list(p) for p in ROW], "along_mm": 0, "chase": None}
+    view = {
+        "done": False,
+        "points": [list(p) for p in ROW],
+        "along_mm": 0,
+        "chase": None,
+        "laps": 0,
+    }
     assert follow.path_view() == view
     follow(ball(95, 3), NO_INTENT, cfg)
     assert follow.path_view()["points"] == [list(p) for p in ROW[::-1]]
@@ -58,9 +64,9 @@ def test_open_path_goes_to_its_start_before_it_follows():
     cfg = cfg_for(ROW)
     follow, cmd = led(cfg, [(-100, 60)])
     assert (cmd.tilt_x_deg, cmd.tilt_y_deg) == pytest.approx((0.0, -full(cfg)))
-    assert follow.open.phase == "join"
+    assert follow.phase == "join"
     assert follow(ball(-100, 10), NO_INTENT, cfg).tilt_x_deg > 0.95 * full(cfg)
-    assert follow.open.phase == "follow"
+    assert follow.phase == "follow"
 
 
 @pytest.mark.parametrize(
@@ -84,21 +90,21 @@ def test_open_path_levels_blind_keeps_its_place_and_picks_up_where_the_ball_retu
     follow, _ = led(cfg, [(-100, 0), (-70, 0), (-50, 0)])
     cmd = follow(ball(999, 999, valid=False), NO_INTENT, cfg)
     assert (cmd.tilt_x_deg, cmd.tilt_y_deg) == (0.0, 0.0)
-    assert follow.open.s == pytest.approx(50.0) and follow.open.phase == "follow"
+    assert follow.s == pytest.approx(50.0) and follow.phase == "follow"
     # 110 mm further on: it catches up a lookahead a tick, so a later pass is never jumped to
     cmd = follow(ball(60, 4), NO_INTENT, cfg)
-    assert follow.open.s == pytest.approx(90.0) and pull_deg(cmd) == pytest.approx(full(cfg))
+    assert follow.s == pytest.approx(90.0) and pull_deg(cmd) == pytest.approx(full(cfg))
     for _ in range(2):
         cmd = follow(ball(60, 4), NO_INTENT, cfg)
-    assert follow.open.s == pytest.approx(160.0) and cmd.tilt_x_deg > 0.95 * full(cfg)
+    assert follow.s == pytest.approx(160.0) and cmd.tilt_x_deg > 0.95 * full(cfg)
 
 
 def test_balance_takes_over_inside_i_err_max_mm_of_the_last_point_and_winds_its_integral():
     cfg = cfg_for(ROW)
     follow, before = led(cfg, [*ALONG_ROW, (69, 0)])
-    assert follow.open.phase == "follow"
+    assert follow.phase == "follow"
     first = follow(ball(71, 0, t=1.0), NO_INTENT, cfg)
-    assert follow.open.phase == "finish"
+    assert follow.phase == "finish"
     assert first.tilt_x_deg == pytest.approx(cfg["control"]["kp_deg_mm"] * 29)
     assert before.tilt_x_deg - first.tilt_x_deg < 0.6
     later = follow(ball(71, 0, t=2.0), NO_INTENT, cfg)
@@ -148,7 +154,7 @@ def test_done_latches_near_the_last_point_only_once_the_path_has_been_followed()
         *((x, 10) for x in range(100, 19, -10)),
     ]:
         follow(ball(*spot), NO_INTENT, cfg)
-    assert follow.open.phase == "finish" and not follow.done
+    assert follow.phase == "finish" and not follow.done
     follow(ball(2, 10, valid=False), NO_INTENT, cfg)
     assert not follow.done
     follow(ball(12, 10), NO_INTENT, cfg)

@@ -34,16 +34,6 @@ def walk(path: list, seg: int, s: float, ahead: float) -> Point:
     return (path[-1][0], path[-1][1])
 
 
-def advance(path: list, seg: int, p: Point, capture: float) -> int:
-    """Step the segment on while p's projection sits within capture mm of the segment's end."""
-    while seg < len(path) - 2:
-        a, b = path[seg], path[seg + 1]
-        if seg_len(a, b) - project(p, a, b) > capture:
-            break
-        seg += 1
-    return seg
-
-
 def clip(p: Point, goal: Point, reach: float) -> Point:
     """goal pulled back to within reach mm of p, so a far ball joins at cruising speed."""
     d = seg_len(p, goal)
@@ -53,18 +43,10 @@ def clip(p: Point, goal: Point, reach: float) -> Point:
     return (p[0] + f * (goal[0] - p[0]), p[1] + f * (goal[1] - p[1]))
 
 
-def target(path: list, seg: int, p: Point, ahead: float, capture: float) -> tuple[int, Point]:
-    """Segment to follow from p and the point to chase, at most ahead mm away from p."""
-    if len(path) < 2:
-        return 0, clip(p, (path[0][0], path[0][1]), ahead)
-    seg = advance(path, seg, p, capture)
-    goal = walk(path, seg, project(p, path[seg], path[seg + 1]), ahead)
-    return seg, clip(p, goal, ahead)
-
-
-def is_open(path: list) -> bool:
-    """Two ends to go between: at least two points and the last is not the first again."""
-    return len(path) > 1 and tuple(path[0]) != tuple(path[-1])
+def loop_start(path: list) -> int | None:
+    """Index of the first point the last one repeats, where the path is lapped from on; None for
+    a path with two ends."""
+    return next((k for k, p in enumerate(path[:-1]) if p == path[-1]), None)
 
 
 def tidy(points: list) -> list:

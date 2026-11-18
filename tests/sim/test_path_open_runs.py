@@ -157,7 +157,7 @@ def test_a_spiral_with_17_mm_between_turns_is_followed_turn_by_turn_through_blin
 
     def watched(ball, intent, cfg):
         cmd = mode(ball, intent, cfg)
-        places.append(mode.open.s)
+        places.append(mode.s)
         return cmd
 
     gaps = ((10.0, 0.5), (25.0, 0.5))
