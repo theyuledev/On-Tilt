@@ -1,8 +1,10 @@
 """Pure geometry for a setpoint that walks a polyline of (x, y) points in mm."""
 
+import bisect
 import math
 
 Point = tuple[float, float]
+HALVINGS = 10  # finds where the line leaves the straight to about 0.01 mm on 10 mm pieces
 
 
 def seg_len(a: Point, b: Point) -> float:
@@ -106,3 +108,46 @@ def stretch(p: Point, goal: Point, reach: float) -> Point:
         return p
     f = reach / d
     return (p[0] + f * (goal[0] - p[0]), p[1] + f * (goal[1] - p[1]))
+
+
+def heading(a: Point, b: Point) -> float:
+    return math.atan2(b[1] - a[1], b[0] - a[0])
+
+
+def tangent(path: list, cum: list, s: float) -> float:
+    """Heading of the path at distance s along it, of its last piece past the end."""
+    i = min(bisect.bisect_right(cum, s), len(cum) - 1)
+    return heading(path[i - 1], path[i])
+
+
+def turned(a: float, b: float) -> float:
+    """Angle from heading a to heading b, between -pi and pi."""
+    return (b - a + math.pi) % (2 * math.pi) - math.pi
+
+
+def apart(p: Point, a: Point, b: Point) -> float:
+    """Distance from p to the segment a->b."""
+    return seg_len(p, walk([a, b], 0, project(p, a, b), 0.0)) if a != b else seg_len(p, a)
+
+
+def sight(path: list, cum: list, s: float, ahead: float, tol: float) -> float:
+    """How far past distance s the path stays within tol mm of the straight line from its point
+    at s, up to ahead mm: the part of it a ball can be sent along in a straight line. A path
+    that ends straight counts as going on straight."""
+    here, end = walk(path, 0, 0.0, s), min(s + ahead, cum[-1])
+    inner = [i for i, d in enumerate(cum) if s < d < end]
+    ends = [cum[i] for i in inner] + [end]
+
+    def fits(d: float, k: int) -> bool:
+        to = walk(path, 0, 0.0, d)
+        return all(apart(path[i], here, to) <= tol for i in inner[:k])
+
+    lo = s
+    for k, hi in enumerate(ends):
+        if not fits(hi, k):
+            for _ in range(HALVINGS):
+                mid = (lo + hi) / 2
+                lo, hi = (mid, hi) if fits(mid, k) else (lo, mid)
+            return lo - s
+        lo = hi
+    return ahead

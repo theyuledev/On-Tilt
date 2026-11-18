@@ -47,7 +47,8 @@ def led(cfg, spots):
 def test_open_path_starts_at_the_end_nearest_the_ball():
     cfg = cfg_for(ROW)
     follow = make_mode("path", cfg)
-    assert follow.path_view() == {"done": False, "points": [list(p) for p in ROW]}
+    view = {"done": False, "points": [list(p) for p in ROW], "along_mm": 0, "chase": None}
+    assert follow.path_view() == view
     follow(ball(95, 3), NO_INTENT, cfg)
     assert follow.path_view()["points"] == [list(p) for p in ROW[::-1]]
     assert follow(ball(95, 3), NO_INTENT, cfg).tilt_x_deg < -0.95 * full(cfg)
@@ -141,7 +142,11 @@ def test_done_latches_near_the_last_point_only_once_the_path_has_been_followed()
     cfg = cfg_for(HOOK)
     follow, _ = led(cfg, [(0, 4)])
     assert follow.path_view()["points"][0] == [0.0, 0.0] and not follow.done
-    for spot in [(30, 0), (60, 0), (90, 0), (100, 5), (80, 10), (50, 10), (25, 10)]:
+    for spot in [
+        *((x, 0) for x in range(10, 101, 10)),
+        (100, 5),
+        *((x, 10) for x in range(100, 19, -10)),
+    ]:
         follow(ball(*spot), NO_INTENT, cfg)
     assert follow.open.phase == "finish" and not follow.done
     follow(ball(2, 10, valid=False), NO_INTENT, cfg)

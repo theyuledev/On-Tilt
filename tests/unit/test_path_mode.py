@@ -145,7 +145,8 @@ def test_a_closed_path_is_followed_exactly_as_before():
             assert (cmd.tilt_x_deg, cmd.tilt_y_deg) == (0.0, 0.0)
         assert follow.seg == seg
     assert seg == 2 and not follow.done
-    assert follow.path_view() == {"done": False, "points": [list(p) for p in SQ]}
+    view = {"done": False, "points": [list(p) for p in SQ], "along_mm": None, "chase": None}
+    assert follow.path_view() == view
 
 
 def test_progress_is_the_distance_along_the_path_whatever_the_spacing():

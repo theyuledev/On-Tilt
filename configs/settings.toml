@@ -54,6 +54,11 @@ d_max_deg = { value = 4.0, label = "uncalibrated default (NOT TESTED, expected p
 path_mm = { value = [[100, 100], [-100, 100], [-100, -100], [100, -100], [100, 100]], label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 path_lookahead_mm = { value = 40, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 path_capture_mm = { value = 15, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+# an open path is aimed along the line ahead as far as it stays within sight_tol_mm of straight,
+# moves on only with the ball within gate_mm of the line and pulls less above bend_mm_s where it bends
+path_sight_tol_mm = { value = 3, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+path_gate_mm = { value = 8, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
+path_bend_mm_s = { value = 30, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 assist_margin_mm = { value = 20, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 est_accel_noise_mm_s2 = { value = 150, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
 est_pos_noise_mm = { value = 0.15, label = "uncalibrated default (NOT TESTED, expected predicted default value)" }
