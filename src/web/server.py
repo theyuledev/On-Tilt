@@ -46,7 +46,14 @@ def make_app(loop) -> FastAPI:
 
     @app.get("/")
     def index():
-        return FileResponse(STATIC / "index.html")
+        # each page file is asked for under its own change time and the page itself is never kept:
+        # a browser that holds old page code would leave a new button dead
+        def stamped(m):
+            f = STATIC / m[1]
+            return f'"/static/{m[1]}?v={int(f.stat().st_mtime)}"' if f.is_file() else m[0]
+
+        html = re.sub(r'"/static/([^"?]+)"', stamped, (STATIC / "index.html").read_text())
+        return Response(html, media_type="text/html", headers={"Cache-Control": "no-cache"})
 
     @app.get("/config")
     def config():

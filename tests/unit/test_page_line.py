@@ -26,11 +26,26 @@ def path_mode(**over):
     return snap(choices={**snap()["choices"], "mode": "path"}, **over)
 
 
-def test_read_line_is_on_while_disarmed_with_a_camera_and_one_click_asks_once():
-    page, asked = click(snap())
+def shown(*steps):
+    return run([OPEN, *steps], config=CAM)["page"]
+
+
+def test_read_line_is_on_while_disarmed_and_a_click_says_reading_at_once_and_asks_once():
+    page = shown(("snap", snap()))
     assert page["readline"]["text"] == "READ LINE" and not page["readline"]["disabled"]
     assert page["linesay"]["hidden"]
+    page, asked = click(snap())
+    assert page["readline"]["text"] == "READING..." and page["readline"]["disabled"]
     assert asked == [{"x": 0, "y": 0, "line": True}]
+
+
+def test_the_click_keeps_reading_over_the_last_answer_until_the_app_has_had_time_to_start():
+    old = ("snap", snap(line="no line found"))
+    steps = [old, ("click", "readline"), ("frame", None), ("wait", 600), old]
+    page = shown(*steps)
+    assert page["readline"]["text"] == "READING..." and page["linesay"]["hidden"]
+    page = shown(*steps, ("wait", 100), old)
+    assert page["readline"]["text"] == "READ LINE" and not page["linesay"]["hidden"]
 
 
 @pytest.mark.parametrize(
@@ -53,13 +68,23 @@ def test_reading_shows_on_the_button_and_a_second_click_asks_nothing():
     assert page["linesay"]["hidden"] and asked == []
 
 
-def test_a_refusal_shows_the_readers_sentence_and_a_good_read_asks_for_a_look():
-    page, _ = click(snap(line="more than one line"))
-    assert page["linesay"]["text"] == "more than one line" and not page["linesay"]["hidden"]
+def test_a_refusal_says_no_path_and_why_and_a_good_read_says_how_much_line_it_got():
+    page = shown(("snap", snap(line="more than one line")))
+    assert page["linesay"]["text"] == "NO PATH: more than one line"
+    assert page["linesay"]["cls"] == "red" and not page["linesay"]["hidden"]
     assert not page["readline"]["disabled"]
-    page, _ = click(path_mode(line="ok"))
-    assert page["linesay"]["text"] == "line read, check the path on the board before arming"
-    assert not page["linesay"]["hidden"]
+    got = path_mode(line="ok", path={"done": False, "points": [[0, 0], [30, 40], [30, 140]]})
+    page = shown(("snap", got))
+    assert page["linesay"]["text"] == "GOT IT: 15 cm of line. check the path on the board, then ARM"
+    assert page["linesay"]["cls"] == "got" and not page["linesay"]["hidden"]
+
+
+def test_only_an_answer_that_ends_a_read_flashes_even_when_it_says_the_same_again():
+    old = ("snap", snap(line="no line found"))
+    assert shown(old)["linesay"]["cls"] == "red"
+    assert shown(("snap", snap(line="reading")), old)["linesay"]["cls"] == "red flash"
+    again = shown(old, ("click", "readline"), old, ("wait", 700), old)["linesay"]
+    assert again["cls"] == "red flash" and again["text"] == "NO PATH: no line found"
 
 
 def test_the_check_the_path_hint_goes_once_armed_or_in_another_mode():
