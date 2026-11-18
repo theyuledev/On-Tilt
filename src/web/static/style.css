@@ -156,6 +156,10 @@ header.tight { gap: 10px 24px; }
 button.pill { border: 0; font: 400 22px var(--vt); cursor: pointer; }
 #readline { justify-content: center; }
 #readline:disabled { opacity: 0.4; }
+#linesay { padding: 2px 8px; border-radius: 8px; font-size: 22px; }
+#linesay.got { color: var(--green); }
+#linesay.flash { animation: saidnew 0.9s ease-out; }
+@keyframes saidnew { from { background: var(--yellow); color: var(--ground); } }
 #save { min-height: 48px; padding: 0 24px; border: 0; border-radius: 999px; background: var(--yellow); color: var(--ground); box-shadow: 0 5px 0 #A8851A; font: 400 13px var(--px); cursor: pointer; }
 #save:disabled { opacity: 0.35; }
 .settings { width: 100%; max-width: 1440px; margin: 0 auto; box-sizing: border-box; display: flex; flex-direction: column; gap: 44px; padding: 28px 32px 64px; }

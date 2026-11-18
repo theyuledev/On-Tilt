@@ -6,7 +6,7 @@ from pathlib import Path
 
 import cv2
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from src import switches
@@ -36,6 +36,17 @@ def retarget(loop, want) -> None:
     spot.aim(loop.cfg, want, cross_mm(frame.image, loop.cfg["vision"]) if look else None)
 
 
+def fresh_page(name: str) -> Response:
+    # each page file is asked for under its own change time and the page itself is never kept:
+    # a browser that holds old page code would leave a new button dead
+    def stamped(m):
+        f = STATIC / m[1]
+        return f'"/static/{m[1]}?v={f.stat().st_mtime_ns}"' if f.is_file() else m[0]
+
+    html = re.sub(r'"/static/([^"?]+)"', stamped, (STATIC / name).read_text())
+    return Response(html, media_type="text/html", headers={"Cache-Control": "no-cache"})
+
+
 def make_app(loop) -> FastAPI:
     app = FastAPI()
     app.state.restart, app.state.leave = False, lambda: None
@@ -46,7 +57,7 @@ def make_app(loop) -> FastAPI:
 
     @app.get("/")
     def index():
-        return FileResponse(STATIC / "index.html")
+        return fresh_page("index.html")
 
     @app.get("/config")
     def config():
@@ -69,7 +80,7 @@ def make_app(loop) -> FastAPI:
 
     @app.get("/settings")
     def settings_page():
-        return FileResponse(STATIC / "settings.html")
+        return fresh_page("settings.html")
 
     @app.get("/settings.json")
     def settings_view():

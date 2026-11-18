@@ -1,7 +1,8 @@
 // the play choices on the page: mode, steering, hand mode, guard and the balance target
 // (uses app.js $, pending, cfg, maze, watch, subtitle, handnone and target.js plateMm)
 const PICKS = { modes: "mode", steers: "steer", handmodes: "hand_mode" };
-let balancing = false, askedX = -Infinity;
+let balancing = false, askedX = -Infinity, askedLine = -Infinity, wasReading = false, saidAt = -Infinity;
+const FLASH_MS = 900;  // as long as the flash in style.css
 
 function wireChoices() {
   for (const [group, field] of Object.entries(PICKS)) {
@@ -12,7 +13,14 @@ function wireChoices() {
     e.currentTarget.blur();
   };
   for (const b of $("targets").children) b.onclick = e => { pending.target = b.dataset.pick; e.currentTarget.blur(); };
-  $("readline").onclick = e => { pending.line = true; e.currentTarget.blur(); };
+  $("readline").onclick = e => {
+    pending.line = true;
+    // the click shows at once, before the app answers
+    askedLine = performance.now();
+    e.currentTarget.textContent = "READING...";
+    e.currentTarget.disabled = true;
+    e.currentTarget.blur();
+  };
   $("race").onclick = e => {
     const c = e.currentTarget;
     // only the flat picture maps a click straight onto the plate
@@ -45,11 +53,25 @@ function choices(s) {
 
 // the line drawn on the board becomes the path; s.line is the last read's answer
 function readLine(s, locked) {
-  const reading = s.line === "reading", say = $("linesay");
+  const reading = s.line === "reading" || performance.now() - askedLine < 700, say = $("linesay");
+  const ok = s.line === "ok", pts = (s.path && s.path.points) || [];
+  const cm = Math.round(pts.slice(1).reduce((a, p, i) => a + Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]), 0) / 10);
   $("readline").textContent = reading ? "READING..." : "READ LINE";
   $("readline").disabled = locked || reading || !cfg.camera || !!s.camera_lost;
   // its ends near the board edge can be off, so the ribbon is worth a look before arming
-  say.textContent = s.line === "ok" ? "line read, check the path on the board before arming" : s.line || "";
+  say.textContent = ok ? `GOT IT: ${cm} cm of line. check the path on the board, then ARM`
+    : s.line ? `NO PATH: ${s.line}` : "";
+  say.classList.toggle("got", ok);
+  say.classList.toggle("red", !ok && !!s.line);
+  // a new answer flashes, so a second read that says the same is still seen. the flash comes off
+  // once played, or showing the answer again after a run or a mode change would play it again
+  if (wasReading && !reading && s.line) {
+    say.classList.toggle("flash", false);
+    void say.offsetWidth;
+    saidAt = performance.now();
+  }
+  say.classList.toggle("flash", performance.now() - saidAt < FLASH_MS);
+  wasReading = reading;
   // the hint is for the path just read, not for a run or another mode
   say.hidden = !s.line || reading || (s.line === "ok" && (locked || s.choices.mode !== "path"));
 }
