@@ -7,8 +7,8 @@ from typing import NamedTuple
 import cv2
 import numpy as np
 
-from src.vision.balls import downsample, plate_level
 from src.vision.line_graph import drawn, lines, links, longest_walk, walk_px
+from src.vision.line_ink import ink
 from src.vision.line_scribble import meets, pieces, through, zones
 from src.vision.maze_path import length
 from src.vision.px_to_mm import outline_px, plate_mm
@@ -16,30 +16,12 @@ from src.vision.tracker import BallPx
 
 NONE, MANY = "no line found", "more than one line"
 BRANCH = "line splits in two: wipe one way, or put the ball on an end with one way out"
-SHORT = "line too short"
 DIFFER = "pictures do not agree"
 
 
 class LinePath(NamedTuple):
     points: list[list[float]]
     reason: str
-
-
-def ink(gray: np.ndarray, cfg: dict, wide: int) -> np.ndarray:
-    """Thin marks darker than the board right around them, kept where part of them is clearly
-    dark. wide (px) is more than the broadest stroke."""
-    b = cv2.GaussianBlur(gray, (3, 3), 0).astype(np.float32)
-    disk = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (wide, wide))
-    board = cv2.resize(plate_level(downsample(gray, cfg), cfg, False), gray.shape[::-1])
-    # capped just above the bare board so a reflection's edge can't pass for ink
-    shut = np.minimum(cv2.morphologyEx(b, cv2.MORPH_CLOSE, disk), (1 + cfg["line_glare"]) * board)
-    dark = 1 - b / np.maximum(shut, 1.0)
-    weak = dark > cfg["line_weak"]
-    _, lab = cv2.connectedComponents(np.uint8(weak))
-    marks = np.uint8(np.isin(lab, np.unique(lab[dark > cfg["line_core"]])) & weak)
-    gap = round(cfg["line_gap_mm"] * cfg["px_per_mm"] / 2)
-    joint = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * gap + 1,) * 2)
-    return cv2.morphologyEx(marks, cv2.MORPH_CLOSE, joint) > 0
 
 
 def _loose(found: list, best: list, runs: list, idx: list, zone: dict, near: float) -> bool:
@@ -115,7 +97,7 @@ def find_line(
     crop = gray[y0 : y0 + h, x0 : x0 + w]
     region = region[y0 : y0 + h, x0 : x0 + w]
     rim = np.float32(np.array(outline_px(half_mm - edge_mm, cfg)) - (x0, y0))
-    marks = np.uint8(ink(crop, cfg, 2 * stroke + 1) & (region > 0))
+    marks = np.uint8(ink(crop, cfg, 2 * stroke + 1, region) & (region > 0))
     if 2 * marks.sum() > region.sum():
         return LinePath([], NONE)
     seen = None
@@ -144,7 +126,7 @@ def find_line(
     keep = cv2.approxPolyDP(np.float32(chain).reshape(-1, 1, 2), 1.0, False).reshape(-1, 2)
     mm = [plate_mm(x + x0, y + y0, cfg) for x, y in keep]
     if length(mm) < cfg["line_min_mm"]:
-        return LinePath([], SHORT)
+        return LinePath([], NONE)
     return LinePath(resample(mm, cfg["line_step_mm"]), "")
 
 
